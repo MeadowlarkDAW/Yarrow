@@ -1,0 +1,16 @@
+[package]
+name = "yarrow"
+version = "0.0.1"
+authors = ["Billy Messenger <60663878+BillyDM@users.noreply.github.com>"]
+edition = "2021"
+license = "MIT"
+keywords = ["gui", "audio"]
+categories = ["gui", "visualization"]
+description = "A non-declarative GUI library in Rust with extreme performance and control, geared towards audio software"
+homepage = "https://github.com/MeadowlarkDAW/Yarrow"
+documentation = "https://docs.rs/yarrow"
+repository = "https://github.com/MeadowlarkDAW/Yarrow"
+readme = "README.md"
+
+[badges]
+maintenance = { status = "actively-developed" }
