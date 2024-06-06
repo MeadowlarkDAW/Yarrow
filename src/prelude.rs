@@ -1,4 +1,4 @@
-pub use crate::action_queue::*;
+pub use crate::action_queue::{ActionReceiver, ActionSender};
 pub use crate::application::*;
 pub use crate::cursor_icon::*;
 pub use crate::elements::button::{Button, ButtonStyle};

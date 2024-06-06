@@ -25,6 +25,7 @@ pub mod style;
 pub(crate) mod view;
 pub mod window;
 
+pub use action_queue::action_channel;
 pub use application::{AppConfig, AppContext, Application};
 pub use cursor_icon::CursorIcon;
 pub use event::AppWindowEvent;

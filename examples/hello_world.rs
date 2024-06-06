@@ -6,7 +6,7 @@ pub fn main() {
     env_logger::init();
 
     // Actions are sent via a regular Rust mpsc queue.
-    let (action_sender, action_receiver) = action_channel();
+    let (action_sender, action_receiver) = yarrow::action_channel();
 
     yarrow::run_blocking(
         MyApp {
