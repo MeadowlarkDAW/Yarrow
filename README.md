@@ -24,7 +24,7 @@
 
 # What to Expect
 
-The goal of Yarrow is different from most other modern GUI libraries. Instead of aiming to for an "elegant" declarative API, Yarrow aims to provide a powerful yet easy-to-use retained-mode API with lots of control over how elements are styled, laid-out, interacted with, and rendered *(\*easy compared to other retained-mode frameworks)*. This library is not optimized for quick prototyping, and instead works best for applications which already have a design mocked up.
+The goal of Yarrow is different from most other modern GUI libraries. Instead of aiming for an "elegant" declarative API, Yarrow aims to provide a powerful yet easy-to-use retained-mode API with lots of control over how elements are styled, laid-out, interacted with, and rendered *(\*easy compared to other retained-mode frameworks)*. This library is not optimized for quick prototyping, and instead works best for applications which already have a design mocked up.
 
 Yarrow does not aim to be "general purpose" GUI library. Only features that are needed for the [Meadowlark DAW Project](https://github.com/MeadowlarkDAW/Meadowlark) and its audio plugins are planned.
 
