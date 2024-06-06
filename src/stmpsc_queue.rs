@@ -8,7 +8,7 @@
 //
 //
 // MIT License Copyright (c) 2024 Billy Messenger
-// https://codeberg.org/BillyDM/Yarrow/src/branch/main/LICENSE
+// https://github.com/MeadowlarkDAW/Yarrow/blob/main/LICENSE
 //
 // ---------------------------------------------------------------------------------
 
