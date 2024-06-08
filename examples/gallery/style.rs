@@ -39,9 +39,6 @@ pub struct MyStyle {
     pub drop_down_btn_width: f32,
     pub text_input_size: Size,
 
-    pub icon_text_offset: Point,
-    pub dual_toggle_btn_right_text_offset: Point,
-
     pub clear_color: RGBA8,
 }
 
@@ -142,9 +139,6 @@ impl MyStyle {
 
             drop_down_btn_width: 100.0,
             text_input_size: Size::new(240.0, 30.0),
-
-            icon_text_offset: Point::new(0.0, -2.0),
-            dual_toggle_btn_right_text_offset: Point::new(-3.0, 0.0),
 
             clear_color: RGBA8::new(15, 15, 15, 255),
         }

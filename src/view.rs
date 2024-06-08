@@ -70,6 +70,8 @@ pub struct ViewConfig {
     ///
     /// By default this is set to 0.5 seconds.
     pub hover_timeout_duration: Duration,
+
+    pub scroll_wheel_timeout_duration: Duration,
 }
 
 impl Default for ViewConfig {
@@ -78,6 +80,7 @@ impl Default for ViewConfig {
             clear_color: PackedSrgb::BLACK,
             preallocate_for_this_many_elements: 0,
             hover_timeout_duration: Duration::from_millis(500),
+            scroll_wheel_timeout_duration: Duration::from_millis(250),
         }
     }
 }
@@ -95,6 +98,7 @@ pub struct View<A: Clone + 'static> {
     mod_queue_receiver: stmpsc_queue::Receiver<ElementModification>,
 
     hovered_elements: FxHashMap<ElementID, Option<Instant>>,
+    elements_with_scroll_wheel_timeout: FxHashMap<ElementID, Option<Instant>>,
     animating_elements: Vec<ElementID>,
     current_focus_info: Option<FocusInfo>,
     prev_element_with_exclusive_focus: Option<ElementID>,
@@ -109,6 +113,7 @@ pub struct View<A: Clone + 'static> {
     logical_size: Size,
     scale_factor: ScaleFactor,
     hover_timeout_duration: Duration,
+    scroll_wheel_timeout_duration: Duration,
     window_id: WindowID,
 
     show_tooltip_action: Option<Box<dyn FnMut(TooltipInfo) -> A>>,
@@ -130,6 +135,7 @@ impl<A: Clone + 'static> View<A> {
             clear_color,
             preallocate_for_this_many_elements,
             hover_timeout_duration,
+            scroll_wheel_timeout_duration,
         } = config;
 
         assert!(scale_factor.0 > 0.0);
@@ -165,6 +171,7 @@ impl<A: Clone + 'static> View<A> {
             mod_queue_receiver,
 
             hovered_elements: FxHashMap::default(),
+            elements_with_scroll_wheel_timeout: FxHashMap::default(),
             animating_elements: Vec::with_capacity(capacity),
             current_focus_info: None,
             prev_element_with_exclusive_focus: None,
@@ -179,6 +186,7 @@ impl<A: Clone + 'static> View<A> {
             logical_size,
             scale_factor,
             hover_timeout_duration,
+            scroll_wheel_timeout_duration,
             window_id,
 
             view_needs_repaint: true,
@@ -569,6 +577,25 @@ impl<A: Clone + 'static> View<A> {
         }
         self.hovered_elements.clear();
 
+        for (element_id, _) in self.elements_with_scroll_wheel_timeout.iter_mut() {
+            if let Some(element_entry) = self.element_arena.get_mut(element_id.0) {
+                send_event_to_element(
+                    ElementEvent::Pointer(PointerEvent::ScrollWheelTimeout),
+                    element_entry,
+                    *element_id,
+                    &self.current_focus_info,
+                    &mut self.mod_queue_sender,
+                    &mut self.action_sender,
+                    self.scale_factor,
+                    self.logical_size,
+                    &mut self.cursor_icon,
+                    font_system,
+                    clipboard,
+                );
+            }
+        }
+        self.elements_with_scroll_wheel_timeout.clear();
+
         for element_id in self.elements_listening_to_clicked_off.iter() {
             if let Some(element_entry) = self.element_arena.get_mut(element_id.0) {
                 send_event_to_element(
@@ -652,6 +679,30 @@ impl<A: Clone + 'static> View<A> {
                 }
             }
         }
+
+        for (element_id, start_instant) in self.elements_with_scroll_wheel_timeout.iter_mut() {
+            if let Some(element_entry) = self.element_arena.get_mut(element_id.0) {
+                if let Some(instant) = start_instant.take() {
+                    if instant.elapsed() >= self.scroll_wheel_timeout_duration {
+                        send_event_to_element(
+                            ElementEvent::Pointer(PointerEvent::ScrollWheelTimeout),
+                            element_entry,
+                            *element_id,
+                            &self.current_focus_info,
+                            &mut self.mod_queue_sender,
+                            &mut self.action_sender,
+                            self.scale_factor,
+                            self.logical_size,
+                            &mut self.cursor_icon,
+                            font_system,
+                            clipboard,
+                        );
+                    } else {
+                        *start_instant = Some(instant);
+                    }
+                }
+            }
+        }
     }
 
     fn handle_pointer_event(
@@ -662,45 +713,49 @@ impl<A: Clone + 'static> View<A> {
     ) -> EventCaptureStatus {
         let pos = event.position();
 
-        if let PointerEvent::Moved { .. } = event {
-            self.cursor_icon = CursorIcon::Default;
+        match event {
+            PointerEvent::Moved { .. } => {
+                self.cursor_icon = CursorIcon::Default;
 
-            if let Some((element_id, bounds)) = self.element_with_active_tooltip.take() {
-                if !bounds.contains(pos) {
+                if let Some((element_id, bounds)) = self.element_with_active_tooltip.take() {
+                    if !bounds.contains(pos) {
+                        if let Some(action) = self.hide_tooltip_action.as_mut() {
+                            self.action_sender.send((action)()).unwrap();
+                        }
+                    } else {
+                        self.element_with_active_tooltip = Some((element_id, bounds));
+                    }
+                }
+            }
+            PointerEvent::PointerLeft => {
+                for (element_id, _) in self.hovered_elements.iter_mut() {
+                    if let Some(element_entry) = self.element_arena.get_mut(element_id.0) {
+                        send_event_to_element(
+                            ElementEvent::Pointer(PointerEvent::PointerLeft),
+                            element_entry,
+                            *element_id,
+                            &self.current_focus_info,
+                            &mut self.mod_queue_sender,
+                            &mut self.action_sender,
+                            self.scale_factor,
+                            self.logical_size,
+                            &mut self.cursor_icon,
+                            font_system,
+                            clipboard,
+                        );
+                    }
+                }
+                self.hovered_elements.clear();
+
+                if let Some(_) = self.element_with_active_tooltip.take() {
                     if let Some(action) = self.hide_tooltip_action.as_mut() {
                         self.action_sender.send((action)()).unwrap();
                     }
-                } else {
-                    self.element_with_active_tooltip = Some((element_id, bounds));
                 }
-            }
-        } else if let PointerEvent::PointerLeft = event {
-            for (element_id, _) in self.hovered_elements.iter_mut() {
-                if let Some(element_entry) = self.element_arena.get_mut(element_id.0) {
-                    send_event_to_element(
-                        ElementEvent::Pointer(PointerEvent::PointerLeft),
-                        element_entry,
-                        *element_id,
-                        &self.current_focus_info,
-                        &mut self.mod_queue_sender,
-                        &mut self.action_sender,
-                        self.scale_factor,
-                        self.logical_size,
-                        &mut self.cursor_icon,
-                        font_system,
-                        clipboard,
-                    );
-                }
-            }
-            self.hovered_elements.clear();
 
-            if let Some(_) = self.element_with_active_tooltip.take() {
-                if let Some(action) = self.hide_tooltip_action.as_mut() {
-                    self.action_sender.send((action)()).unwrap();
-                }
+                return EventCaptureStatus::NotCaptured;
             }
-
-            return EventCaptureStatus::NotCaptured;
+            _ => {}
         }
 
         let mut unhovered_elements: SmallVec<[ElementID; 4]> = SmallVec::new();
@@ -796,8 +851,19 @@ impl<A: Clone + 'static> View<A> {
                                       did_just_enter: bool|
          -> EventCaptureStatus {
             let mut event = event.clone();
-            if let PointerEvent::Moved { just_entered, .. } = &mut event {
-                *just_entered = did_just_enter;
+
+            match &mut event {
+                PointerEvent::Moved { just_entered, .. } => {
+                    *just_entered = did_just_enter;
+                }
+                PointerEvent::ScrollWheel { .. } => {
+                    if let Some(Some(start_instant)) =
+                        self.elements_with_scroll_wheel_timeout.get_mut(&element_id)
+                    {
+                        *start_instant = Instant::now();
+                    }
+                }
+                _ => {}
             }
 
             send_event_to_element(
@@ -1064,6 +1130,9 @@ impl<A: Clone + 'static> View<A> {
                 ElementModificationType::StartHoverTimeout => {
                     self.handle_element_start_hover_timeout(modification.element_id);
                 }
+                ElementModificationType::StartScrollWheelTimeout => {
+                    self.handle_element_start_scroll_wheel_timeout(modification.element_id);
+                }
                 ElementModificationType::ShowTooltip(info) => {
                     self.handle_element_show_tooltip(modification.element_id, info);
                 }
@@ -1087,6 +1156,16 @@ impl<A: Clone + 'static> View<A> {
         if self.element_arena.contains(element_id.0) {
             if let Some(hover_start_instant) = self.hovered_elements.get_mut(&element_id) {
                 *hover_start_instant = Some(Instant::now());
+            }
+        }
+    }
+
+    fn handle_element_start_scroll_wheel_timeout(&mut self, element_id: ElementID) {
+        if self.element_arena.contains(element_id.0) {
+            if let Some(start_instant) =
+                self.elements_with_scroll_wheel_timeout.get_mut(&element_id)
+            {
+                *start_instant = Some(Instant::now());
             }
         }
     }
@@ -1776,6 +1855,15 @@ impl<A: Clone + 'static> View<A> {
         self.scissor_rects[usize::from(element_entry.stack_data.scissor_rect_id)]
             .remove_element(&element_entry.stack_data, &mut self.element_arena);
 
+        if let Some((id, _)) = &self.element_with_active_tooltip {
+            if element_id == *id {
+                self.element_with_active_tooltip = None;
+            }
+        }
+
+        self.hovered_elements.remove(&element_id);
+        self.elements_with_scroll_wheel_timeout.remove(&element_id);
+
         if element_entry.stack_data.visible() {
             self.view_needs_repaint = true;
         }
@@ -2007,17 +2095,24 @@ fn send_event_to_element<A: Clone + 'static>(
         });
     }
 
-    if cx.repaint_requested() {
+    if cx.repaint_requested {
         mod_queue_sender.send_to_front(ElementModification {
             element_id,
             type_: ElementModificationType::MarkDirty,
         });
     }
 
-    if cx.hover_timeout_requested() {
+    if cx.hover_timeout_requested {
         mod_queue_sender.send_to_front(ElementModification {
             element_id,
             type_: ElementModificationType::StartHoverTimeout,
+        });
+    }
+
+    if cx.scroll_wheel_timeout_requested {
+        mod_queue_sender.send_to_front(ElementModification {
+            element_id,
+            type_: ElementModificationType::StartScrollWheelTimeout,
         });
     }
 

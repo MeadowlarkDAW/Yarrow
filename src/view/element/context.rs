@@ -50,16 +50,17 @@ pub struct ElementContext<'a, A: Clone + 'static> {
     pub(crate) requested_show_tooltip: Option<ElementTooltipInfo>,
     pub(crate) change_focus_request: Option<ChangeFocusRequest>,
 
-    rect: Rect,
-    visible_rect: Option<Rect>,
-    window_size: Size,
-    z_index: ZIndex,
-    manually_hidden: bool,
-    animating: bool,
-    repaint_requested: bool,
-    has_focus: bool,
-    hover_timeout_requested: bool,
-    scale_factor: ScaleFactor,
+    pub(crate) rect: Rect,
+    pub(crate) visible_rect: Option<Rect>,
+    pub(crate) window_size: Size,
+    pub(crate) z_index: ZIndex,
+    pub(crate) manually_hidden: bool,
+    pub(crate) animating: bool,
+    pub(crate) repaint_requested: bool,
+    pub(crate) has_focus: bool,
+    pub(crate) hover_timeout_requested: bool,
+    pub(crate) scroll_wheel_timeout_requested: bool,
+    pub(crate) scale_factor: ScaleFactor,
 }
 
 impl<'a, A: Clone + 'static> ElementContext<'a, A> {
@@ -92,6 +93,7 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
             scale_factor,
             listen_to_pointer_clicked_off: false,
             hover_timeout_requested: false,
+            scroll_wheel_timeout_requested: false,
             requested_rect: None,
             requested_show_tooltip: None,
             change_focus_request: None,
@@ -240,14 +242,6 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
 
     pub fn show_tooltip(&mut self, info: ElementTooltipInfo) {
         self.requested_show_tooltip = Some(info);
-    }
-
-    pub(crate) fn repaint_requested(&self) -> bool {
-        self.repaint_requested
-    }
-
-    pub(crate) fn hover_timeout_requested(&self) -> bool {
-        self.hover_timeout_requested
     }
 }
 

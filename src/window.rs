@@ -311,7 +311,7 @@ impl<A: Clone + 'static> WindowState<A> {
         let position = self.prev_pointer_pos.unwrap_or(Point::zero());
 
         self.view.handle_event(
-            &CanvasEvent::Pointer(PointerEvent::Wheel {
+            &CanvasEvent::Pointer(PointerEvent::ScrollWheel {
                 position,
                 delta_type,
                 pointer_type: PointerType::default(),

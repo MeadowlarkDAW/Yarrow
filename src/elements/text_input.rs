@@ -127,7 +127,7 @@ impl Default for TextInputStyle {
             vertical_align: Align::Center,
             min_clipped_size: Size::new(5.0, 5.0),
             padding: Padding::new(6.0, 6.0, 6.0, 6.0),
-            highlight_padding: Padding::new(3.0, 0.0, 1.0, 0.0),
+            highlight_padding: Padding::new(1.0, 0.0, 0.0, 0.0),
             back_quad_unfocused: QuadStyle {
                 bg: Background::Solid(RGBA8::new(30, 30, 30, 255)),
                 border: BorderStyle {
@@ -344,18 +344,18 @@ impl<A: Clone + 'static> TextInputElement<A> {
             properties.attrs.family = Family::Monospace;
         }
 
-        let buffer = RcTextBuffer::new(
-            &text,
-            properties,
-            text_bounds_rect.size,
-            true,
-            cx.font_system,
+        let buffer_size = Size::new(
+            text_bounds_rect.width(),
+            // Add some extra padding below so that text doesn't get clipped.
+            text_bounds_rect.height() + 2.0,
         );
+
+        let buffer = RcTextBuffer::new(&text, properties, buffer_size, true, cx.font_system);
 
         let placeholder_buffer = RcTextBuffer::new(
             &placeholder_text,
             placeholder_properties,
-            text_bounds_rect.size,
+            buffer_size,
             true,
             cx.font_system,
         );
@@ -364,7 +364,7 @@ impl<A: Clone + 'static> TextInputElement<A> {
             Some(RcTextBuffer::new(
                 &text_to_password_text(&buffer),
                 properties,
-                text_bounds_rect.size,
+                buffer_size,
                 false,
                 cx.font_system,
             ))
@@ -754,13 +754,21 @@ impl<A: Clone + 'static> Element<A> for TextInputElement<A> {
                         shared_state.style.properties.metrics.line_height,
                     );
 
-                    shared_state
-                        .buffer
-                        .set_bounds(self.text_bounds_rect.size, cx.font_system);
+                    let buffer_size = Size::new(
+                        self.text_bounds_rect.width(),
+                        // Add some extra padding below so that text doesn't get clipped.
+                        self.text_bounds_rect.height() + 2.0,
+                    );
+
+                    shared_state.buffer.set_bounds(buffer_size, cx.font_system);
 
                     shared_state
                         .placeholder_buffer
-                        .set_bounds(self.text_bounds_rect.size, cx.font_system);
+                        .set_bounds(buffer_size, cx.font_system);
+
+                    if let Some(password_buffer) = self.password_buffer.as_mut() {
+                        password_buffer.set_bounds(buffer_size, cx.font_system);
+                    }
 
                     editor_state_changed = true;
                 }
@@ -1226,7 +1234,7 @@ impl<A: Clone + 'static> Element<A> for TextInputElement<A> {
             );
         }
 
-        let highlight_height = shared_state.style.properties.metrics.font_size
+        let highlight_height = self.text_bounds_rect.height()
             + shared_state.style.highlight_padding.top
             + shared_state.style.highlight_padding.bottom;
         let highlight_y = self.text_bounds_rect.min_y() - shared_state.style.highlight_padding.top;
@@ -1527,13 +1535,14 @@ fn layout_text_bounds(
     // We need to vertically align the text ourselves as rootvg/glyphon does not do this.
     let text_bounds_y = match vertical_align {
         Align::Start => content_rect.min_y(),
-        Align::Center => content_rect.min_y() + ((content_rect.height() - font_size) / 2.0) + 1.0,
+        Align::Center => content_rect.min_y() + ((content_rect.height() - line_height) / 2.0),
+        //Align::Center => content_rect.min_y() + ((content_rect.height() - font_size) / 2.0) + 1.0,
         Align::End => content_rect.max_y() - font_size,
     };
 
     Rect::new(
         Point::new(content_rect.min_x(), text_bounds_y),
-        Size::new(content_rect.width(), line_height),
+        content_rect.size,
     )
 }
 

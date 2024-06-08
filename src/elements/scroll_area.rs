@@ -628,7 +628,7 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
 
                 return EventCaptureStatus::Captured;
             }
-            ElementEvent::Pointer(PointerEvent::Wheel {
+            ElementEvent::Pointer(PointerEvent::ScrollWheel {
                 position,
                 delta_type,
                 ..

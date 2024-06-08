@@ -116,6 +116,7 @@ pub(super) enum ElementModificationType {
     HandleDropped,
     ListenToClickOff,
     StartHoverTimeout,
+    StartScrollWheelTimeout,
     ShowTooltip(ElementTooltipInfo),
 }
 

@@ -135,7 +135,6 @@ impl MyApp {
         let menu_btn = Button::builder(&self.style.menu_btn_style)
             .text('\u{f0c9}')
             .on_select(MyAction::OpenMenu)
-            .text_offset(Point::new(0.0, -2.0))
             .z_index(MAIN_Z_INDEX)
             .build(cx);
         let menu = DropDownMenu::builder(&self.style.menu_style)

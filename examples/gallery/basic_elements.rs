@@ -84,7 +84,6 @@ impl Elements {
         let dual_label = DualLabel::builder(&style.dual_label_style)
             .left_text('\u{f05a}')
             .right_text("Dual Label")
-            .left_text_offset(style.icon_text_offset)
             .z_index(MAIN_Z_INDEX)
             .scissor_rect(SCROLL_AREA_SCISSOR_RECT_ID)
             .build(cx);
@@ -107,8 +106,6 @@ impl Elements {
         let dual_toggle_btn = DualToggleButton::builder(&style.dual_toggle_btn_style)
             .left_text('\u{23fb}')
             .right_text("off")
-            .left_text_offset(style.icon_text_offset)
-            .right_text_offset(style.dual_toggle_btn_right_text_offset)
             .on_toggled(|toggled| Action::ToggleValue(toggled).into())
             .z_index(MAIN_Z_INDEX)
             .scissor_rect(SCROLL_AREA_SCISSOR_RECT_ID)
@@ -165,7 +162,6 @@ impl Elements {
             .left_text(format!("{}", DropDownOption::ALL[0]))
             .right_text('\u{2304}')
             .on_select(Action::OpenDropDown.into())
-            .right_text_offset(style.icon_text_offset)
             .z_index(MAIN_Z_INDEX)
             .scissor_rect(SCROLL_AREA_SCISSOR_RECT_ID)
             .build(cx);

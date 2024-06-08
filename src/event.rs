@@ -200,7 +200,7 @@ pub enum PointerEvent {
         click_count: usize,
         modifiers: Modifiers,
     },
-    Wheel {
+    ScrollWheel {
         position: Point,
         delta_type: WheelDeltaType,
         pointer_type: PointerType,
@@ -209,6 +209,7 @@ pub enum PointerEvent {
     HoverTimeout {
         position: Point,
     },
+    ScrollWheelTimeout,
     PointerLeft,
 }
 
@@ -218,8 +219,9 @@ impl PointerEvent {
             Self::Moved { position, .. } => *position,
             Self::ButtonJustPressed { position, .. } => *position,
             Self::ButtonJustReleased { position, .. } => *position,
-            Self::Wheel { position, .. } => *position,
+            Self::ScrollWheel { position, .. } => *position,
             Self::HoverTimeout { position } => *position,
+            Self::ScrollWheelTimeout => Point::zero(),
             Self::PointerLeft => Point::zero(),
         }
     }

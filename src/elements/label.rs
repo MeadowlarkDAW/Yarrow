@@ -206,11 +206,16 @@ impl LabelInner {
                 style.padding,
                 style.min_clipped_size,
                 style.vertical_align,
-                style.properties.metrics.font_size,
             );
 
-            self.text_buffer
-                .set_bounds(self.text_bounds_rect.size, font_system);
+            self.text_buffer.set_bounds(
+                Size::new(
+                    self.text_bounds_rect.width(),
+                    // Add some extra padding below so that text doesn't get clipped.
+                    self.text_bounds_rect.height() + 2.0,
+                ),
+                font_system,
+            );
         }
 
         let text = if !self.text.is_empty() {
@@ -470,7 +475,6 @@ pub fn layout_text_bounds(
     padding: Padding,
     min_clipped_size: Size,
     vertical_align: Align,
-    font_size: f32,
 ) -> Rect {
     if unclipped_text_size.is_empty() {
         return Rect::default();
@@ -485,12 +489,14 @@ pub fn layout_text_bounds(
     // We need to vertically align the text ourselves as rootvg/glyphon does not do this.
     let text_bounds_y = match vertical_align {
         Align::Start => content_rect.min_y(),
-        Align::Center => content_rect.min_y() + ((content_rect.height() - font_size) / 2.0) + 1.0,
+        Align::Center => {
+            content_rect.min_y() + ((content_rect.height() - unclipped_text_size.height) * 0.5)
+        }
         Align::End => content_rect.max_y() - unclipped_text_size.height,
     };
 
     Rect::new(
         Point::new(content_rect.min_x(), text_bounds_y),
-        Size::new(content_rect.width(), unclipped_text_size.height),
+        content_rect.size,
     )
 }

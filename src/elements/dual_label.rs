@@ -344,19 +344,7 @@ impl DualLabelInner {
         }
 
         if needs_layout {
-            if self.left_text_size_needs_calculated {
-                self.left_text_size_needs_calculated = false;
-
-                self.left_unclipped_text_size = self.left_text_buffer.measure();
-            }
-
-            if self.right_text_size_needs_calculated {
-                self.right_text_size_needs_calculated = false;
-
-                if let Some(right_text_buffer) = self.right_text_buffer.as_mut() {
-                    self.right_unclipped_text_size = right_text_buffer.measure()
-                };
-            }
+            let _ = self.unclipped_text_size();
 
             let (left_rect, right_rect) = layout_text_bounds(
                 bounds.size,
@@ -368,11 +356,24 @@ impl DualLabelInner {
             self.left_text_bounds_rect = left_rect;
             self.right_text_bounds_rect = right_rect;
 
-            self.left_text_buffer
-                .set_bounds(self.left_text_bounds_rect.size, font_system);
+            self.left_text_buffer.set_bounds(
+                Size::new(
+                    self.left_text_bounds_rect.width(),
+                    // Add some extra padding below so that text doesn't get clipped.
+                    self.left_text_bounds_rect.height() + 2.0,
+                ),
+                font_system,
+            );
 
             if let Some(right_text_buffer) = self.right_text_buffer.as_mut() {
-                right_text_buffer.set_bounds(self.right_text_bounds_rect.size, font_system);
+                right_text_buffer.set_bounds(
+                    Size::new(
+                        self.right_text_bounds_rect.width(),
+                        // Add some extra padding below so that text doesn't get clipped.
+                        self.right_text_bounds_rect.height() + 2.0,
+                    ),
+                    font_system,
+                );
             }
         }
 
@@ -730,7 +731,6 @@ fn layout_text_bounds(
                     style.left_padding,
                     style.left_min_clipped_size,
                     style.vertical_align,
-                    style.left_properties.metrics.font_size,
                 )
             },
             if right_empty {
@@ -742,7 +742,6 @@ fn layout_text_bounds(
                     style.right_padding,
                     style.right_min_clipped_size,
                     style.vertical_align,
-                    style.right_properties.metrics.font_size,
                 )
             },
         );
@@ -816,9 +815,15 @@ fn layout_text_bounds(
         crate::layout::Align::Start => left_content_rect.min_y(),
         crate::layout::Align::Center => {
             left_content_rect.min_y()
+                + ((left_content_rect.height() - left_unclipped_text_size.height) * 0.5)
+        }
+        /*
+        crate::layout::Align::Center => {
+            left_content_rect.min_y()
                 + ((left_content_rect.height() - style.left_properties.metrics.font_size) / 2.0)
                 + 1.0
         }
+        */
         crate::layout::Align::End => left_content_rect.max_y() - left_unclipped_text_size.height,
     };
 
@@ -836,20 +841,26 @@ fn layout_text_bounds(
         crate::layout::Align::Start => right_content_rect.min_y(),
         crate::layout::Align::Center => {
             right_content_rect.min_y()
+                + ((right_content_rect.height() - right_unclipped_text_size.height) * 0.5)
+        }
+        /*
+        crate::layout::Align::Center => {
+            right_content_rect.min_y()
                 + ((right_content_rect.height() - style.right_properties.metrics.font_size) / 2.0)
                 + 1.0
         }
+        */
         crate::layout::Align::End => right_content_rect.max_y() - right_unclipped_text_size.height,
     };
 
     (
         Rect::new(
             Point::new(left_content_rect.min_x(), left_text_bounds_y),
-            Size::new(left_content_rect.width(), left_unclipped_text_size.height),
+            left_content_rect.size,
         ),
         Rect::new(
             Point::new(right_content_rect.min_x(), right_text_bounds_y),
-            Size::new(right_content_rect.width(), right_unclipped_text_size.height),
+            right_content_rect.size,
         ),
     )
 }
