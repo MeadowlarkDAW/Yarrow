@@ -7,7 +7,7 @@ use rootvg::{
 };
 
 use crate::{
-    event::{ElementEvent, EventCaptureStatus, WheelDeltaType},
+    event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent, WheelDeltaType},
     layout::Align2,
     view::element::{
         Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
@@ -52,9 +52,13 @@ pub struct ParamOpenTextEntryInfo {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct VirtualSliderConfig {
     /// The scalar (points to normalized units) to use when dragging.
+    ///
+    /// By default this is set to `0.00275`.
     pub drag_scalar: f32,
 
     /// The scalar (points to normalized units) to use when scrolling.
+    ///
+    /// By default this is set to `0.0004`.
     pub scroll_wheel_scalar: f32,
 
     /// How many points per line when using the scroll wheel (for backends
@@ -64,6 +68,8 @@ pub struct VirtualSliderConfig {
     pub scroll_wheel_points_per_line: f32,
 
     /// An additional scalar to apply when the modifier key is held down.
+    ///
+    /// By default this is set to `0.02`.
     pub fine_adjustment_scalar: f32,
 
     /// Whether or not the scroll wheel should adjust this parameter.
@@ -102,10 +108,10 @@ pub struct VirtualSliderConfig {
 impl Default for VirtualSliderConfig {
     fn default() -> Self {
         Self {
-            drag_scalar: 0.001,
-            scroll_wheel_scalar: 0.01,
+            drag_scalar: 0.00275,
+            scroll_wheel_scalar: 0.0004,
             scroll_wheel_points_per_line: 24.0,
-            fine_adjustment_scalar: 0.01,
+            fine_adjustment_scalar: 0.02,
             use_scroll_wheel: true,
             fine_adjustment_modifier: Some(Modifiers::SHIFT),
             open_text_entry_modifier: Some(Modifiers::CONTROL),
@@ -221,7 +227,11 @@ impl VirtualSliderInner {
         }
     }
 
-    pub fn handle_drag(
+    pub fn is_gesturing(&self) -> bool {
+        self.current_gesture.is_some()
+    }
+
+    pub fn handle_pointer_moved(
         &mut self,
         pointer_pos: Point,
         pointer_delta: Option<Point>,
@@ -244,7 +254,7 @@ impl VirtualSliderInner {
             let (new_gesture_normal, reset_start_pos) = if use_pointer_delta {
                 let delta = pointer_delta.unwrap();
                 let delta_points = if self.drag_vertically {
-                    delta.y
+                    -delta.y
                 } else {
                     delta.x
                 };
@@ -260,7 +270,7 @@ impl VirtualSliderInner {
                 )
             } else if apply_fine_adjustment_scalar {
                 let delta_points = if self.drag_vertically {
-                    pointer_pos.y - pointer_start_pos.y
+                    pointer_start_pos.y - pointer_pos.y
                 } else {
                     pointer_pos.x - pointer_start_pos.x
                 };
@@ -275,7 +285,7 @@ impl VirtualSliderInner {
             } else {
                 // Use absolute positions instead of deltas for a "better feel".
                 let offset = if self.drag_vertically {
-                    pointer_pos.y - pointer_start_pos.y
+                    pointer_start_pos.y - pointer_pos.y
                 } else {
                     pointer_pos.x - pointer_start_pos.x
                 };
@@ -329,12 +339,12 @@ impl VirtualSliderInner {
             return None;
         }
 
-        let mut delta_normal = delta_points * self.config.drag_scalar;
+        let mut delta_normal = delta_points * self.config.scroll_wheel_scalar;
         if apply_fine_adjustment_scalar {
             delta_normal *= self.config.fine_adjustment_scalar;
         }
 
-        let new_gesture_normal = self.continuous_gesture_normal + f64::from(delta_normal);
+        let new_gesture_normal = self.continuous_gesture_normal - f64::from(delta_normal);
 
         self.set_new_gesture_normal(new_gesture_normal)
     }
@@ -381,6 +391,8 @@ impl VirtualSliderInner {
     }
 
     pub fn reset_to_default(&mut self) -> Option<ParamUpdate> {
+        self.continuous_gesture_normal = self.default_normal;
+
         if let Some(_) = self.current_gesture.take() {
             self.normal_value = self.default_normal;
 
@@ -505,22 +517,72 @@ pub struct NormalsState {
     pub num_quantized_steps: Option<u32>,
 }
 
-pub trait VirtualSliderRenderer: Default {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct UpdateResult {
+    pub repaint: bool,
+    pub animating: bool,
+}
+
+impl Default for UpdateResult {
+    fn default() -> Self {
+        Self {
+            repaint: false,
+            animating: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VirtualSliderState {
+    Idle,
+    Hovered,
+    Gesturing,
+}
+
+pub trait VirtualSliderRenderer: Default + 'static {
     type Style;
+
+    fn does_paint(&self) -> bool {
+        true
+    }
+
+    #[allow(unused)]
+    fn on_state_changed(
+        &mut self,
+        prev_state: VirtualSliderState,
+        new_state: VirtualSliderState,
+        style: &Self::Style,
+    ) -> UpdateResult {
+        UpdateResult::default()
+    }
+
+    #[allow(unused)]
+    /// Return `true` if the element should be repainted.
+    fn on_automation_info_update(&mut self, info: &AutomationInfo, style: &Self::Style) -> bool {
+        false
+    }
+
+    #[allow(unused)]
+    fn on_animation(
+        &mut self,
+        delta_seconds: f64,
+        normals: NormalsState,
+        state: VirtualSliderState,
+        style: &Self::Style,
+    ) -> UpdateResult {
+        UpdateResult::default()
+    }
 
     #[allow(unused)]
     fn render_primitives(
         &mut self,
         style: &Self::Style,
         normals: NormalsState,
+        state: VirtualSliderState,
         disabled: bool,
         cx: RenderContext<'_>,
         primitives: &mut PrimitiveGroup,
     ) {
-    }
-
-    fn does_paint(&self) -> bool {
-        true
     }
 }
 
@@ -536,8 +598,20 @@ pub struct ParamTooltipInfo {
     pub tooltip_align: Align2,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParamRightClickInfo {
+    /// The parameter ID
+    pub param_id: u32,
+    /// The normalized value in the range `[0.0, 1.0]`
+    pub normal_value: f64,
+    /// The stepped value (if this parameter is stepped)
+    pub stepped_value: Option<u32>,
+    pub pointer_pos: Point,
+}
+
 pub struct VirtualSliderBuilder<A: Clone + 'static, R: VirtualSliderRenderer> {
-    pub on_gesture: Option<Box<dyn FnMut(ParamUpdate) -> Option<A>>>,
+    pub on_gesture: Option<Box<dyn FnMut(ParamUpdate) -> A>>,
+    pub on_right_click: Option<Box<dyn FnMut(ParamRightClickInfo) -> A>>,
     pub on_open_text_entry: Option<Box<dyn FnMut(ParamOpenTextEntryInfo) -> A>>,
     pub on_tooltip_request: Option<Box<dyn FnMut(ParamTooltipInfo) -> A>>,
     pub style: Rc<R::Style>,
@@ -560,6 +634,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer> VirtualSliderBuilder<A, R> {
     pub fn new(param_id: u32, style: &Rc<R::Style>) -> Self {
         Self {
             on_gesture: None,
+            on_right_click: None,
             on_open_text_entry: None,
             on_tooltip_request: None,
             style: Rc::clone(style),
@@ -579,8 +654,17 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer> VirtualSliderBuilder<A, R> {
         }
     }
 
-    pub fn on_gesture<F: FnMut(ParamUpdate) -> Option<A> + 'static>(mut self, f: F) -> Self {
+    pub fn build(self, cx: &mut WindowContext<'_, A>) -> VirtualSlider<R> {
+        VirtualSliderElement::create(self, cx)
+    }
+
+    pub fn on_gesture<F: FnMut(ParamUpdate) -> A + 'static>(mut self, f: F) -> Self {
         self.on_gesture = Some(Box::new(f));
+        self
+    }
+
+    pub fn on_right_click<F: FnMut(ParamRightClickInfo) -> A + 'static>(mut self, f: F) -> Self {
+        self.on_right_click = Some(Box::new(f));
         self
     }
 
@@ -661,12 +745,15 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer> VirtualSliderBuilder<A, R> {
 pub struct VirtualSliderElement<A: Clone + 'static, R: VirtualSliderRenderer + 'static> {
     shared_state: Rc<RefCell<SharedState<R>>>,
 
-    on_gesture: Option<Box<dyn FnMut(ParamUpdate) -> Option<A>>>,
+    on_gesture: Option<Box<dyn FnMut(ParamUpdate) -> A>>,
+    on_right_click: Option<Box<dyn FnMut(ParamRightClickInfo) -> A>>,
     on_open_text_entry: Option<Box<dyn FnMut(ParamOpenTextEntryInfo) -> A>>,
     on_tooltip_request: Option<Box<dyn FnMut(ParamTooltipInfo) -> A>>,
     tooltip_align: Align2,
 
     renderer: R,
+    hovered: bool,
+    state: VirtualSliderState,
 }
 
 impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElement<A, R> {
@@ -676,6 +763,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
     ) -> VirtualSlider<R> {
         let VirtualSliderBuilder {
             on_gesture,
+            on_right_click,
             on_open_text_entry,
             on_tooltip_request,
             style,
@@ -706,6 +794,8 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
             ),
             style,
             automation_info: AutomationInfo::default(),
+            automation_info_changed: false,
+            needs_repaint: false,
             disabled,
         }));
 
@@ -713,10 +803,13 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
             element: Box::new(Self {
                 shared_state: Rc::clone(&shared_state),
                 on_gesture,
+                on_right_click,
                 on_open_text_entry,
                 on_tooltip_request,
                 tooltip_align,
                 renderer: R::default(),
+                hovered: false,
+                state: VirtualSliderState::Idle,
             }),
             z_index,
             bounding_rect,
@@ -752,7 +845,415 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
         event: ElementEvent,
         cx: &mut ElementContext<'_, A>,
     ) -> EventCaptureStatus {
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+        let SharedState {
+            inner,
+            style,
+            automation_info,
+            automation_info_changed,
+            disabled,
+            needs_repaint,
+        } = &mut *shared_state;
+
+        let send_param_update =
+            |param_update: ParamUpdate,
+             cx: &mut ElementContext<'_, A>,
+             renderer: &mut R,
+             style: &R::Style,
+             prev_state: Option<VirtualSliderState>,
+             state: VirtualSliderState,
+             on_gesture: &mut Option<Box<dyn FnMut(ParamUpdate) -> A>>| {
+                if let Some(f) = on_gesture.as_mut() {
+                    cx.send_action((f)(param_update)).unwrap();
+                }
+
+                if renderer.does_paint() {
+                    cx.request_repaint();
+                }
+
+                if let Some(prev_state) = prev_state {
+                    let res = renderer.on_state_changed(prev_state, state, style);
+                    cx.set_animating(res.animating);
+                }
+            };
+
+        let finish_gesture =
+            |inner: &mut VirtualSliderInner,
+             cx: &mut ElementContext<'_, A>,
+             hovered: bool,
+             state: &mut VirtualSliderState,
+             renderer: &mut R,
+             style: &R::Style,
+             on_gesture: &mut Option<Box<dyn FnMut(ParamUpdate) -> A>>| {
+                if let Some(param_update) = inner.finish_gesture() {
+                    let prev_state = if !hovered && *state != VirtualSliderState::Idle {
+                        let p = Some(*state);
+                        *state = VirtualSliderState::Idle;
+                        p
+                    } else if hovered && *state != VirtualSliderState::Hovered {
+                        let p = Some(*state);
+                        *state = VirtualSliderState::Hovered;
+                        p
+                    } else {
+                        None
+                    };
+
+                    send_param_update(
+                        param_update,
+                        cx,
+                        renderer,
+                        style,
+                        prev_state,
+                        *state,
+                        on_gesture,
+                    );
+                }
+            };
+
         match event {
+            ElementEvent::Animation { delta_seconds } => {
+                if *disabled {
+                    cx.set_animating(false);
+                    return EventCaptureStatus::NotCaptured;
+                }
+
+                let res = self.renderer.on_animation(
+                    delta_seconds,
+                    NormalsState {
+                        normal_value: inner.normal_value(),
+                        default_normal: inner.default_normal(),
+                        automation_info: automation_info.clone(),
+                        num_quantized_steps: inner.num_quantized_steps(),
+                    },
+                    self.state,
+                    style,
+                );
+                if res.repaint {
+                    cx.request_repaint();
+                }
+                cx.set_animating(res.animating);
+            }
+            ElementEvent::CustomStateChanged => {
+                if *needs_repaint {
+                    *needs_repaint = false;
+                    cx.request_repaint();
+                }
+
+                if *automation_info_changed {
+                    *automation_info_changed = false;
+
+                    let repaint = self
+                        .renderer
+                        .on_automation_info_update(automation_info, style);
+                    if repaint {
+                        cx.request_repaint();
+                    }
+                }
+
+                if *disabled {
+                    self.hovered = false;
+
+                    finish_gesture(
+                        inner,
+                        cx,
+                        self.hovered,
+                        &mut self.state,
+                        &mut self.renderer,
+                        style,
+                        &mut self.on_gesture,
+                    );
+
+                    cx.set_animating(false);
+                }
+            }
+            ElementEvent::Pointer(PointerEvent::Moved {
+                position,
+                delta,
+                modifiers,
+                just_entered,
+                ..
+            }) => {
+                if *disabled {
+                    return EventCaptureStatus::NotCaptured;
+                }
+
+                let hovered = cx.rect().contains(position);
+
+                if self.hovered != hovered {
+                    self.hovered = hovered;
+
+                    if !inner.is_gesturing() {
+                        let prev_state = self.state;
+                        self.state = if hovered {
+                            VirtualSliderState::Hovered
+                        } else {
+                            VirtualSliderState::Idle
+                        };
+                        let res = self
+                            .renderer
+                            .on_state_changed(prev_state, self.state, style);
+                        if res.repaint {
+                            cx.request_repaint();
+                        }
+                        cx.set_animating(res.animating);
+                    }
+                }
+
+                if just_entered && self.on_tooltip_request.is_some() && !inner.is_gesturing() {
+                    cx.start_hover_timeout();
+                }
+
+                if let Some(param_update) = inner.handle_pointer_moved(position, delta, modifiers) {
+                    send_param_update(
+                        param_update,
+                        cx,
+                        &mut self.renderer,
+                        style,
+                        None,
+                        self.state,
+                        &mut self.on_gesture,
+                    );
+                }
+            }
+            ElementEvent::Pointer(PointerEvent::PointerLeft) => {
+                if self.hovered {
+                    if !inner.is_gesturing() {
+                        if self.state != VirtualSliderState::Idle {
+                            let prev_state = self.state;
+                            self.state = VirtualSliderState::Idle;
+
+                            let res = self
+                                .renderer
+                                .on_state_changed(prev_state, self.state, style);
+                            if res.repaint {
+                                cx.request_repaint();
+                            }
+                            cx.set_animating(res.animating);
+                        }
+                    }
+
+                    self.hovered = false;
+                }
+            }
+            ElementEvent::Pointer(PointerEvent::ButtonJustPressed {
+                position,
+                button,
+                click_count,
+                ..
+            }) => {
+                if *disabled || !cx.rect.contains(position) {
+                    return EventCaptureStatus::NotCaptured;
+                }
+
+                if button == PointerButton::Auxiliary
+                    && inner.config.open_text_entry_on_middle_click
+                {
+                    if let Some(f) = self.on_open_text_entry.as_mut() {
+                        finish_gesture(
+                            inner,
+                            cx,
+                            self.hovered,
+                            &mut self.state,
+                            &mut self.renderer,
+                            style,
+                            &mut self.on_gesture,
+                        );
+
+                        cx.send_action((f)(ParamOpenTextEntryInfo {
+                            param_id: inner.param_id,
+                            normal_value: inner.normal_value(),
+                            stepped_value: inner.stepped_value(),
+                            bounds: cx.rect(),
+                        }))
+                        .unwrap();
+
+                        return EventCaptureStatus::Captured;
+                    }
+                }
+
+                if button == PointerButton::Secondary {
+                    if let Some(f) = self.on_right_click.as_mut() {
+                        finish_gesture(
+                            inner,
+                            cx,
+                            self.hovered,
+                            &mut self.state,
+                            &mut self.renderer,
+                            style,
+                            &mut self.on_gesture,
+                        );
+
+                        cx.send_action((f)(ParamRightClickInfo {
+                            param_id: inner.param_id,
+                            normal_value: inner.normal_value(),
+                            stepped_value: inner.stepped_value(),
+                            pointer_pos: position,
+                        }))
+                        .unwrap();
+
+                        return EventCaptureStatus::Captured;
+                    }
+                }
+
+                if button != PointerButton::Primary {
+                    return EventCaptureStatus::Captured;
+                }
+
+                finish_gesture(
+                    inner,
+                    cx,
+                    self.hovered,
+                    &mut self.state,
+                    &mut self.renderer,
+                    style,
+                    &mut self.on_gesture,
+                );
+
+                if click_count == 1 {
+                    if let Some(param_update) = inner.begin_drag_gesture(position) {
+                        let prev_state = Some(self.state);
+                        self.state = VirtualSliderState::Gesturing;
+
+                        send_param_update(
+                            param_update,
+                            cx,
+                            &mut self.renderer,
+                            style,
+                            prev_state,
+                            self.state,
+                            &mut self.on_gesture,
+                        );
+
+                        cx.steal_focus();
+                    }
+                } else if click_count == 2 {
+                    if let Some(param_update) = inner.reset_to_default() {
+                        let prev_state = if !self.hovered && self.state != VirtualSliderState::Idle
+                        {
+                            let p = Some(self.state);
+                            self.state = VirtualSliderState::Idle;
+                            p
+                        } else if self.hovered && self.state != VirtualSliderState::Hovered {
+                            let p = Some(self.state);
+                            self.state = VirtualSliderState::Hovered;
+                            p
+                        } else {
+                            None
+                        };
+
+                        send_param_update(
+                            param_update,
+                            cx,
+                            &mut self.renderer,
+                            style,
+                            prev_state,
+                            self.state,
+                            &mut self.on_gesture,
+                        );
+                    }
+                }
+
+                return EventCaptureStatus::Captured;
+            }
+            ElementEvent::Pointer(PointerEvent::ButtonJustReleased {
+                button, position, ..
+            }) => {
+                if *disabled {
+                    return EventCaptureStatus::NotCaptured;
+                }
+
+                let in_bounds = cx.rect().contains(position);
+
+                if button != PointerButton::Primary {
+                    if in_bounds {
+                        return EventCaptureStatus::Captured;
+                    } else {
+                        return EventCaptureStatus::NotCaptured;
+                    }
+                }
+
+                if cx.has_focus() {
+                    cx.release_focus();
+                }
+            }
+            ElementEvent::Pointer(PointerEvent::HoverTimeout { position }) => {
+                if *disabled {
+                    return EventCaptureStatus::NotCaptured;
+                }
+
+                if cx.rect().contains(position) {
+                    if let Some(f) = self.on_tooltip_request.as_mut() {
+                        cx.send_action((f)(ParamTooltipInfo {
+                            param_id: inner.param_id,
+                            normal_value: inner.normal_value(),
+                            stepped_value: inner.stepped_value(),
+                            bounding_rect: cx.rect(),
+                            tooltip_align: self.tooltip_align,
+                        }))
+                        .unwrap();
+                    }
+                }
+            }
+            ElementEvent::Pointer(PointerEvent::ScrollWheel {
+                position,
+                delta_type,
+                modifiers,
+                ..
+            }) => {
+                if *disabled || !cx.rect().contains(position) || !inner.config.use_scroll_wheel {
+                    return EventCaptureStatus::NotCaptured;
+                }
+
+                if let Some(param_update) = inner.begin_scroll_wheel_gesture() {
+                    let prev_state = Some(self.state);
+                    self.state = VirtualSliderState::Gesturing;
+
+                    send_param_update(
+                        param_update,
+                        cx,
+                        &mut self.renderer,
+                        style,
+                        prev_state,
+                        self.state,
+                        &mut self.on_gesture,
+                    );
+
+                    cx.steal_focus();
+                    cx.start_scroll_wheel_timeout();
+                }
+
+                if let Some(param_update) = inner.handle_scroll_wheel(delta_type, modifiers) {
+                    send_param_update(
+                        param_update,
+                        cx,
+                        &mut self.renderer,
+                        style,
+                        None,
+                        self.state,
+                        &mut self.on_gesture,
+                    );
+                }
+
+                return EventCaptureStatus::Captured;
+            }
+            ElementEvent::Pointer(PointerEvent::ScrollWheelTimeout) => {
+                if cx.has_focus() {
+                    cx.release_focus();
+                }
+            }
+            ElementEvent::Focus(focused) => {
+                if !focused {
+                    finish_gesture(
+                        inner,
+                        cx,
+                        self.hovered,
+                        &mut self.state,
+                        &mut self.renderer,
+                        style,
+                        &mut self.on_gesture,
+                    );
+                }
+            }
             _ => {}
         }
 
@@ -770,6 +1271,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                 automation_info: shared_state.automation_info.clone(),
                 num_quantized_steps: shared_state.inner.num_quantized_steps(),
             },
+            self.state,
             shared_state.disabled,
             cx,
             primitives,
@@ -800,7 +1302,9 @@ struct SharedState<R: VirtualSliderRenderer> {
     inner: VirtualSliderInner,
     style: Rc<R::Style>,
     automation_info: AutomationInfo,
+    automation_info_changed: bool,
     disabled: bool,
+    needs_repaint: bool,
 }
 
 /// A handle to a [`VirtualSliderElement`].
@@ -822,6 +1326,7 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
 
         let state_changed = shared_state.inner.set_normal_value(new_normal).is_some();
         if state_changed {
+            shared_state.needs_repaint = true;
             self.el.notify_custom_state_change();
         }
     }
@@ -831,6 +1336,7 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
 
         let state_changed = shared_state.inner.set_default_normal(new_normal);
         if state_changed {
+            shared_state.needs_repaint = true;
             self.el.notify_custom_state_change();
         }
     }
@@ -841,6 +1347,7 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
         if shared_state.automation_info != info {
             shared_state.automation_info = info;
+            shared_state.automation_info_changed = true;
             self.el.notify_custom_state_change();
         }
     }
@@ -851,6 +1358,7 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
 
         let state_changed = shared_state.inner.reset_to_default().is_some();
         if state_changed {
+            shared_state.needs_repaint = true;
             self.el.notify_custom_state_change();
         }
     }
@@ -878,6 +1386,7 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
 
         if !Rc::ptr_eq(&shared_state.style, style) {
             shared_state.style = Rc::clone(style);
+            shared_state.needs_repaint = true;
             self.el.notify_custom_state_change();
         }
     }
@@ -891,6 +1400,7 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
 
         if shared_state.disabled != disabled {
             shared_state.disabled = disabled;
+            shared_state.needs_repaint = true;
             self.el.notify_custom_state_change();
         }
     }

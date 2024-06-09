@@ -26,7 +26,7 @@ use super::ElementTooltipInfo;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ChangeFocusRequest {
-    StealExclusiveFocus,
+    StealFocus,
     StealTemporaryFocus,
     ReleaseFocus,
 }
@@ -183,7 +183,7 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
     ///
     /// By default every newly created element does not have focus.
     pub fn steal_focus(&mut self) {
-        self.change_focus_request = Some(ChangeFocusRequest::StealExclusiveFocus);
+        self.change_focus_request = Some(ChangeFocusRequest::StealFocus);
     }
 
     /// Request to temporarily steal focus.
@@ -238,6 +238,10 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
 
     pub fn start_hover_timeout(&mut self) {
         self.hover_timeout_requested = true;
+    }
+
+    pub fn start_scroll_wheel_timeout(&mut self) {
+        self.scroll_wheel_timeout_requested = true;
     }
 
     pub fn show_tooltip(&mut self, info: ElementTooltipInfo) {

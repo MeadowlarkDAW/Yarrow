@@ -236,7 +236,7 @@ impl<A: Clone + 'static> ResizeHandleElement<A> {
             style,
             layout,
             current_span,
-            resized_by_user: false,
+            resized_by_handle: false,
             disabled,
         }));
 
@@ -300,15 +300,12 @@ impl<A: Clone + 'static> Element<A> for ResizeHandleElement<A> {
                 cx.set_bounding_rect(bounding_rect);
                 cx.request_repaint();
 
-                if shared_state.resized_by_user {
-                    shared_state.resized_by_user = false;
+                if shared_state.resized_by_handle {
+                    shared_state.resized_by_handle = false;
 
-                    if let Some(f) = &mut self.resized_action {
-                        cx.send_action((f)(shared_state.current_span)).unwrap();
-                    }
-                    if let Some(f) = &mut self.resize_finished_action {
-                        cx.send_action((f)(shared_state.current_span)).unwrap();
-                    }
+                    self.queued_resize_finished_span = None;
+                    self.drag_state = None;
+                    self.show_drag_handle = false;
                 }
             }
             ElementEvent::Pointer(PointerEvent::Moved { position, .. }) => {
@@ -444,7 +441,7 @@ impl<A: Clone + 'static> Element<A> for ResizeHandleElement<A> {
                     cx.request_repaint();
                 }
             }
-            ElementEvent::ExclusiveFocus(false) => {
+            ElementEvent::Focus(false) => {
                 cx.cursor_icon = CursorIcon::Default;
 
                 self.drag_state = None;
@@ -557,7 +554,7 @@ impl ResizeHandle {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
         if shared_state.current_span != span {
             shared_state.current_span = span;
-            shared_state.resized_by_user = true;
+            shared_state.resized_by_handle = true;
             self.el.notify_custom_state_change();
         }
     }
@@ -601,7 +598,7 @@ struct SharedState {
     style: Rc<ResizeHandleStyle>,
     layout: ResizeHandleLayout,
     current_span: f32,
-    resized_by_user: bool,
+    resized_by_handle: bool,
     disabled: bool,
 }
 

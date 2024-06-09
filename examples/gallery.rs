@@ -1,5 +1,7 @@
 #[path = "gallery/basic_elements.rs"]
 mod basic_elements;
+#[path = "gallery/knobs_and_sliders.rs"]
+mod knobs_and_sliders;
 #[path = "gallery/style.rs"]
 mod style;
 
@@ -7,11 +9,11 @@ use self::style::MyStyle;
 use yarrow::prelude::*;
 
 #[repr(usize)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, parse_display::Display)]
-#[display(style = "Title Case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, derive_more::Display)]
 enum MyTab {
+    #[display(fmt = "Basic Elements")]
     BasicElements,
-    #[display("Knobs & Sliders")]
+    #[display(fmt = "Knobs & Sliders")]
     KnobsAndSliders,
     More,
 }
@@ -20,8 +22,7 @@ impl MyTab {
 }
 
 #[repr(usize)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, parse_display::Display)]
-#[display(style = "Title Case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, derive_more::Display)]
 enum MenuOption {
     Hello,
     World,
@@ -60,6 +61,7 @@ pub fn main() {
 #[derive(Debug, Clone, PartialEq)]
 enum MyAction {
     BasicElements(basic_elements::Action),
+    KnobsAndSliders(knobs_and_sliders::Action),
     LeftPanelResized(f32),
     LeftPanelResizeFinished(f32),
     MenuItemSelected(MenuOption),
@@ -75,9 +77,16 @@ impl From<basic_elements::Action> for MyAction {
     }
 }
 
+impl From<knobs_and_sliders::Action> for MyAction {
+    fn from(a: knobs_and_sliders::Action) -> Self {
+        MyAction::KnobsAndSliders(a)
+    }
+}
+
 // A struct to hold all of our elements that belong to the main window.
 struct MainWindowElements {
     basic_elements: basic_elements::Elements,
+    knobs_and_sliders: knobs_and_sliders::Elements,
     menu: DropDownMenu,
     menu_btn: Button,
     top_panel_bg: QuadElement,
@@ -99,6 +108,7 @@ struct MyApp {
 
     style: MyStyle,
     did_load_fonts: bool,
+    current_tab: MyTab,
 }
 
 impl MyApp {
@@ -112,12 +122,13 @@ impl MyApp {
             main_window_elements: None,
             style: MyStyle::new(),
             did_load_fonts: false,
+            current_tab: MyTab::BasicElements,
         }
     }
 
     fn build_main_window(&mut self, cx: &mut WindowContext<'_, MyAction>) {
         cx.view.clear_color = self.style.clear_color.into();
-        cx.view.set_num_additional_scissor_rects(1);
+        cx.view.set_num_additional_scissor_rects(2);
 
         let top_panel_bg = QuadElement::builder(&self.style.panel_bg_style).build(cx);
         let top_panel_border = QuadElement::builder(&self.style.panel_border_style).build(cx);
@@ -167,7 +178,7 @@ impl MyApp {
         let tab_group = TabGroup::new(
             MyTab::ALL
                 .map(|t| TabGroupOption::new(format!("{t}"), format!("{t}"), Point::default())),
-            0,
+            self.current_tab as usize,
             |i| MyAction::TabSelected(MyTab::ALL[i]),
             &self.style.tab_style,
             MAIN_Z_INDEX,
@@ -177,8 +188,15 @@ impl MyApp {
             cx,
         );
 
+        let mut basic_elements = basic_elements::Elements::new(&self.style, cx);
+        let mut knobs_and_sliders = knobs_and_sliders::Elements::new(&self.style, cx);
+
+        basic_elements.set_hidden(self.current_tab != MyTab::BasicElements);
+        knobs_and_sliders.set_hidden(self.current_tab != MyTab::KnobsAndSliders);
+
         self.main_window_elements = Some(MainWindowElements {
-            basic_elements: basic_elements::Elements::new(&self.style, cx),
+            basic_elements,
+            knobs_and_sliders,
             menu,
             menu_btn,
             top_panel_bg,
@@ -189,6 +207,66 @@ impl MyApp {
             tab_group,
             tooltip,
         });
+    }
+
+    fn handle_action(&mut self, action: MyAction, cx: &mut AppContext<MyAction>) {
+        dbg!(&action);
+
+        let Some(elements) = self.main_window_elements.as_mut() else {
+            return;
+        };
+
+        let mut needs_layout = false;
+
+        match action {
+            MyAction::BasicElements(action) => {
+                let mut main_window_cx = cx.window_context(MAIN_WINDOW).unwrap();
+                needs_layout = elements
+                    .basic_elements
+                    .handle_action(action, &mut main_window_cx);
+            }
+            MyAction::KnobsAndSliders(action) => {
+                let mut main_window_cx = cx.window_context(MAIN_WINDOW).unwrap();
+                needs_layout = elements
+                    .knobs_and_sliders
+                    .handle_action(action, &mut main_window_cx);
+            }
+            MyAction::LeftPanelResized(_new_span) => {
+                needs_layout = true;
+            }
+            MyAction::LeftPanelResizeFinished(_new_span) => {}
+            MyAction::MenuItemSelected(_option) => {}
+            MyAction::OpenMenu => {
+                elements.menu.open(None);
+            }
+            MyAction::ShowTooltip((info, _window_id)) => {
+                elements.tooltip.show(
+                    &info.message,
+                    info.element_bounds,
+                    info.align,
+                    &mut cx.font_system,
+                );
+            }
+            MyAction::HideTooltip(_window_id) => {
+                elements.tooltip.hide();
+            }
+            MyAction::TabSelected(tab) => {
+                self.current_tab = tab;
+                elements.tab_group.updated_selected(tab as usize);
+                elements
+                    .basic_elements
+                    .set_hidden(tab != MyTab::BasicElements);
+                elements
+                    .knobs_and_sliders
+                    .set_hidden(tab != MyTab::KnobsAndSliders);
+                needs_layout = true;
+            }
+        }
+
+        if needs_layout {
+            let mut main_window_cx = cx.window_context(MAIN_WINDOW).unwrap();
+            self.layout_main_window(&mut main_window_cx);
+        }
     }
 
     fn layout_main_window(&mut self, cx: &mut WindowContext<'_, MyAction>) {
@@ -259,65 +337,26 @@ impl MyApp {
             Some(left_panel_width - self.style.panel_border_width),
         );
 
-        elements.basic_elements.layout(
-            Rect::new(
-                Point::new(left_panel_width, self.style.top_panel_height),
-                Size::new(
-                    window_size.width - left_panel_width,
-                    window_size.height - self.style.top_panel_height,
-                ),
+        let content_rect = Rect::new(
+            Point::new(left_panel_width, self.style.top_panel_height),
+            Size::new(
+                window_size.width - left_panel_width,
+                window_size.height - self.style.top_panel_height,
             ),
-            &self.style,
-            cx,
-        )
-    }
+        );
 
-    fn handle_action(&mut self, action: MyAction, cx: &mut AppContext<MyAction>) {
-        dbg!(&action);
-
-        let Some(elements) = self.main_window_elements.as_mut() else {
-            return;
-        };
-
-        let mut needs_layout = false;
-
-        match action {
-            MyAction::BasicElements(action) => {
-                let mut main_window_cx = cx.window_context(MAIN_WINDOW).unwrap();
-                needs_layout = elements
-                    .basic_elements
-                    .handle_action(action, &mut main_window_cx);
-            }
-            MyAction::LeftPanelResized(_new_span) => {
-                needs_layout = true;
-            }
-            MyAction::LeftPanelResizeFinished(_new_span) => {}
-            MyAction::MenuItemSelected(_option) => {}
-            MyAction::OpenMenu => {
-                elements.menu.open(None);
-            }
-            MyAction::ShowTooltip((info, _window_id)) => {
-                elements.tooltip.show(
-                    &info.message,
-                    info.element_bounds,
-                    info.align,
-                    &mut cx.font_system,
-                );
-            }
-            MyAction::HideTooltip(_window_id) => {
-                elements.tooltip.hide();
-            }
-            MyAction::TabSelected(tab) => {
-                elements.tab_group.updated_selected(tab as usize);
+        match self.current_tab {
+            MyTab::BasicElements => {
                 elements
                     .basic_elements
-                    .set_hidden(tab != MyTab::BasicElements);
+                    .layout(content_rect, &self.style, cx);
             }
-        }
-
-        if needs_layout {
-            let mut main_window_cx = cx.window_context(MAIN_WINDOW).unwrap();
-            self.layout_main_window(&mut main_window_cx);
+            MyTab::KnobsAndSliders => {
+                elements
+                    .knobs_and_sliders
+                    .layout(content_rect, &self.style, cx);
+            }
+            MyTab::More => {}
         }
     }
 }

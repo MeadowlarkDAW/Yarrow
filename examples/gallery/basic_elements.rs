@@ -2,18 +2,18 @@ use crate::style::MyStyle;
 use crate::{MyAction, MAIN_Z_INDEX, OVERLAY_Z_INDEX, SCROLL_AREA_Z_INDEX};
 use yarrow::prelude::*;
 
-pub const SCROLL_AREA_SCISSOR_RECT_ID: ScissorRectID = 1;
+pub const SCROLL_AREA_SCISSOR_RECT: ScissorRectID = 1;
 
 #[repr(usize)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, parse_display::Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, derive_more::Display)]
 pub enum DropDownOption {
-    #[display("Option A")]
+    #[display(fmt = "Option A")]
     A,
-    #[display("Option B")]
+    #[display(fmt = "Option B")]
     B,
-    #[display("Option C")]
+    #[display(fmt = "Option C")]
     C,
-    #[display("Option D")]
+    #[display(fmt = "Option D")]
     D,
 }
 impl DropDownOption {
@@ -21,12 +21,12 @@ impl DropDownOption {
 }
 
 #[repr(usize)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, parse_display::Display)]
-#[display(style = "Title Case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, derive_more::Display)]
 pub enum TextMenuOption {
     Cut,
     Copy,
     Paste,
+    #[display(fmt = "Select All")]
     SelectAll,
 }
 impl TextMenuOption {
@@ -78,14 +78,14 @@ impl Elements {
         let label = Label::builder(&style.label_style)
             .text("Label")
             .z_index(MAIN_Z_INDEX)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT_ID)
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
             .build(cx);
 
         let dual_label = DualLabel::builder(&style.dual_label_style)
             .left_text('\u{f05a}')
             .right_text("Dual Label")
             .z_index(MAIN_Z_INDEX)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT_ID)
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
             .build(cx);
 
         let click_me_btn = Button::builder(&style.button_style)
@@ -93,14 +93,14 @@ impl Elements {
             .on_select(Action::ClickMePressed.into())
             .tooltip_message("A cool button", Align2::TOP_CENTER)
             .z_index(MAIN_Z_INDEX)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT_ID)
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
             .build(cx);
 
         let toggle_btn = ToggleButton::builder(&style.toggle_btn_style)
             .text("off")
             .on_toggled(|toggled| Action::ToggleValue(toggled).into())
             .z_index(MAIN_Z_INDEX)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT_ID)
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
             .build(cx);
 
         let dual_toggle_btn = DualToggleButton::builder(&style.dual_toggle_btn_style)
@@ -108,13 +108,13 @@ impl Elements {
             .right_text("off")
             .on_toggled(|toggled| Action::ToggleValue(toggled).into())
             .z_index(MAIN_Z_INDEX)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT_ID)
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
             .build(cx);
 
         let switch = Switch::builder(&style.switch_style)
             .on_toggled(|toggled| Action::ToggleValue(toggled).into())
             .z_index(MAIN_Z_INDEX)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT_ID)
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
             .build(cx);
 
         let radio_group = RadioButtonGroup::new(
@@ -124,7 +124,7 @@ impl Elements {
             &style.label_no_bg_style,
             &style.radio_btn_style,
             MAIN_Z_INDEX,
-            SCROLL_AREA_SCISSOR_RECT_ID,
+            SCROLL_AREA_SCISSOR_RECT,
             cx,
         );
 
@@ -133,7 +133,7 @@ impl Elements {
             .tooltip_message("A text input :)", Align2::TOP_LEFT)
             .on_changed(|text| Action::TextChanged(text).into())
             .on_right_click(|pos| Action::OpenTextInputMenu(pos).into())
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT_ID)
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
             .password_mode(false) // There is an optional password mode if desired.
             .z_index(MAIN_Z_INDEX)
             .build(cx);
@@ -163,7 +163,7 @@ impl Elements {
             .right_text('\u{2304}')
             .on_select(Action::OpenDropDown.into())
             .z_index(MAIN_Z_INDEX)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT_ID)
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
             .build(cx);
         let drop_down_menu = DropDownMenu::builder(&style.menu_style)
             .entries(
@@ -271,7 +271,7 @@ impl Elements {
             },
             Action::ScrollOffsetChanged(scroll_offset) => {
                 cx.view
-                    .update_scissor_rect(SCROLL_AREA_SCISSOR_RECT_ID, None, Some(scroll_offset))
+                    .update_scissor_rect(SCROLL_AREA_SCISSOR_RECT, None, Some(scroll_offset))
                     .unwrap();
             }
         }
@@ -290,7 +290,7 @@ impl Elements {
         self.scroll_area.el.set_rect(content_rect);
         cx.view
             .update_scissor_rect(
-                SCROLL_AREA_SCISSOR_RECT_ID,
+                SCROLL_AREA_SCISSOR_RECT,
                 Some(self.scroll_area.el.rect()),
                 None,
             )
@@ -382,19 +382,37 @@ impl Elements {
     }
 
     pub fn set_hidden(&mut self, hidden: bool) {
-        self.label.el.set_hidden(hidden);
-        self.dual_label.el.set_hidden(hidden);
-        self.click_me_btn.el.set_hidden(hidden);
-        self.switch.el.set_hidden(hidden);
-        self.toggle_btn.el.set_hidden(hidden);
-        self.dual_toggle_btn.el.set_hidden(hidden);
-        self.radio_group.set_hidden(hidden);
-        self.drop_down_menu_btn.el.set_hidden(hidden);
-        self.drop_down_menu.el.set_hidden(hidden);
-        self.text_input.el.set_hidden(hidden);
-        self.text_input_menu.el.set_hidden(hidden);
-        self.right_click_area.el.set_hidden(hidden);
-        self.right_click_menu.el.set_hidden(hidden);
-        self.scroll_area.el.set_hidden(hidden);
+        // Destructuring helps to make sure you didn't miss any elements.
+        let Self {
+            label,
+            dual_label,
+            click_me_btn,
+            switch,
+            toggle_btn,
+            dual_toggle_btn,
+            radio_group,
+            drop_down_menu_btn,
+            drop_down_menu,
+            text_input,
+            text_input_menu,
+            right_click_area,
+            right_click_menu,
+            scroll_area,
+        } = self;
+
+        label.el.set_hidden(hidden);
+        dual_label.el.set_hidden(hidden);
+        click_me_btn.el.set_hidden(hidden);
+        switch.el.set_hidden(hidden);
+        toggle_btn.el.set_hidden(hidden);
+        dual_toggle_btn.el.set_hidden(hidden);
+        radio_group.set_hidden(hidden);
+        drop_down_menu_btn.el.set_hidden(hidden);
+        drop_down_menu.el.set_hidden(hidden);
+        text_input.el.set_hidden(hidden);
+        text_input_menu.el.set_hidden(hidden);
+        right_click_area.el.set_hidden(hidden);
+        right_click_menu.el.set_hidden(hidden);
+        scroll_area.el.set_hidden(hidden);
     }
 }

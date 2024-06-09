@@ -54,7 +54,7 @@ pub enum ElementEvent {
     SizeChanged,
     PositionChanged,
     ZIndexChanged,
-    ExclusiveFocus(bool),
+    Focus(bool),
     ClickedOff,
     Init,
 }

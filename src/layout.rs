@@ -95,6 +95,18 @@ pub struct BoundsLayout {
     pub placement: BoundsPlacement,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SizeType {
+    FixedPoints(f32),
+    Scale(f32),
+}
+
+impl Default for SizeType {
+    fn default() -> Self {
+        Self::Scale(1.0)
+    }
+}
+
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Stretch {
     #[default]

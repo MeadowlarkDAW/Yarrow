@@ -7,8 +7,7 @@ use rootvg::quad::SolidQuadBuilder;
 use rootvg::text::glyphon::cosmic_text::{Motion, Selection};
 use rootvg::text::glyphon::{Action, Affinity, Cursor, Edit, FontSystem};
 use rootvg::text::{
-    Attrs, EditorBorrowStatus, Family, RcTextBuffer, Shaping, TextPrimitive, TextProperties,
-    Weight, Wrap,
+    Attrs, EditorBorrowStatus, Family, RcTextBuffer, Shaping, TextPrimitive, TextProperties, Wrap,
 };
 use rootvg::PrimitiveGroup;
 use unicode_segmentation::UnicodeSegmentation;
@@ -1139,7 +1138,7 @@ impl<A: Clone + 'static> Element<A> for TextInputElement<A> {
                     }
                 }
             }
-            ElementEvent::ExclusiveFocus(has_focus) => {
+            ElementEvent::Focus(has_focus) => {
                 if has_focus {
                     cx.listen_to_pointer_clicked_off();
                     self.cursor_blink_state_on = true;

@@ -26,7 +26,7 @@ pub type WindowID = u32;
 pub const MAIN_WINDOW: WindowID = 0;
 
 // TODO: Get click intervals from OS.
-const DOUBLE_CLICK_INTERVAL: Duration = Duration::from_millis(500);
+const DOUBLE_CLICK_INTERVAL: Duration = Duration::from_millis(300);
 
 #[derive(Clone, Copy)]
 struct PointerBtnState {

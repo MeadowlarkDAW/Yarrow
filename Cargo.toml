@@ -40,5 +40,5 @@ rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "0fc878ede24b1
 #rootvg = { path = "../rootvg" }
 
 [dev-dependencies]
-env_logger = "0.11.3"
-parse-display = "0.9.1"
+env_logger = { version = "0.11.3", default-features = false }
+derive_more = "0.99.17"

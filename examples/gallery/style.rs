@@ -24,6 +24,7 @@ pub struct MyStyle {
     pub tooltip_style: Rc<LabelStyle>,
     pub tab_style: Rc<TabStyle>,
     pub scroll_bar_style: Rc<ScrollBarStyle>,
+    pub knob_style_1: Rc<KnobStyle>,
 
     pub top_panel_height: f32,
     pub panel_border_width: f32,
@@ -127,6 +128,7 @@ impl MyStyle {
                 ..Default::default()
             }),
             scroll_bar_style: Rc::new(ScrollBarStyle::default()),
+            knob_style_1: Rc::new(KnobStyle::default()),
 
             top_panel_height: 30.0,
             panel_border_width: 1.0,

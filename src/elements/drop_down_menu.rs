@@ -442,7 +442,7 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
             ElementEvent::ClickedOff => {
                 cx.release_focus();
             }
-            ElementEvent::ExclusiveFocus(false) => {
+            ElementEvent::Focus(false) => {
                 self.active = false;
                 self.hovered_entry_index = None;
                 cx.release_focus();

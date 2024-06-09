@@ -1101,7 +1101,7 @@ impl<A: Clone + 'static> View<A> {
                     self.set_element_animating(modification.element_id, animating);
                 }
                 ElementModificationType::ChangeFocus(req) => match req {
-                    ChangeFocusRequest::StealExclusiveFocus => {
+                    ChangeFocusRequest::StealFocus => {
                         self.element_steal_focus(
                             modification.element_id,
                             false,
@@ -1701,7 +1701,7 @@ impl<A: Clone + 'static> View<A> {
             .contains(ElementFlags::LISTENS_TO_FOCUS_CHANGE)
         {
             send_event_to_element(
-                ElementEvent::ExclusiveFocus(true),
+                ElementEvent::Focus(true),
                 element_entry,
                 element_id,
                 &self.current_focus_info,
@@ -2155,7 +2155,7 @@ fn release_focus_for_element<A: Clone + 'static>(
         .contains(ElementFlags::LISTENS_TO_FOCUS_CHANGE)
     {
         send_event_to_element(
-            ElementEvent::ExclusiveFocus(false),
+            ElementEvent::Focus(false),
             element_entry,
             element_id,
             current_focus_info,
@@ -2173,9 +2173,7 @@ fn release_focus_for_element<A: Clone + 'static>(
         if prev_element_id != element_id {
             mod_queue_sender.send_to_front(ElementModification {
                 element_id: prev_element_id,
-                type_: ElementModificationType::ChangeFocus(
-                    ChangeFocusRequest::StealExclusiveFocus,
-                ),
+                type_: ElementModificationType::ChangeFocus(ChangeFocusRequest::StealFocus),
             });
         }
     }
