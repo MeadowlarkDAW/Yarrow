@@ -44,16 +44,17 @@ pub struct MyStyle {
 
 impl MyStyle {
     pub fn new() -> Self {
+        let icon_attrs = Attrs::new().family(Family::Fantasy).weight(Weight::BLACK);
+
         let mut menu_btn_style = ButtonStyle::default_menu_style();
-        menu_btn_style.properties.attrs =
-            Attrs::new().family(Family::Fantasy).weight(Weight::BLACK);
+        menu_btn_style.properties.attrs = icon_attrs;
 
         Self {
             button_style: Rc::new(ButtonStyle::default()),
             toggle_btn_style: Rc::new(ToggleButtonStyle::default()),
             dual_toggle_btn_style: Rc::new(DualToggleButtonStyle {
                 left_properties: TextProperties {
-                    attrs: Attrs::new().family(Family::Fantasy).weight(Weight::BLACK),
+                    attrs: icon_attrs,
                     ..Default::default()
                 },
                 ..Default::default()
@@ -72,7 +73,7 @@ impl MyStyle {
             }),
             dual_label_style: Rc::new(DualLabelStyle {
                 left_properties: TextProperties {
-                    attrs: Attrs::new().family(Family::Fantasy).weight(Weight::BLACK),
+                    attrs: icon_attrs,
                     ..Default::default()
                 },
                 left_font_color: DEFAULT_ACCENT_COLOR,
@@ -91,7 +92,7 @@ impl MyStyle {
             radio_btn_style: Rc::new(RadioButtonStyle::default()),
             drop_down_btn_style: Rc::new(DualButtonStyle {
                 right_properties: TextProperties {
-                    attrs: Attrs::new().family(Family::Fantasy).weight(Weight::BLACK),
+                    attrs: icon_attrs,
                     ..Default::default()
                 },
                 layout: DualLabelLayout::LeftAndRightAlign,
@@ -116,6 +117,7 @@ impl MyStyle {
             tab_style: Rc::new(TabStyle {
                 toggle_btn_style: ToggleButtonStyle {
                     properties: TextProperties {
+                        attrs: Attrs::new().weight(Weight::NORMAL),
                         align: Some(TextAlign::Left),
                         ..Default::default()
                     },

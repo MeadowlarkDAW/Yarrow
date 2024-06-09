@@ -9,7 +9,7 @@ use rootvg::PrimitiveGroup;
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
 use crate::layout::{Align, Align2, Padding};
 use crate::math::{Rect, Size, ZIndex};
-use crate::style::{Background, BorderStyle, QuadStyle};
+use crate::style::{Background, BorderStyle, QuadStyle, DEFAULT_TEXT_ATTRIBUTES};
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, ElementTooltipInfo,
@@ -141,6 +141,7 @@ impl Default for ButtonStyle {
 
         Self {
             properties: TextProperties {
+                attrs: DEFAULT_TEXT_ATTRIBUTES,
                 align: Some(rootvg::text::Align::Center),
                 ..Default::default()
             },

@@ -9,7 +9,7 @@ use rootvg::PrimitiveGroup;
 use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::{Align, Padding};
 use crate::math::{Point, Rect, Size, ZIndex};
-use crate::style::{Background, BorderStyle, QuadStyle};
+use crate::style::{Background, BorderStyle, QuadStyle, DEFAULT_TEXT_ATTRIBUTES};
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
@@ -72,7 +72,10 @@ impl LabelStyle {
 impl Default for LabelStyle {
     fn default() -> Self {
         Self {
-            properties: TextProperties::default(),
+            properties: TextProperties {
+                attrs: DEFAULT_TEXT_ATTRIBUTES,
+                ..Default::default()
+            },
             font_color: color::WHITE,
             vertical_align: Align::Center,
             min_clipped_size: Size::new(5.0, 5.0),

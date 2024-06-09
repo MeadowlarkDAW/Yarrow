@@ -7,7 +7,8 @@ use rootvg::quad::SolidQuadBuilder;
 use rootvg::text::glyphon::cosmic_text::{Motion, Selection};
 use rootvg::text::glyphon::{Action, Affinity, Cursor, Edit, FontSystem};
 use rootvg::text::{
-    EditorBorrowStatus, Family, RcTextBuffer, Shaping, TextPrimitive, TextProperties, Wrap,
+    Attrs, EditorBorrowStatus, Family, RcTextBuffer, Shaping, TextPrimitive, TextProperties,
+    Weight, Wrap,
 };
 use rootvg::PrimitiveGroup;
 use unicode_segmentation::UnicodeSegmentation;
@@ -16,7 +17,9 @@ use crate::clipboard::{Clipboard, ClipboardKind};
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
 use crate::layout::{Align, Align2, Padding};
 use crate::math::{Point, Rect, Size, ZIndex};
-use crate::style::{Background, BorderStyle, QuadStyle, DEFAULT_ACCENT_COLOR};
+use crate::style::{
+    Background, BorderStyle, QuadStyle, DEFAULT_ACCENT_COLOR, DEFAULT_TEXT_ATTRIBUTES,
+};
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, ElementTooltipInfo,
@@ -33,6 +36,8 @@ use crate::CursorIcon;
 pub struct TextInputStyle {
     /// The text properties.
     pub properties: TextProperties,
+
+    pub placeholder_text_attrs: Attrs<'static>,
 
     /// The color of the font
     ///
@@ -116,7 +121,14 @@ pub struct TextInputStyle {
 impl Default for TextInputStyle {
     fn default() -> Self {
         Self {
-            properties: TextProperties::default(),
+            properties: TextProperties {
+                attrs: DEFAULT_TEXT_ATTRIBUTES,
+                ..Default::default()
+            },
+            placeholder_text_attrs: Attrs {
+                style: rootvg::text::Style::Italic,
+                ..DEFAULT_TEXT_ATTRIBUTES
+            },
             font_color: color::WHITE,
             font_color_placeholder: RGBA8::new(120, 120, 120, 255),
             font_color_disabled: RGBA8::new(120, 120, 120, 255),
@@ -338,7 +350,8 @@ impl<A: Clone + 'static> TextInputElement<A> {
         let mut properties = style.properties;
         properties.wrap = Wrap::None;
         properties.shaping = Shaping::Advanced;
-        let placeholder_properties = properties.clone();
+        let mut placeholder_properties = properties.clone();
+        placeholder_properties.attrs = style.placeholder_text_attrs;
 
         if password_mode {
             properties.attrs.family = Family::Monospace;
@@ -1437,7 +1450,15 @@ impl TextInput {
         if !Rc::ptr_eq(old_style, style) {
             *old_style = Rc::clone(style);
             buffer.set_text_and_props(text, style.properties, font_system);
-            placeholder_buffer.set_text_and_props(placeholder_text, style.properties, font_system);
+
+            let mut placeholder_properties = style.properties.clone();
+            placeholder_properties.attrs = style.placeholder_text_attrs;
+            placeholder_buffer.set_text_and_props(
+                placeholder_text,
+                placeholder_properties,
+                font_system,
+            );
+
             self.el.notify_custom_state_change();
         }
     }

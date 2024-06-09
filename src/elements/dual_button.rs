@@ -9,7 +9,7 @@ use rootvg::PrimitiveGroup;
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
 use crate::layout::{Align, Align2, Padding};
 use crate::math::{Rect, Size, ZIndex};
-use crate::style::{Background, BorderStyle, QuadStyle};
+use crate::style::{Background, BorderStyle, QuadStyle, DEFAULT_TEXT_ATTRIBUTES};
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, ElementTooltipInfo,
@@ -101,8 +101,14 @@ impl Default for DualButtonStyle {
         };
 
         Self {
-            left_properties: TextProperties::default(),
-            right_properties: TextProperties::default(),
+            left_properties: TextProperties {
+                attrs: DEFAULT_TEXT_ATTRIBUTES,
+                ..Default::default()
+            },
+            right_properties: TextProperties {
+                attrs: DEFAULT_TEXT_ATTRIBUTES,
+                ..Default::default()
+            },
             vertical_align: Align::Center,
             left_min_clipped_size: Size::new(5.0, 5.0),
             right_min_clipped_size: Size::new(5.0, 5.0),

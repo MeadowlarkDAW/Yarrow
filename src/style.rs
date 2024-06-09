@@ -1,11 +1,24 @@
 use rootvg::math::Rect;
 use rootvg::quad::{GradientQuad, QuadPrimitive, SolidQuad};
+use rootvg::text::glyphon::cosmic_text::CacheKeyFlags;
+use rootvg::text::{Attrs, Family, Weight};
 
 use crate::vg::color::RGBA8;
 use crate::vg::gradient::Gradient;
 use crate::vg::quad::{Border, Radius};
 
 pub const DEFAULT_ACCENT_COLOR: RGBA8 = RGBA8::new(179, 123, 95, 255);
+pub const DEFAULT_TEXT_ATTRIBUTES: Attrs<'static> = Attrs {
+    color_opt: None,
+    family: Family::SansSerif,
+    stretch: rootvg::text::Stretch::Normal,
+    style: rootvg::text::Style::Normal,
+    // Glyphon currently makes text look a bit too bold, so use the light
+    // weight by default for now until that is fixed.
+    weight: Weight::LIGHT,
+    metadata: 0,
+    cache_key_flags: CacheKeyFlags::empty(),
+};
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct BorderStyle {

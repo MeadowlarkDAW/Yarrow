@@ -9,7 +9,7 @@ use rootvg::PrimitiveGroup;
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
 use crate::layout::Padding;
 use crate::math::{Rect, Size, ZIndex};
-use crate::style::{Background, BorderStyle, QuadStyle};
+use crate::style::{Background, BorderStyle, QuadStyle, DEFAULT_TEXT_ATTRIBUTES};
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
@@ -78,8 +78,14 @@ pub struct DropDownMenuStyle {
 impl Default for DropDownMenuStyle {
     fn default() -> Self {
         Self {
-            left_text_properties: TextProperties::default(),
-            right_text_properties: TextProperties::default(),
+            left_text_properties: TextProperties {
+                attrs: DEFAULT_TEXT_ATTRIBUTES,
+                ..Default::default()
+            },
+            right_text_properties: TextProperties {
+                attrs: DEFAULT_TEXT_ATTRIBUTES,
+                ..Default::default()
+            },
 
             left_text_color_idle: color::WHITE,
             right_text_color_idle: color::WHITE,

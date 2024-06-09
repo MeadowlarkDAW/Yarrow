@@ -9,7 +9,7 @@ use rootvg::PrimitiveGroup;
 use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::Padding;
 use crate::math::{Point, Rect, Size, ZIndex};
-use crate::style::QuadStyle;
+use crate::style::{QuadStyle, DEFAULT_TEXT_ATTRIBUTES};
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
@@ -87,8 +87,14 @@ pub struct DualLabelStyle {
 impl Default for DualLabelStyle {
     fn default() -> Self {
         Self {
-            left_properties: TextProperties::default(),
-            right_properties: TextProperties::default(),
+            left_properties: TextProperties {
+                attrs: DEFAULT_TEXT_ATTRIBUTES,
+                ..Default::default()
+            },
+            right_properties: TextProperties {
+                attrs: DEFAULT_TEXT_ATTRIBUTES,
+                ..Default::default()
+            },
             left_font_color: color::WHITE,
             right_font_color: color::WHITE,
             vertical_align: crate::layout::Align::Center,

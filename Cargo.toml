@@ -36,7 +36,7 @@ raw-window-handle = { version = "0.6.0", features = ["std"] }
 winit = { version = "0.30.0", optional = true, default-features = false, features = ["rwh_06"] }
 wgpu = { version = "0.20.0", default-features = false, features = ["wgsl"] }
 window_clipboard = "0.4.1"
-rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "08dee44b787cbb6dfff5006b757bb8743ee6f97e" }
+rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "0fc878ede24b13cfa1cd8ef8199c81a6db2362de" }
 #rootvg = { path = "../rootvg" }
 
 [dev-dependencies]
