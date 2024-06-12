@@ -101,6 +101,15 @@ pub enum SizeType {
     Scale(f32),
 }
 
+impl SizeType {
+    pub fn points(&self, bounds_points: f32) -> f32 {
+        match self {
+            Self::FixedPoints(p) => *p,
+            Self::Scale(s) => *s * bounds_points,
+        }
+    }
+}
+
 impl Default for SizeType {
     fn default() -> Self {
         Self::Scale(1.0)

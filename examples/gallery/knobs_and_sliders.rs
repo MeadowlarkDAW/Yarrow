@@ -1,5 +1,5 @@
 use crate::style::MyStyle;
-use crate::{MyAction, MAIN_Z_INDEX, OVERLAY_Z_INDEX, SCROLL_AREA_Z_INDEX};
+use crate::{MyAction, MAIN_Z_INDEX};
 use yarrow::prelude::*;
 
 pub const SCROLL_AREA_SCISSOR_RECT: ScissorRectID = 2;
@@ -21,6 +21,9 @@ impl Elements {
             .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
             .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
             .z_index(MAIN_Z_INDEX)
+            .normal_value(0.5)
+            .default_normal(0.5)
+            .bipolar(true)
             .build(cx);
 
         let scroll_area = ScrollArea::builder(&style.scroll_bar_style)
@@ -36,7 +39,7 @@ impl Elements {
 
     /// Returns `true` if the the contents need to be laid out.
     pub fn handle_action(&mut self, action: Action, cx: &mut WindowContext<'_, MyAction>) -> bool {
-        let mut needs_layout = false;
+        let needs_layout = false;
 
         match action {
             Action::ParamUpdate(_param_update) => {}
@@ -72,8 +75,8 @@ impl Elements {
             .set_rect(Rect::new(start_pos, Size::new(35.0, 35.0)));
 
         self.scroll_area.set_content_size(Size::new(
-            500.0 + style.content_padding,
-            500.0 + style.content_padding,
+            200.0 + style.content_padding,
+            200.0 + style.content_padding,
         ));
     }
 

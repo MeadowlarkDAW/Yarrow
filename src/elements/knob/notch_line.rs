@@ -1,11 +1,13 @@
 use rootvg::{
     color::RGBA8,
     gradient::Gradient,
-    math::{Point, Rect, Size},
+    math::{Point, Rect, Size, Transform},
     mesh::{GradientMeshPrimitive, MeshPrimitive, SolidMeshPrimitive},
 };
 
 use crate::{elements::virtual_slider::VirtualSliderState, layout::SizeType};
+
+use super::KnobAngleRange;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum KnobNotchStyleLineBg {
@@ -53,17 +55,20 @@ impl KnobNotchStyleLine {
                 idle,
                 hovered,
                 gesturing,
+                disabled,
                 ..
             } => {
                 let color_a = match a {
                     VirtualSliderState::Idle => idle,
                     VirtualSliderState::Hovered => hovered,
                     VirtualSliderState::Gesturing => gesturing,
+                    VirtualSliderState::Disabled => disabled,
                 };
                 let color_b = match b {
                     VirtualSliderState::Idle => idle,
                     VirtualSliderState::Hovered => hovered,
                     VirtualSliderState::Gesturing => gesturing,
+                    VirtualSliderState::Disabled => disabled,
                 };
 
                 color_a != color_b
@@ -72,17 +77,20 @@ impl KnobNotchStyleLine {
                 idle,
                 hovered,
                 gesturing,
+                disabled,
                 ..
             } => {
                 let gradient_a = match a {
                     VirtualSliderState::Idle => idle,
                     VirtualSliderState::Hovered => hovered,
                     VirtualSliderState::Gesturing => gesturing,
+                    VirtualSliderState::Disabled => disabled,
                 };
                 let gradient_b = match b {
                     VirtualSliderState::Idle => idle,
                     VirtualSliderState::Hovered => hovered,
                     VirtualSliderState::Gesturing => gesturing,
+                    VirtualSliderState::Disabled => disabled,
                 };
 
                 gradient_a != gradient_b
@@ -201,15 +209,30 @@ impl KnobNotchLinePrimitives {
         }
     }
 
-    pub fn mesh(&self, state: VirtualSliderState, disabled: bool) -> &MeshPrimitive {
-        if disabled {
-            &self.disabled
-        } else {
-            match state {
-                VirtualSliderState::Idle => &self.idle,
-                VirtualSliderState::Hovered => &self.hovered,
-                VirtualSliderState::Gesturing => &self.gesturing,
-            }
+    pub fn mesh(&self, state: VirtualSliderState) -> &MeshPrimitive {
+        match state {
+            VirtualSliderState::Idle => &self.idle,
+            VirtualSliderState::Hovered => &self.hovered,
+            VirtualSliderState::Gesturing => &self.gesturing,
+            VirtualSliderState::Disabled => &self.disabled,
         }
+    }
+
+    pub fn transformed_mesh(
+        &self,
+        normal_val: f32,
+        angle_range: KnobAngleRange,
+        state: VirtualSliderState,
+        back_bounds: Rect,
+    ) -> MeshPrimitive {
+        let mut mesh = self.mesh(state).clone();
+
+        mesh.set_offset(back_bounds.center());
+
+        let notch_angle = angle_range.min() + (angle_range.span() * normal_val);
+
+        mesh.set_transform(Transform::identity().then_rotate(notch_angle));
+
+        mesh
     }
 }
