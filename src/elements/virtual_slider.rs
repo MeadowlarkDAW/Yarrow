@@ -1,16 +1,22 @@
-use std::{cell::RefCell, ops::Range, rc::Rc};
+use std::{
+    cell::{Ref, RefCell},
+    ops::Range,
+    rc::Rc,
+};
 
 use keyboard_types::Modifiers;
 use rootvg::{
     math::{Point, Rect, Vector, ZIndex},
     PrimitiveGroup,
 };
+use smallvec::SmallVec;
 
 use crate::{
     event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent, WheelDeltaType},
     layout::Align2,
     view::element::{
-        Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
+        Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, ElementRenderCache,
+        RenderContext,
     },
     ScissorRectID, WindowContext, MAIN_SCISSOR_RECT,
 };
@@ -47,6 +53,102 @@ pub struct ParamOpenTextEntryInfo {
     pub stepped_value: Option<u32>,
     /// The bounding rectangle of this element
     pub bounds: Rect,
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParamerMarkerType {
+    #[default]
+    Primary,
+    Secondary,
+    Third,
+}
+
+/// A marker on a parameter element.
+#[derive(Default, Debug, Clone, PartialEq)]
+pub struct ParamMarker {
+    pub normal_val: f32,
+    pub label: Option<String>,
+    pub type_: ParamerMarkerType,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParamMarkersConfig {
+    /// Use the default configuration.
+    ///
+    /// * Standard linear parametrs: 1 main at `0.0`, 1 main at `1.0`
+    /// * Bipolar linear parameters: 1 main at `0.0`, 1 main at `0.5`, 1 main at `1.0`
+    /// * Quantized parameters: 1 main at each step
+    Default,
+    Custom(SmallVec<[ParamMarker; 8]>),
+}
+
+impl ParamMarkersConfig {
+    pub fn with_markers<F: FnMut(&ParamMarker)>(
+        &self,
+        bipolar: bool,
+        num_quantized_steps: Option<u32>,
+        mut f: F,
+    ) {
+        match self {
+            Self::Default => {
+                if let Some(num_steps) = num_quantized_steps {
+                    if num_steps < 2 {
+                        (f)(&ParamMarker {
+                            normal_val: 0.0,
+                            label: None,
+                            type_: ParamerMarkerType::Primary,
+                        });
+                    } else if num_steps > 16 {
+                        // Don't clutter the view.
+                        for normal_val in [0.0, 0.5, 1.0] {
+                            (f)(&ParamMarker {
+                                normal_val,
+                                label: None,
+                                type_: ParamerMarkerType::Primary,
+                            });
+                        }
+                    } else {
+                        let num_steps_recip = (num_steps as f32).recip();
+
+                        for i in 0..(num_steps - 1) {
+                            (f)(&ParamMarker {
+                                normal_val: (i as f32) * num_steps_recip,
+                                label: None,
+                                type_: ParamerMarkerType::Primary,
+                            });
+                        }
+
+                        (f)(&ParamMarker {
+                            normal_val: 1.0,
+                            label: None,
+                            type_: ParamerMarkerType::Primary,
+                        });
+                    }
+                } else if bipolar {
+                    for normal_val in [0.0, 0.5, 1.0] {
+                        (f)(&ParamMarker {
+                            normal_val,
+                            label: None,
+                            type_: ParamerMarkerType::Primary,
+                        });
+                    }
+                } else {
+                    for normal_val in [0.0, 1.0] {
+                        (f)(&ParamMarker {
+                            normal_val,
+                            label: None,
+                            type_: ParamerMarkerType::Primary,
+                        });
+                    }
+                }
+            }
+            Self::Custom(m) => {
+                for marker in m.iter() {
+                    (f)(marker);
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -509,14 +611,6 @@ pub fn param_snap_normal(normal: f64, num_steps: u32) -> f64 {
 
 // --------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct NormalsState {
-    pub normal_value: f64,
-    pub default_normal: f64,
-    pub automation_info: AutomationInfo,
-    pub num_quantized_steps: Option<u32>,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct UpdateResult {
     pub repaint: bool,
@@ -539,6 +633,25 @@ pub enum VirtualSliderState {
     Gesturing,
 }
 
+#[derive(Debug)]
+pub struct VirtualSliderRenderInfo<'a> {
+    pub normal_value: f64,
+    pub default_normal: f64,
+    pub automation_info: AutomationInfo,
+    pub num_quantized_steps: Option<u32>,
+    pub state: VirtualSliderState,
+    pub markers: &'a ParamMarkersConfig,
+    pub bipolar: bool,
+    pub disabled: bool,
+}
+
+impl<'a> VirtualSliderRenderInfo<'a> {
+    pub fn with_markers<F: FnMut(&ParamMarker)>(&self, f: F) {
+        self.markers
+            .with_markers(self.bipolar, self.num_quantized_steps, f);
+    }
+}
+
 pub trait VirtualSliderRenderer: Default + 'static {
     type Style;
 
@@ -551,14 +664,18 @@ pub trait VirtualSliderRenderer: Default + 'static {
         &mut self,
         prev_state: VirtualSliderState,
         new_state: VirtualSliderState,
-        style: &Self::Style,
+        style: &Rc<Self::Style>,
     ) -> UpdateResult {
         UpdateResult::default()
     }
 
     #[allow(unused)]
     /// Return `true` if the element should be repainted.
-    fn on_automation_info_update(&mut self, info: &AutomationInfo, style: &Self::Style) -> bool {
+    fn on_automation_info_update(
+        &mut self,
+        info: &AutomationInfo,
+        style: &Rc<Self::Style>,
+    ) -> bool {
         false
     }
 
@@ -566,9 +683,8 @@ pub trait VirtualSliderRenderer: Default + 'static {
     fn on_animation(
         &mut self,
         delta_seconds: f64,
-        normals: NormalsState,
-        state: VirtualSliderState,
-        style: &Self::Style,
+        style: &Rc<Self::Style>,
+        info: VirtualSliderRenderInfo<'_>,
     ) -> UpdateResult {
         UpdateResult::default()
     }
@@ -576,13 +692,27 @@ pub trait VirtualSliderRenderer: Default + 'static {
     #[allow(unused)]
     fn render_primitives(
         &mut self,
-        style: &Self::Style,
-        normals: NormalsState,
-        state: VirtualSliderState,
-        disabled: bool,
+        style: &Rc<Self::Style>,
+        info: VirtualSliderRenderInfo<'_>,
         cx: RenderContext<'_>,
         primitives: &mut PrimitiveGroup,
     ) {
+    }
+
+    /// A unique identifier for the optional global render cache.
+    ///
+    /// All instances of this element type must return the same value.
+    fn global_render_cache_id(&self) -> Option<u32> {
+        None
+    }
+
+    /// An optional struct that is shared across all instances of this element type
+    /// which can be used to cache rendering primitives.
+    ///
+    /// This will only be called once at the creation of the first instance of this
+    /// element type.
+    fn global_render_cache(&self) -> Option<Box<dyn ElementRenderCache>> {
+        None
     }
 }
 
@@ -620,6 +750,8 @@ pub struct VirtualSliderBuilder<A: Clone + 'static, R: VirtualSliderRenderer> {
     pub normal_value: f64,
     pub default_normal: f64,
     pub num_quantized_steps: Option<u32>,
+    pub markers: ParamMarkersConfig,
+    pub bipolar: bool,
     pub config: VirtualSliderConfig,
     pub drag_vertically: bool,
     pub scroll_vertically: bool,
@@ -643,6 +775,8 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer> VirtualSliderBuilder<A, R> {
             normal_value: 0.0,
             default_normal: 0.0,
             num_quantized_steps: None,
+            markers: ParamMarkersConfig::Default,
+            bipolar: false,
             config: VirtualSliderConfig::default(),
             drag_vertically: true,
             scroll_vertically: true,
@@ -698,6 +832,16 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer> VirtualSliderBuilder<A, R> {
 
     pub const fn num_quantized_steps(mut self, num_steps: Option<u32>) -> Self {
         self.num_quantized_steps = num_steps;
+        self
+    }
+
+    pub fn markers(mut self, markers: ParamMarkersConfig) -> Self {
+        self.markers = markers;
+        self
+    }
+
+    pub const fn bipolar(mut self, bipolar: bool) -> Self {
+        self.bipolar = bipolar;
         self
     }
 
@@ -772,6 +916,8 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
             normal_value,
             default_normal,
             num_quantized_steps,
+            markers,
+            bipolar,
             config,
             drag_vertically,
             scroll_vertically,
@@ -794,6 +940,8 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
             ),
             style,
             automation_info: AutomationInfo::default(),
+            markers,
+            bipolar,
             automation_info_changed: false,
             needs_repaint: false,
             disabled,
@@ -850,6 +998,8 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
             inner,
             style,
             automation_info,
+            markers,
+            bipolar,
             automation_info_changed,
             disabled,
             needs_repaint,
@@ -859,7 +1009,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
             |param_update: ParamUpdate,
              cx: &mut ElementContext<'_, A>,
              renderer: &mut R,
-             style: &R::Style,
+             style: &Rc<R::Style>,
              prev_state: Option<VirtualSliderState>,
              state: VirtualSliderState,
              on_gesture: &mut Option<Box<dyn FnMut(ParamUpdate) -> A>>| {
@@ -883,7 +1033,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
              hovered: bool,
              state: &mut VirtualSliderState,
              renderer: &mut R,
-             style: &R::Style,
+             style: &Rc<R::Style>,
              on_gesture: &mut Option<Box<dyn FnMut(ParamUpdate) -> A>>| {
                 if let Some(param_update) = inner.finish_gesture() {
                     let prev_state = if !hovered && *state != VirtualSliderState::Idle {
@@ -919,14 +1069,17 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
 
                 let res = self.renderer.on_animation(
                     delta_seconds,
-                    NormalsState {
+                    style,
+                    VirtualSliderRenderInfo {
                         normal_value: inner.normal_value(),
                         default_normal: inner.default_normal(),
                         automation_info: automation_info.clone(),
                         num_quantized_steps: inner.num_quantized_steps(),
+                        state: self.state,
+                        bipolar: *bipolar,
+                        markers,
+                        disabled: *disabled,
                     },
-                    self.state,
-                    style,
                 );
                 if res.repaint {
                     cx.request_repaint();
@@ -1265,17 +1418,27 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
 
         self.renderer.render_primitives(
             &shared_state.style,
-            NormalsState {
+            VirtualSliderRenderInfo {
                 normal_value: shared_state.inner.normal_value(),
                 default_normal: shared_state.inner.default_normal(),
                 automation_info: shared_state.automation_info.clone(),
                 num_quantized_steps: shared_state.inner.num_quantized_steps(),
+                state: self.state,
+                bipolar: shared_state.bipolar,
+                markers: &shared_state.markers,
+                disabled: shared_state.disabled,
             },
-            self.state,
-            shared_state.disabled,
             cx,
             primitives,
         )
+    }
+
+    fn global_render_cache_id(&self) -> Option<u32> {
+        self.renderer.global_render_cache_id()
+    }
+
+    fn global_render_cache(&self) -> Option<Box<dyn ElementRenderCache>> {
+        self.renderer.global_render_cache()
     }
 }
 
@@ -1302,6 +1465,8 @@ struct SharedState<R: VirtualSliderRenderer> {
     inner: VirtualSliderInner,
     style: Rc<R::Style>,
     automation_info: AutomationInfo,
+    markers: ParamMarkersConfig,
+    bipolar: bool,
     automation_info_changed: bool,
     disabled: bool,
     needs_repaint: bool,
@@ -1379,6 +1544,34 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
         RefCell::borrow(&self.shared_state)
             .inner
             .num_quantized_steps()
+    }
+
+    pub fn set_markers(&mut self, markers: ParamMarkersConfig) {
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+
+        if shared_state.markers != markers {
+            shared_state.markers = markers;
+            shared_state.needs_repaint = true;
+            self.el.notify_custom_state_change();
+        }
+    }
+
+    pub fn markers<'a>(&'a self) -> Ref<'a, ParamMarkersConfig> {
+        Ref::map(RefCell::borrow(&self.shared_state), |s| &s.markers)
+    }
+
+    pub fn set_bipolar(&mut self, bipolar: bool) {
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+
+        if shared_state.bipolar != bipolar {
+            shared_state.bipolar = bipolar;
+            shared_state.needs_repaint = true;
+            self.el.notify_custom_state_change();
+        }
+    }
+
+    pub fn bipolar(&self) -> bool {
+        RefCell::borrow(&self.shared_state).bipolar
     }
 
     pub fn set_style(&mut self, style: &Rc<R::Style>) {

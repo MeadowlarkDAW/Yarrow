@@ -15,6 +15,7 @@
 use std::time::Duration;
 use std::time::Instant;
 
+use element::ElementRenderCache;
 use keyboard_types::CompositionEvent;
 use rootvg::color::PackedSrgb;
 use rootvg::math::PhysicalSizeI32;
@@ -121,6 +122,8 @@ pub struct View<A: Clone + 'static> {
 
     view_needs_repaint: bool,
     window_visible: bool,
+
+    render_caches: FxHashMap<u32, Box<dyn ElementRenderCache>>,
 }
 
 impl<A: Clone + 'static> View<A> {
@@ -196,6 +199,8 @@ impl<A: Clone + 'static> View<A> {
             hide_tooltip_action: None,
 
             cursor_icon: CursorIcon::Default,
+
+            render_caches: FxHashMap::default(),
         }
     }
 
@@ -367,6 +372,14 @@ impl<A: Clone + 'static> View<A> {
                 font_system,
                 clipboard,
             );
+        }
+
+        if let Some(render_cache_id) = element_entry.element.global_render_cache_id() {
+            if !self.render_caches.contains_key(&render_cache_id) {
+                if let Some(render_cache) = element_entry.element.global_render_cache() {
+                    self.render_caches.insert(render_cache_id, render_cache);
+                }
+            }
         }
 
         self::element::new_element_handle(
@@ -1162,11 +1175,8 @@ impl<A: Clone + 'static> View<A> {
 
     fn handle_element_start_scroll_wheel_timeout(&mut self, element_id: ElementID) {
         if self.element_arena.contains(element_id.0) {
-            if let Some(start_instant) =
-                self.elements_with_scroll_wheel_timeout.get_mut(&element_id)
-            {
-                *start_instant = Some(Instant::now());
-            }
+            self.elements_with_scroll_wheel_timeout
+                .insert(element_id, Some(Instant::now()));
         }
     }
 
@@ -1890,6 +1900,10 @@ impl<A: Clone + 'static> View<A> {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
+        for render_cache in self.render_caches.values_mut() {
+            render_cache.pre_render();
+        }
+
         {
             let mut vg = vg.begin(self.physical_size, self.scale_factor);
 
@@ -1905,6 +1919,14 @@ impl<A: Clone + 'static> View<A> {
 
                     let element_entry = self.element_arena.get_mut(cache.element_id.0).unwrap();
 
+                    let render_cache = if let Some(render_cache_id) =
+                        element_entry.element.global_render_cache_id()
+                    {
+                        self.render_caches.get_mut(&render_cache_id)
+                    } else {
+                        None
+                    };
+
                     element_entry.element.render_primitives(
                         RenderContext {
                             font_system,
@@ -1913,6 +1935,7 @@ impl<A: Clone + 'static> View<A> {
                             visible_bounds: element_entry.stack_data.visible_rect.unwrap(),
                             scale: self.scale_factor,
                             window_size: self.logical_size,
+                            render_cache,
                         },
                         &mut cache.primitives,
                     );
@@ -1935,6 +1958,10 @@ impl<A: Clone + 'static> View<A> {
             font_system,
         )
         .unwrap(); // TODO: handle this error properly.
+
+        for render_cache in self.render_caches.values_mut() {
+            render_cache.post_render();
+        }
 
         pre_present_notify();
 

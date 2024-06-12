@@ -22,7 +22,7 @@ use crate::clipboard::Clipboard;
 use crate::math::{Rect, ScaleFactor, ZIndex};
 use crate::CursorIcon;
 
-use super::ElementTooltipInfo;
+use super::{ElementRenderCache, ElementTooltipInfo};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ChangeFocusRequest {
@@ -266,4 +266,6 @@ pub struct RenderContext<'a> {
     /// The size of the window. This can be useful to reposition/resize elements
     /// like drop-down menus to fit within the window.
     pub window_size: Size,
+    /// The optional global render cache.
+    pub render_cache: Option<&'a mut Box<dyn ElementRenderCache>>,
 }

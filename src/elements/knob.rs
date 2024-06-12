@@ -1,25 +1,35 @@
-use std::f32::consts::PI;
+use std::{f32::consts::PI, rc::Rc};
 
+use cache::{KnobRenderCache, KnobRenderCacheInner};
 use rootvg::{
     color::RGBA8,
-    math::{Angle, Rect, Size, Vector},
+    math::{Angle, Point, Rect, Size, Transform, Vector},
     PrimitiveGroup,
 };
 
 use crate::{
     layout::SizeType,
     style::{Background, BorderStyle, QuadStyle},
-    view::element::RenderContext,
+    view::element::{ElementRenderCache, RenderContext},
 };
 
 use super::virtual_slider::{
-    NormalsState, UpdateResult, VirtualSlider, VirtualSliderRenderer, VirtualSliderState,
+    ParamerMarkerType, UpdateResult, VirtualSlider, VirtualSliderRenderInfo, VirtualSliderRenderer,
+    VirtualSliderState,
 };
+
+mod angle_range;
+mod cache;
+mod notch_line;
+
+pub use angle_range::KnobAngleRange;
+pub use notch_line::{KnobNotchLinePrimitives, KnobNotchStyleLine, KnobNotchStyleLineBg};
 
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct KnobStyle {
     pub back: KnobBackStyle,
     pub notch: KnobNotchStyle,
+    pub markers: KnobMarkersStyle,
     pub angle_range: KnobAngleRange,
 }
 
@@ -84,7 +94,7 @@ impl KnobBackStyleQuad {
 impl Default for KnobBackStyleQuad {
     fn default() -> Self {
         let idle_style = QuadStyle {
-            bg: Background::Solid(RGBA8::new(40, 40, 40, 255)),
+            bg: Background::Solid(RGBA8::new(70, 70, 70, 255)),
             border: BorderStyle {
                 radius: 10000.0.into(),
                 color: RGBA8::new(105, 105, 105, 255),
@@ -93,18 +103,22 @@ impl Default for KnobBackStyleQuad {
             },
         };
 
-        let hovered_style = QuadStyle {
-            border: BorderStyle {
-                color: RGBA8::new(150, 150, 150, 255),
-                ..idle_style.border
-            },
-            ..idle_style.clone()
-        };
-
         Self {
             idle_style: idle_style.clone(),
-            hovered_style: hovered_style.clone(),
-            gesturing_style: hovered_style,
+            hovered_style: QuadStyle {
+                border: BorderStyle {
+                    color: RGBA8::new(135, 135, 135, 255),
+                    ..idle_style.border
+                },
+                ..idle_style.clone()
+            },
+            gesturing_style: QuadStyle {
+                border: BorderStyle {
+                    color: RGBA8::new(150, 150, 150, 255),
+                    ..idle_style.border
+                },
+                ..idle_style.clone()
+            },
             disabled_style: QuadStyle {
                 border: BorderStyle {
                     color: RGBA8::new(65, 65, 65, 255),
@@ -120,19 +134,21 @@ impl Default for KnobBackStyleQuad {
 #[derive(Debug, Clone, PartialEq)]
 pub enum KnobNotchStyle {
     Quad(KnobNotchStyleQuad),
+    Line(KnobNotchStyleLine),
 }
 
 impl KnobNotchStyle {
     pub fn states_differ(&self, a: VirtualSliderState, b: VirtualSliderState) -> bool {
         match self {
             Self::Quad(s) => s.states_differ(a, b),
+            Self::Line(s) => s.states_differ(a, b),
         }
     }
 }
 
 impl Default for KnobNotchStyle {
     fn default() -> Self {
-        Self::Quad(KnobNotchStyleQuad::default())
+        Self::Line(KnobNotchStyleLine::default())
     }
 }
 
@@ -171,7 +187,7 @@ impl KnobNotchStyleQuad {
 impl Default for KnobNotchStyleQuad {
     fn default() -> Self {
         let idle_style = QuadStyle {
-            bg: Background::Solid(RGBA8::new(200, 200, 200, 255)),
+            bg: Background::Solid(RGBA8::new(255, 255, 255, 255)),
             border: BorderStyle {
                 radius: 10000.0.into(),
                 ..Default::default()
@@ -186,116 +202,67 @@ impl Default for KnobNotchStyleQuad {
                 bg: Background::Solid(RGBA8::new(105, 105, 105, 255)),
                 ..idle_style
             },
-            size: SizeType::FixedPoints(5.5),
-            edge_offset: SizeType::FixedPoints(6.0),
+            size: SizeType::FixedPoints(4.5),
+            edge_offset: SizeType::FixedPoints(5.0),
         }
     }
 }
 
-/// The range between the minimum and maximum angle (in radians) a knob
-/// will rotate.
-///
-/// `0.0` radians points straight down at the bottom of the knob, with the
-/// angles rotating clockwise towards `2*PI.
-///
-/// Values < `0.0` and >= `2*PI` are not allowed.
-///
-/// The default minimum (converted to degrees) is `30` degrees, and the default
-/// maximum is `330` degrees, giving a span of `300` degrees, and a halfway
-/// point pointing strait up.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct KnobAngleRange {
-    min: Angle,
-    max: Angle,
+#[derive(Debug, Clone, PartialEq)]
+pub enum KnobMarkersStyle {
+    Dots(KnobMarkersDotStyle),
 }
 
-impl std::default::Default for KnobAngleRange {
+impl Default for KnobMarkersStyle {
+    fn default() -> Self {
+        Self::Dots(KnobMarkersDotStyle::default())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct KnobMarkersDotStyle {
+    primary_quad_style: QuadStyle,
+    secondary_quad_style: QuadStyle,
+    third_quad_style: QuadStyle,
+    primary_size: f32,
+    secondary_size: f32,
+    third_size: f32,
+    primary_padding: f32,
+    secondary_padding: f32,
+    third_padding: f32,
+}
+
+impl Default for KnobMarkersDotStyle {
     fn default() -> Self {
         Self {
-            min: Self::DEFAULT_MIN,
-            max: Self::DEFAULT_MAX,
+            primary_quad_style: QuadStyle {
+                bg: Background::Solid(RGBA8::new(150, 150, 150, 150)),
+                border: BorderStyle {
+                    radius: 10000.0.into(),
+                    ..Default::default()
+                },
+            },
+            secondary_quad_style: QuadStyle {
+                bg: Background::Solid(RGBA8::new(150, 150, 150, 100)),
+                border: BorderStyle {
+                    radius: 10000.0.into(),
+                    ..Default::default()
+                },
+            },
+            third_quad_style: QuadStyle {
+                bg: Background::Solid(RGBA8::new(150, 150, 150, 50)),
+                border: BorderStyle {
+                    radius: 10000.0.into(),
+                    ..Default::default()
+                },
+            },
+            primary_size: 2.0,
+            secondary_size: 1.0,
+            third_size: 1.0,
+            primary_padding: 3.0,
+            secondary_padding: 3.0,
+            third_padding: 3.0,
         }
-    }
-}
-
-impl KnobAngleRange {
-    /// The default minimum angle of a rotating element such as a Knob
-    pub const DEFAULT_MIN: Angle = Angle {
-        radians: 30.0 * PI / 180.0,
-    };
-    /// The default maximum angle of a rotating element such as a Knob
-    pub const DEFAULT_MAX: Angle = Angle {
-        radians: (360.0 - 30.0) * PI / 180.0,
-    };
-
-    /// The range between the `min` and `max` angle (in degrees) a knob
-    /// will rotate.
-    ///
-    /// `0.0` degrees points straight down at the bottom of the knob, with the
-    /// angles rotating clockwise towards `360` degrees.
-    ///
-    /// Values < `0.0` and >= `360.0` will be set to `0.0`.
-    ///
-    /// The default minimum is `30` degrees, and the default maximum is `330`
-    /// degrees, giving a span of `300` degrees, and a halfway point pointing
-    /// strait up.
-    ///
-    /// # Panics
-    ///
-    /// This will panic if `min` > `max`.
-    pub fn from_degrees(min: f32, max: f32) -> Self {
-        let min_rad = min * PI / 180.0;
-        let max_rad = max * PI / 180.0;
-
-        Self::from_radians(min_rad, max_rad)
-    }
-
-    /// The span between the `min` and `max` angle (in radians) the knob
-    /// will rotate.
-    ///
-    /// `0.0` radians points straight down at the bottom of the knob, with the
-    /// angles rotating clockwise towards `2*PI` radians.
-    ///
-    /// Values < `0.0` and >= `2*PI` will be set to `0.0`.
-    ///
-    /// The default minimum (converted to degrees) is `30` degrees, and the
-    /// default maximum is `330` degrees, giving a span of `300` degrees, and
-    /// a halfway point pointing strait up.
-    ///
-    /// # Panics
-    ///
-    /// This will panic if `min` > `max`.
-    pub fn from_radians(mut min: f32, mut max: f32) -> Self {
-        assert!(min <= max);
-
-        if min < 0.0 || min >= 2.0 * PI {
-            log::warn!("KnobAngleRange min value {min} is out of range of [0.0, 2.0*PI), using 0.0 instead");
-            min = 0.0;
-        }
-        if max < 0.0 || max >= 2.0 * PI {
-            log::warn!("KnobAngleRange max value {max} is out of range of [0.0, 2.0*PI), using 0.0 instead");
-            max = 0.0;
-        }
-
-        Self {
-            min: Angle { radians: min },
-            max: Angle { radians: max },
-        }
-    }
-
-    /// Returns the minimum angle (between `0.0` and `2*PI`)
-    pub fn min(&self) -> Angle {
-        self.min
-    }
-
-    /// Returns the maximum angle (between `0.0` and `2*PI`)
-    pub fn max(&self) -> Angle {
-        self.max
-    }
-
-    /// Returns `self.max() - self.min()` in radians
-    pub fn span(&self) -> Angle {
-        self.max - self.min
     }
 }
 
@@ -309,7 +276,7 @@ impl VirtualSliderRenderer for KnobRenderer {
         &mut self,
         prev_state: VirtualSliderState,
         new_state: VirtualSliderState,
-        style: &Self::Style,
+        style: &Rc<Self::Style>,
     ) -> UpdateResult {
         // Only repaint if the appearance is different.
         UpdateResult {
@@ -320,10 +287,8 @@ impl VirtualSliderRenderer for KnobRenderer {
 
     fn render_primitives(
         &mut self,
-        style: &Self::Style,
-        normals: NormalsState,
-        state: VirtualSliderState,
-        disabled: bool,
+        style: &Rc<Self::Style>,
+        info: VirtualSliderRenderInfo<'_>,
         cx: RenderContext<'_>,
         primitives: &mut PrimitiveGroup,
     ) {
@@ -349,16 +314,59 @@ impl VirtualSliderRenderer for KnobRenderer {
 
         match &style.back {
             KnobBackStyle::Quad(s) => {
-                let quad_style = s.quad_style(state, disabled);
+                let quad_style = s.quad_style(info.state, info.disabled);
                 if !quad_style.is_transparent() {
                     primitives.add(quad_style.create_primitive(back_bounds));
                 }
             }
         }
 
+        match &style.markers {
+            KnobMarkersStyle::Dots(s) => {
+                let primary_center_offset =
+                    ((back_bounds.width() + s.primary_size) * 0.5) + s.primary_padding;
+                let secondary_center_offset =
+                    ((back_bounds.width() + s.secondary_size) * 0.5) + s.secondary_padding;
+                let third_center_offset =
+                    ((back_bounds.width() + s.third_size) * 0.5) + s.third_padding;
+
+                info.with_markers(|marker| {
+                    let angle = style.angle_range.min()
+                        + (style.angle_range.span() * marker.normal_val)
+                        - Angle { radians: PI / 2.0 };
+
+                    let (mut y_offset, mut x_offset) = angle.sin_cos();
+
+                    let (center_offset, size, quad_style) = match marker.type_ {
+                        ParamerMarkerType::Primary => {
+                            (primary_center_offset, s.primary_size, &s.primary_quad_style)
+                        }
+                        ParamerMarkerType::Secondary => (
+                            secondary_center_offset,
+                            s.secondary_size,
+                            &s.secondary_quad_style,
+                        ),
+                        ParamerMarkerType::Third => {
+                            (third_center_offset, s.third_size, &s.third_quad_style)
+                        }
+                    };
+
+                    x_offset *= center_offset;
+                    y_offset *= center_offset;
+
+                    let bounds = crate::layout::centered_rect(
+                        back_bounds.center() - Vector::new(x_offset, y_offset),
+                        Size::new(size, size),
+                    );
+
+                    primitives.add(quad_style.create_primitive(bounds));
+                });
+            }
+        }
+
         match &style.notch {
             KnobNotchStyle::Quad(s) => {
-                let quad_style = s.quad_style(state, disabled);
+                let quad_style = s.quad_style(info.state, info.disabled);
                 if !quad_style.is_transparent() {
                     let notch_size = match s.size {
                         SizeType::FixedPoints(points) => points,
@@ -372,10 +380,10 @@ impl VirtualSliderRenderer for KnobRenderer {
                         }
                     };
 
-                    let normal_val = normals
+                    let normal_val = info
                         .automation_info
                         .current_normal
-                        .unwrap_or(normals.normal_value);
+                        .unwrap_or(info.normal_value);
 
                     let notch_angle = style.angle_range.min()
                         + (style.angle_range.span() * normal_val as f32)
@@ -394,7 +402,54 @@ impl VirtualSliderRenderer for KnobRenderer {
                     primitives.add(quad_style.create_primitive(notch_bounds));
                 }
             }
+            KnobNotchStyle::Line(_) => {
+                let render_cache = cx
+                    .render_cache
+                    .unwrap()
+                    .get_mut()
+                    .downcast_mut::<KnobRenderCacheInner>()
+                    .unwrap();
+
+                let meshes = render_cache
+                    .get_notch_line_mesh(style, back_bounds.width())
+                    .unwrap();
+
+                let mut mesh = meshes.mesh(info.state, info.disabled).clone();
+
+                mesh.set_offset(Point::new(
+                    cx.bounds_size.width * 0.5,
+                    cx.bounds_size.height * 0.5,
+                ));
+
+                let normal_val = info
+                    .automation_info
+                    .current_normal
+                    .unwrap_or(info.normal_value);
+
+                let notch_angle =
+                    style.angle_range.min() + (style.angle_range.span() * normal_val as f32);
+                mesh.set_transform(Transform::identity().then_rotate(notch_angle));
+
+                primitives.set_z_index(1);
+                primitives.add(mesh);
+            }
         }
+    }
+
+    /// A unique identifier for the optional global render cache.
+    ///
+    /// All instances of this element type must return the same value.
+    fn global_render_cache_id(&self) -> Option<u32> {
+        Some(KnobRenderCache::ID)
+    }
+
+    /// An optional struct that is shared across all instances of this element type
+    /// which can be used to cache rendering primitives.
+    ///
+    /// This will only be called once at the creation of the first instance of this
+    /// element type.
+    fn global_render_cache(&self) -> Option<Box<dyn ElementRenderCache>> {
+        Some(Box::new(KnobRenderCache::new()))
     }
 }
 

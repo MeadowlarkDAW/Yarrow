@@ -16,6 +16,8 @@ mod context;
 mod flags;
 mod handle;
 
+use std::any::Any;
+
 pub use context::{ElementContext, RenderContext};
 pub use flags::ElementFlags;
 pub use handle::ElementHandle;
@@ -49,7 +51,30 @@ pub trait Element<A: Clone + 'static> {
     #[allow(unused)]
     fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {}
 
+    /// A unique identifier for the optional global render cache.
+    ///
+    /// All instances of this element type must return the same value.
+    fn global_render_cache_id(&self) -> Option<u32> {
+        None
+    }
+
+    /// An optional struct that is shared across all instances of this element type
+    /// which can be used to cache rendering primitives.
+    ///
+    /// This will only be called once at the creation of the first instance of this
+    /// element type.
+    fn global_render_cache(&self) -> Option<Box<dyn ElementRenderCache>> {
+        None
+    }
+
     // TODO: Implement draw method for custom shader.
+}
+
+pub trait ElementRenderCache {
+    fn pre_render(&mut self) {}
+    fn post_render(&mut self) {}
+
+    fn get_mut(&mut self) -> &mut Box<dyn Any>;
 }
 
 pub struct ElementBuilder<A: Clone + 'static> {
