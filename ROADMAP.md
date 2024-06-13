@@ -8,7 +8,7 @@
 - [ ] Multi-window example in gallery demo
 - [ ] Implement [pointer-locking](https://developer.mozilla.org/en-US/docs/Web/API/Pointer_Lock_API) support
 - [ ] "Virtual Slider" elements:
-    - [ ] Knob element
+    - [X] Knob element
     - [ ] Slider element
     - [ ] TextureKnob element
     - [ ] TextureSlider element
