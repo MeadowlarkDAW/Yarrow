@@ -4,9 +4,7 @@ use rootvg::math::Point;
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent, PointerType};
 use crate::layout::Align2;
 use crate::math::{Rect, ZIndex};
-use crate::view::element::{
-    Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, ElementTooltipInfo,
-};
+use crate::view::element::{Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle};
 use crate::view::{ScissorRectID, MAIN_SCISSOR_RECT};
 use crate::window::WindowContext;
 
@@ -209,11 +207,7 @@ impl<A: Clone + 'static> Element<A> for ClickAreaElement<A> {
             }
             ElementEvent::Pointer(PointerEvent::HoverTimeout { .. }) => {
                 if let Some(message) = &self.tooltip_message {
-                    cx.show_tooltip(ElementTooltipInfo {
-                        message: message.clone(),
-                        element_bounds: cx.rect(),
-                        align: self.tooltip_align,
-                    });
+                    cx.show_tooltip(message.clone(), self.tooltip_align);
                 }
             }
             _ => {}

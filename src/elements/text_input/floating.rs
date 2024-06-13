@@ -1,12 +1,13 @@
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
+use rootvg::math::Size;
 use rootvg::text::glyphon::FontSystem;
 use rootvg::PrimitiveGroup;
 
 use crate::elements::text_input::TextInputUpdateResult;
 use crate::event::{ElementEvent, EventCaptureStatus, PointerEvent};
-use crate::layout::Align2;
+use crate::layout::{Align2, Padding};
 use crate::math::{Point, Rect, ZIndex};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
@@ -17,64 +18,48 @@ use crate::CursorIcon;
 
 use super::{TextInputAction, TextInputInner, TextInputStyle};
 
-pub struct TextInputBuilder<A: Clone + 'static> {
-    pub action: Option<Box<dyn FnMut(String) -> A>>,
+pub struct FloatingTextInputBuilder<A: Clone + 'static> {
+    pub action: Option<Box<dyn FnMut(Option<String>) -> A>>,
     pub right_click_action: Option<Box<dyn FnMut(Point) -> A>>,
-    pub tooltip_message: Option<String>,
-    pub tooltip_align: Align2,
     pub placeholder_text: String,
     pub text: String,
     pub text_offset: Point,
     pub select_all_when_focused: bool,
-    pub password_mode: bool,
     pub max_characters: usize,
-    pub disabled: bool,
     pub style: Rc<TextInputStyle>,
     pub z_index: ZIndex,
     pub bounding_rect: Rect,
-    pub manually_hidden: bool,
     pub scissor_rect_id: ScissorRectID,
 }
 
-impl<A: Clone + 'static> TextInputBuilder<A> {
+impl<A: Clone + 'static> FloatingTextInputBuilder<A> {
     pub fn new(style: &Rc<TextInputStyle>) -> Self {
         Self {
             action: None,
             right_click_action: None,
-            tooltip_message: None,
-            tooltip_align: Align2::TOP_CENTER,
             placeholder_text: String::new(),
             text: String::new(),
             text_offset: Point::default(),
-            select_all_when_focused: false,
-            password_mode: false,
+            select_all_when_focused: true,
             max_characters: 256,
-            disabled: false,
             style: Rc::clone(style),
             z_index: 0,
             bounding_rect: Rect::default(),
-            manually_hidden: false,
             scissor_rect_id: MAIN_SCISSOR_RECT,
         }
     }
 
-    pub fn build(self, cx: &mut WindowContext<'_, A>) -> TextInput {
-        TextInputElement::create(self, cx)
+    pub fn build(self, cx: &mut WindowContext<'_, A>) -> FloatingTextInput {
+        FloatingTextInputElement::create(self, cx)
     }
 
-    pub fn on_changed<F: FnMut(String) -> A + 'static>(mut self, f: F) -> Self {
+    pub fn on_result<F: FnMut(Option<String>) -> A + 'static>(mut self, f: F) -> Self {
         self.action = Some(Box::new(f));
         self
     }
 
     pub fn on_right_click<F: FnMut(Point) -> A + 'static>(mut self, f: F) -> Self {
         self.right_click_action = Some(Box::new(f));
-        self
-    }
-
-    pub fn tooltip_message(mut self, message: impl Into<String>, align: Align2) -> Self {
-        self.tooltip_message = Some(message.into());
-        self.tooltip_align = align;
         self
     }
 
@@ -102,17 +87,6 @@ impl<A: Clone + 'static> TextInputBuilder<A> {
         self
     }
 
-    /// If set the `true`, then text will be displayed in "password mode".
-    pub const fn password_mode(mut self, do_use: bool) -> Self {
-        self.password_mode = do_use;
-        self
-    }
-
-    pub const fn disabled(mut self, disabled: bool) -> Self {
-        self.disabled = disabled;
-        self
-    }
-
     /// The maximum characters that can be in this text input.
     ///
     /// By default this is set to `256`.
@@ -131,43 +105,37 @@ impl<A: Clone + 'static> TextInputBuilder<A> {
         self
     }
 
-    pub const fn hidden(mut self, hidden: bool) -> Self {
-        self.manually_hidden = hidden;
-        self
-    }
-
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
         self.scissor_rect_id = scissor_rect_id;
         self
     }
 }
 
-pub struct TextInputElement<A: Clone + 'static> {
+pub struct FloatingTextInputElement<A: Clone + 'static> {
     shared_state: Rc<RefCell<SharedState>>,
-    action: Option<Box<dyn FnMut(String) -> A>>,
+    action: Option<Box<dyn FnMut(Option<String>) -> A>>,
     right_click_action: Option<Box<dyn FnMut(Point) -> A>>,
-    tooltip_message: Option<String>,
-    tooltip_align: Align2,
+    start_text: String,
+    size: Size,
+    canceled: bool,
 }
 
-impl<A: Clone + 'static> TextInputElement<A> {
-    pub fn create(builder: TextInputBuilder<A>, cx: &mut WindowContext<'_, A>) -> TextInput {
-        let TextInputBuilder {
+impl<A: Clone + 'static> FloatingTextInputElement<A> {
+    pub fn create(
+        builder: FloatingTextInputBuilder<A>,
+        cx: &mut WindowContext<'_, A>,
+    ) -> FloatingTextInput {
+        let FloatingTextInputBuilder {
             action,
             right_click_action,
-            tooltip_message,
-            tooltip_align,
             placeholder_text,
             text,
             text_offset,
             select_all_when_focused,
-            password_mode,
             max_characters,
-            disabled,
             style,
             z_index,
             bounding_rect,
-            manually_hidden,
             scissor_rect_id,
         } = builder;
 
@@ -175,30 +143,32 @@ impl<A: Clone + 'static> TextInputElement<A> {
             inner: TextInputInner::new(
                 text,
                 placeholder_text,
-                password_mode,
+                false,
                 max_characters,
                 bounding_rect.size,
-                disabled,
-                tooltip_message.is_some(),
+                false,
+                false,
                 select_all_when_focused,
                 &style,
                 cx.font_system,
             ),
             style,
             text_offset,
+            show_with_info: None,
         }));
 
         let element_builder = ElementBuilder {
             element: Box::new(Self {
                 shared_state: Rc::clone(&shared_state),
-                tooltip_message,
-                tooltip_align,
                 action,
                 right_click_action,
+                start_text: String::new(),
+                size: bounding_rect.size,
+                canceled: false,
             }),
             z_index,
             bounding_rect,
-            manually_hidden,
+            manually_hidden: true,
             scissor_rect_id,
         };
 
@@ -206,11 +176,11 @@ impl<A: Clone + 'static> TextInputElement<A> {
             .view
             .add_element(element_builder, cx.font_system, cx.clipboard);
 
-        TextInput { el, shared_state }
+        FloatingTextInput { el, shared_state }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for TextInputElement<A> {
+impl<A: Clone + 'static> Element<A> for FloatingTextInputElement<A> {
     fn flags(&self) -> ElementFlags {
         ElementFlags::PAINTS
             | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
@@ -231,11 +201,38 @@ impl<A: Clone + 'static> Element<A> for TextInputElement<A> {
             inner,
             style,
             text_offset: _,
+            show_with_info,
         } = &mut *shared_state;
 
         let res = match event {
             ElementEvent::Animation { .. } => inner.on_animation(style),
             ElementEvent::CustomStateChanged => {
+                if let Some((element_rect, align, padding)) = show_with_info.take() {
+                    self.start_text = String::from(inner.text());
+
+                    let origin = align.align_floating_element(element_rect, self.size, padding);
+
+                    let mut rect = Rect::new(origin, self.size);
+                    let window_rect = Rect::from_size(cx.window_size());
+
+                    if rect.min_x() < window_rect.min_x() {
+                        rect.origin.x = 0.0;
+                    }
+                    if rect.max_x() > window_rect.max_x() {
+                        rect.origin.x = window_rect.max_x() - rect.size.width;
+                    }
+                    if rect.min_y() < window_rect.min_y() {
+                        rect.origin.y = 0.0;
+                    }
+                    if rect.max_y() > window_rect.max_y() {
+                        rect.origin.y = window_rect.max_y() - rect.size.height;
+                    }
+
+                    cx.set_bounding_rect(rect);
+                    cx.steal_temporary_focus();
+                    cx.listen_to_pointer_clicked_off();
+                }
+
                 inner.on_custom_state_changed(cx.clipboard, cx.font_system)
             }
             ElementEvent::SizeChanged => {
@@ -271,15 +268,27 @@ impl<A: Clone + 'static> Element<A> for TextInputElement<A> {
                 inner.on_text_composition_event(&comp_event, cx.font_system)
             }
             ElementEvent::Focus(has_focus) => {
-                inner.on_focus_changed(has_focus, cx.clipboard, cx.font_system)
-            }
-            ElementEvent::ClickedOff => inner.on_clicked_off(),
-            ElementEvent::Pointer(PointerEvent::HoverTimeout { .. }) => {
-                if let Some(message) = &self.tooltip_message {
-                    cx.show_tooltip(message.clone(), self.tooltip_align);
+                if !has_focus {
+                    cx.set_bounding_rect(Rect::new(cx.rect().origin, Size::zero()));
+
+                    if let Some(action) = self.action.as_mut() {
+                        let new_text = if &self.start_text == inner.text() || self.canceled {
+                            self.canceled = false;
+                            None
+                        } else {
+                            Some(String::from(inner.text()))
+                        };
+
+                        cx.send_action((action)(new_text)).unwrap();
+                    }
                 }
 
-                TextInputUpdateResult::default()
+                inner.on_focus_changed(has_focus, cx.clipboard, cx.font_system)
+            }
+            ElementEvent::ClickedOff => {
+                cx.release_focus();
+
+                inner.on_clicked_off()
             }
             _ => TextInputUpdateResult::default(),
         };
@@ -287,35 +296,23 @@ impl<A: Clone + 'static> Element<A> for TextInputElement<A> {
         if res.needs_repaint {
             cx.request_repaint();
         }
-        if res.send_action {
-            if let Some(action) = self.action.as_mut() {
-                cx.send_action((action)(String::from(inner.text())))
-                    .unwrap();
-            }
-        }
         if let Some(pos) = res.right_clicked_at {
             if let Some(action) = self.right_click_action.as_mut() {
                 cx.send_action((action)(pos)).unwrap();
             }
         }
-        if let Some(focus) = res.set_focus {
-            if focus {
-                cx.steal_focus();
-            } else {
-                cx.release_focus();
-            }
-        }
         if res.set_cursor_icon {
             cx.cursor_icon = CursorIcon::Text;
         }
-        if res.start_hover_timeout {
-            cx.start_hover_timeout();
-        }
-        if res.listen_to_pointer_clicked_off {
-            cx.listen_to_pointer_clicked_off();
-        }
         if let Some(animating) = res.set_animating {
             cx.set_animating(animating);
+        }
+
+        if res.enter_key_pressed {
+            cx.release_focus();
+        } else if res.escape_key_pressed {
+            cx.release_focus();
+            self.canceled = true;
         }
 
         res.capture_status
@@ -352,17 +349,57 @@ struct SharedState {
     inner: TextInputInner,
     style: Rc<TextInputStyle>,
     text_offset: Point,
+    show_with_info: Option<(Rect, Align2, Padding)>,
 }
 
-/// A handle to a [`TextInputElement`]
-pub struct TextInput {
+/// A handle to a [`FloatingTextInputElement`]
+pub struct FloatingTextInput {
     pub el: ElementHandle,
     shared_state: Rc<RefCell<SharedState>>,
 }
 
-impl TextInput {
-    pub fn builder<A: Clone + 'static>(style: &Rc<TextInputStyle>) -> TextInputBuilder<A> {
-        TextInputBuilder::new(style)
+impl FloatingTextInput {
+    pub fn builder<A: Clone + 'static>(style: &Rc<TextInputStyle>) -> FloatingTextInputBuilder<A> {
+        FloatingTextInputBuilder::new(style)
+    }
+
+    pub fn show(
+        &mut self,
+        text: Option<&str>,
+        placeholder_text: Option<&str>,
+        element_bounds: Rect,
+        align: Align2,
+        padding: Padding,
+        font_system: &mut FontSystem,
+    ) {
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+        let SharedState {
+            inner,
+            style,
+            show_with_info,
+            ..
+        } = &mut *shared_state;
+
+        if let Some(text) = text {
+            inner.set_text(text, font_system, true);
+        } else {
+            inner.queue_action(TextInputAction::SelectAll);
+        }
+
+        if let Some(text) = placeholder_text {
+            inner.set_placeholder_text(text, font_system, style);
+        }
+
+        *show_with_info = Some((element_bounds, align, padding));
+
+        self.el.notify_custom_state_change();
+        self.el.set_hidden(false);
+    }
+
+    pub fn hide(&mut self) {
+        RefCell::borrow_mut(&self.shared_state).show_with_info = None;
+
+        self.el.set_hidden(true);
     }
 
     pub fn set_text(&mut self, text: &str, font_system: &mut FontSystem, select_all: bool) {
@@ -414,15 +451,6 @@ impl TextInput {
         Rc::clone(&RefCell::borrow(&self.shared_state).style)
     }
 
-    pub fn set_disabled(&mut self, disabled: bool) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
-        if shared_state.inner.disabled != disabled {
-            shared_state.inner.disabled = true;
-            self.el.notify_custom_state_change();
-        }
-    }
-
     /// An offset that can be used mainly to correct the position of icon glyphs.
     /// This does not effect the position of the background quad.
     pub fn set_text_offset(&mut self, offset: Point) {
@@ -470,17 +498,6 @@ impl TextInput {
 
         if !shared_state.inner.disabled {
             shared_state.inner.queue_action(TextInputAction::SelectAll);
-            self.el.notify_custom_state_change();
-        }
-    }
-
-    /// Show/hide the password. This has no effect if the element wasn't created
-    /// with password mode enabled.
-    pub fn show_password(&mut self, show: bool) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
-        if shared_state.inner.show_password != show {
-            shared_state.inner.show_password = show;
             self.el.notify_custom_state_change();
         }
     }

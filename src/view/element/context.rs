@@ -19,10 +19,11 @@ use rootvg::text::glyphon::FontSystem;
 
 use crate::action_queue::ActionSender;
 use crate::clipboard::Clipboard;
+use crate::layout::Align2;
 use crate::math::{Rect, ScaleFactor, ZIndex};
 use crate::CursorIcon;
 
-use super::{ElementRenderCache, ElementTooltipInfo};
+use super::ElementRenderCache;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ChangeFocusRequest {
@@ -47,7 +48,7 @@ pub struct ElementContext<'a, A: Clone + 'static> {
 
     pub(crate) listen_to_pointer_clicked_off: bool,
     pub(crate) requested_rect: Option<Rect>,
-    pub(crate) requested_show_tooltip: Option<ElementTooltipInfo>,
+    pub(crate) requested_show_tooltip: Option<(String, Align2)>,
     pub(crate) change_focus_request: Option<ChangeFocusRequest>,
 
     pub(crate) rect: Rect,
@@ -244,8 +245,8 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
         self.scroll_wheel_timeout_requested = true;
     }
 
-    pub fn show_tooltip(&mut self, info: ElementTooltipInfo) {
-        self.requested_show_tooltip = Some(info);
+    pub fn show_tooltip(&mut self, message: String, align: Align2) {
+        self.requested_show_tooltip = Some((message, align));
     }
 }
 

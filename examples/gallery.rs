@@ -227,9 +227,11 @@ impl MyApp {
             }
             MyAction::KnobsAndSliders(action) => {
                 let mut main_window_cx = cx.window_context(MAIN_WINDOW).unwrap();
-                needs_layout = elements
-                    .knobs_and_sliders
-                    .handle_action(action, &mut main_window_cx);
+                needs_layout = elements.knobs_and_sliders.handle_action(
+                    action,
+                    &self.style,
+                    &mut main_window_cx,
+                );
             }
             MyAction::LeftPanelResized(_new_span) => {
                 needs_layout = true;

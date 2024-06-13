@@ -40,7 +40,6 @@ pub mod element;
 mod scissor_rect;
 
 use self::element::ChangeFocusRequest;
-use self::element::ElementTooltipInfo;
 use self::element::RenderContext;
 pub use self::scissor_rect::{ScissorRectID, MAIN_SCISSOR_RECT};
 
@@ -108,7 +107,7 @@ pub struct View<A: Clone + 'static> {
     elements_listening_to_pointer_event_need_sorted: bool,
     painted_elements: Vec<CachedElementPrimitives>,
     elements_listening_to_clicked_off: FxHashSet<ElementID>,
-    element_with_active_tooltip: Option<(ElementID, Rect)>,
+    element_with_active_tooltip: Option<ElementID>,
 
     physical_size: PhysicalSizeI32,
     logical_size: Size,
@@ -730,13 +729,21 @@ impl<A: Clone + 'static> View<A> {
             PointerEvent::Moved { .. } => {
                 self.cursor_icon = CursorIcon::Default;
 
-                if let Some((element_id, bounds)) = self.element_with_active_tooltip.take() {
-                    if !bounds.contains(pos) {
+                if let Some(element_id) = self.element_with_active_tooltip.take() {
+                    let mut hide_tooltip = true;
+
+                    if let Some(element_entry) = self.element_arena.get(element_id.0) {
+                        if let Some(visible_rect) = element_entry.stack_data.visible_rect {
+                            hide_tooltip = !visible_rect.contains(pos);
+                        }
+                    }
+
+                    if hide_tooltip {
                         if let Some(action) = self.hide_tooltip_action.as_mut() {
                             self.action_sender.send((action)()).unwrap();
                         }
                     } else {
-                        self.element_with_active_tooltip = Some((element_id, bounds));
+                        self.element_with_active_tooltip = Some(element_id);
                     }
                 }
             }
@@ -1146,8 +1153,8 @@ impl<A: Clone + 'static> View<A> {
                 ElementModificationType::StartScrollWheelTimeout => {
                     self.handle_element_start_scroll_wheel_timeout(modification.element_id);
                 }
-                ElementModificationType::ShowTooltip(info) => {
-                    self.handle_element_show_tooltip(modification.element_id, info);
+                ElementModificationType::ShowTooltip { message, align } => {
+                    self.handle_element_show_tooltip(modification.element_id, message, align);
                 }
             }
         }
@@ -1180,19 +1187,24 @@ impl<A: Clone + 'static> View<A> {
         }
     }
 
-    fn handle_element_show_tooltip(&mut self, element_id: ElementID, info: ElementTooltipInfo) {
-        if self.element_arena.get(element_id.0).is_none() {
+    fn handle_element_show_tooltip(
+        &mut self,
+        element_id: ElementID,
+        message: String,
+        align: Align2,
+    ) {
+        let Some(element_entry) = self.element_arena.get(element_id.0) else {
             // Element has been dropped. Do nothing and return.
             return;
         };
 
-        self.element_with_active_tooltip = Some((element_id, info.element_bounds));
+        self.element_with_active_tooltip = Some(element_id);
 
         if let Some(action) = self.show_tooltip_action.as_mut() {
             let info = TooltipInfo {
-                message: info.message,
-                element_bounds: info.element_bounds,
-                align: info.align,
+                message,
+                element_bounds: element_entry.stack_data.rect,
+                align,
                 window_id: self.window_id,
             };
 
@@ -1865,9 +1877,13 @@ impl<A: Clone + 'static> View<A> {
         self.scissor_rects[usize::from(element_entry.stack_data.scissor_rect_id)]
             .remove_element(&element_entry.stack_data, &mut self.element_arena);
 
-        if let Some((id, _)) = &self.element_with_active_tooltip {
+        if let Some(id) = &self.element_with_active_tooltip {
             if element_id == *id {
                 self.element_with_active_tooltip = None;
+
+                if let Some(action) = self.hide_tooltip_action.as_mut() {
+                    self.action_sender.send((action)()).unwrap();
+                }
             }
         }
 
@@ -2143,10 +2159,10 @@ fn send_event_to_element<A: Clone + 'static>(
         });
     }
 
-    if let Some(info) = cx.requested_show_tooltip {
+    if let Some((message, align)) = cx.requested_show_tooltip {
         mod_queue_sender.send_to_front(ElementModification {
             element_id,
-            type_: ElementModificationType::ShowTooltip(info),
+            type_: ElementModificationType::ShowTooltip { message, align },
         });
     }
 

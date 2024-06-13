@@ -445,7 +445,6 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
             ElementEvent::Focus(false) => {
                 self.active = false;
                 self.hovered_entry_index = None;
-                cx.release_focus();
                 cx.set_bounding_rect(Rect::new(cx.rect().origin, Size::zero()));
             }
             ElementEvent::Pointer(PointerEvent::Moved { position, .. }) => {

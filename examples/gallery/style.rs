@@ -39,6 +39,9 @@ pub struct MyStyle {
 
     pub drop_down_btn_width: f32,
     pub text_input_size: Size,
+    pub floating_text_input_size: Size,
+    pub floating_text_input_align: Align2,
+    pub floating_text_input_padding: Padding,
 
     pub clear_color: RGBA8,
 }
@@ -143,6 +146,9 @@ impl MyStyle {
 
             drop_down_btn_width: 100.0,
             text_input_size: Size::new(240.0, 30.0),
+            floating_text_input_size: Size::new(100.0, 30.0),
+            floating_text_input_align: Align2::BOTTOM_CENTER,
+            floating_text_input_padding: Padding::new(5.0, 5.0, 5.0, 5.0),
 
             clear_color: RGBA8::new(15, 15, 15, 255),
         }

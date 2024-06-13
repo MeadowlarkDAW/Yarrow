@@ -171,6 +171,8 @@ pub struct TextInputUpdateResult {
     pub start_hover_timeout: bool,
     pub listen_to_pointer_clicked_off: bool,
     pub set_animating: Option<bool>,
+    pub enter_key_pressed: bool,
+    pub escape_key_pressed: bool,
 }
 
 pub struct TextInputInner {
@@ -310,7 +312,11 @@ impl TextInputInner {
 
         res.needs_repaint = true;
 
-        self.text = String::from(&text[0..self.max_characters]);
+        self.text = if text.len() > self.max_characters {
+            String::from(&text[0..self.max_characters])
+        } else {
+            String::from(text)
+        };
 
         self.buffer.with_editor_mut(
             |editor, font_system| -> EditorBorrowStatus {
@@ -588,9 +594,10 @@ impl TextInputInner {
 
             return res;
         } else if button != PointerButton::Primary {
-            res.capture_status = EventCaptureStatus::Captured;
             return res;
         }
+
+        res.capture_status = EventCaptureStatus::Captured;
 
         if !self.focused {
             res.set_focus = Some(true);
@@ -661,6 +668,8 @@ impl TextInputInner {
 
         match event.code {
             Code::Backspace => {
+                res.capture_status = EventCaptureStatus::Captured;
+
                 let mut text_changed = false;
 
                 self.buffer.with_editor_mut(
@@ -694,6 +703,9 @@ impl TextInputInner {
                 }
             }
             Code::Escape => {
+                res.capture_status = EventCaptureStatus::Captured;
+                res.escape_key_pressed = true;
+
                 self.buffer.with_editor_mut(
                     |editor, font_system| -> EditorBorrowStatus {
                         editor.action(font_system, Action::Escape);
@@ -709,6 +721,8 @@ impl TextInputInner {
                 res.needs_repaint = true;
             }
             Code::Delete => {
+                res.capture_status = EventCaptureStatus::Captured;
+
                 let mut text_changed = false;
 
                 self.buffer.with_editor_mut(
@@ -742,6 +756,8 @@ impl TextInputInner {
                 }
             }
             Code::ArrowLeft => {
+                res.capture_status = EventCaptureStatus::Captured;
+
                 self.buffer.with_editor_mut(
                     |editor, font_system| -> EditorBorrowStatus {
                         if editor.selection() != Selection::None {
@@ -761,6 +777,8 @@ impl TextInputInner {
                 res.needs_repaint = true;
             }
             Code::ArrowRight => {
+                res.capture_status = EventCaptureStatus::Captured;
+
                 self.buffer.with_editor_mut(
                     |editor, font_system| -> EditorBorrowStatus {
                         if editor.selection() != Selection::None {
@@ -780,6 +798,10 @@ impl TextInputInner {
                 res.needs_repaint = true;
             }
             Code::Enter => {
+                res.capture_status = EventCaptureStatus::Captured;
+
+                res.enter_key_pressed = true;
+
                 if self.do_send_action {
                     self.do_send_action = false;
                     res.send_action = true;
@@ -787,24 +809,32 @@ impl TextInputInner {
             }
             // TODO: Make this keyboard shortcut configurable.
             Code::KeyA => {
+                res.capture_status = EventCaptureStatus::Captured;
+
                 if event.modifiers.contains(Modifiers::CONTROL) {
                     self.queue_action(TextInputAction::SelectAll);
                 }
             }
             // TODO: Make this keyboard shortcut configurable.
             Code::KeyX => {
+                res.capture_status = EventCaptureStatus::Captured;
+
                 if event.modifiers.contains(Modifiers::CONTROL) {
                     self.queue_action(TextInputAction::Cut);
                 }
             }
             // TODO: Make this keyboard shortcut configurable.
             Code::KeyC => {
+                res.capture_status = EventCaptureStatus::Captured;
+
                 if event.modifiers.contains(Modifiers::CONTROL) {
                     self.queue_action(TextInputAction::Copy);
                 }
             }
             // TODO: Make this keyboard shortcut configurable.
             Code::KeyV => {
+                res.capture_status = EventCaptureStatus::Captured;
+
                 if event.modifiers.contains(Modifiers::CONTROL) {
                     self.queue_action(TextInputAction::Paste);
                 }
@@ -884,6 +914,7 @@ impl TextInputInner {
     pub fn on_focus_changed(
         &mut self,
         has_focus: bool,
+        clipboard: &mut Clipboard,
         font_system: &mut FontSystem,
     ) -> TextInputUpdateResult {
         let mut res = TextInputUpdateResult::default();
@@ -892,27 +923,19 @@ impl TextInputInner {
             res.listen_to_pointer_clicked_off = true;
             self.cursor_blink_state_on = true;
             self.cursor_blink_last_toggle_instant = Instant::now();
+            self.focused = true;
 
             if self.select_all_when_focused && !self.text.is_empty() {
-                self.buffer.with_editor_mut(
-                    |editor, _| -> EditorBorrowStatus {
-                        editor.set_selection(Selection::Line(Cursor {
-                            line: 0,
-                            index: 0,
-                            affinity: Affinity::Before,
-                        }));
-
-                        EditorBorrowStatus {
-                            text_changed: false,
-                            has_text: !self.text.is_empty(),
-                        }
-                    },
-                    font_system,
-                );
+                self.queue_action(TextInputAction::SelectAll);
             }
 
-            self.layout_contents(font_system);
+            self.drain_actions(clipboard, font_system, &mut res);
+
+            if res.needs_repaint {
+                self.layout_contents(font_system);
+            }
         } else {
+            self.focused = false;
             self.dragging = false;
 
             if self.do_send_action {
@@ -921,7 +944,6 @@ impl TextInputInner {
             }
         }
 
-        self.focused = has_focus;
         res.set_animating = Some(has_focus);
         res.needs_repaint = true;
 

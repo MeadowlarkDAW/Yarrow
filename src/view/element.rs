@@ -117,13 +117,6 @@ impl<A: Clone + 'static> ElementBuilder<A> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct ElementTooltipInfo {
-    pub message: String,
-    pub element_bounds: Rect,
-    pub align: Align2,
-}
-
 pub(super) struct ElementModification {
     pub element_id: ElementID,
     pub type_: ElementModificationType,
@@ -142,7 +135,7 @@ pub(super) enum ElementModificationType {
     ListenToClickOff,
     StartHoverTimeout,
     StartScrollWheelTimeout,
-    ShowTooltip(ElementTooltipInfo),
+    ShowTooltip { message: String, align: Align2 },
 }
 
 // I get a warning about leaking `ElementID` if I make `ElementHandle::new()`

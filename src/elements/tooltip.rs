@@ -127,46 +127,10 @@ impl<A: Clone + 'static> Element<A> for TooltipElement {
                 show_with_info,
             } = &mut *shared_state;
 
-            if let Some((bounds, align)) = show_with_info.take() {
+            if let Some((element_rect, align)) = show_with_info.take() {
                 let size = inner.desired_padded_size(style);
 
-                let origin = match align {
-                    Align2::TOP_LEFT => Point::new(
-                        bounds.min_x(),
-                        bounds.min_y() - size.height - self.padding.top,
-                    ),
-                    Align2::TOP_CENTER => Point::new(
-                        bounds.min_x() + ((bounds.width() - size.width) * 0.5),
-                        bounds.min_y() - size.height - self.padding.top,
-                    ),
-                    Align2::TOP_RIGHT => Point::new(
-                        bounds.max_x() - size.width,
-                        bounds.min_y() - size.height - self.padding.top,
-                    ),
-                    Align2::CENTER_LEFT => Point::new(
-                        bounds.min_x() - size.width - self.padding.left,
-                        bounds.min_y() + ((bounds.height() - size.height) * 0.5),
-                    ),
-                    Align2::CENTER => Point::new(
-                        bounds.min_x() + ((bounds.width() - size.width) * 0.5),
-                        bounds.min_y() + ((bounds.height() - size.height) * 0.5),
-                    ),
-                    Align2::CENTER_RIGHT => Point::new(
-                        bounds.max_x() + self.padding.right,
-                        bounds.min_y() + ((bounds.height() - size.height) * 0.5),
-                    ),
-                    Align2::BOTTOM_LEFT => {
-                        Point::new(bounds.min_x(), bounds.max_y() + self.padding.bottom)
-                    }
-                    Align2::BOTTOM_CENTER => Point::new(
-                        bounds.min_x() + ((bounds.width() - size.width) * 0.5),
-                        bounds.max_y() + self.padding.bottom,
-                    ),
-                    Align2::BOTTOM_RIGHT => Point::new(
-                        bounds.max_x() - size.width,
-                        bounds.max_y() + self.padding.bottom,
-                    ),
-                };
+                let origin = align.align_floating_element(element_rect, size, self.padding);
 
                 let mut rect = Rect::new(origin, size);
                 let window_rect = Rect::from_size(cx.window_size());

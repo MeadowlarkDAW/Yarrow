@@ -184,6 +184,15 @@ pub struct VirtualSliderConfig {
     /// By default this is set to `true`.
     pub open_text_entry_on_middle_click: bool,
 
+    /// Whether or not to activate the `on_open_text_entry` event when
+    /// the user right-clicks this element.
+    ///
+    /// If the use has defined a right-click action, then that action
+    /// will take precedence.
+    ///
+    /// By default this is set to `true`.
+    pub open_text_entry_on_right_click: bool,
+
     /// Whether or not to disabled locking the pointer in place while
     /// dragging this element.
     ///
@@ -202,13 +211,14 @@ impl Default for VirtualSliderConfig {
             fine_adjustment_modifier: Some(Modifiers::SHIFT),
             open_text_entry_modifier: Some(Modifiers::CONTROL),
             open_text_entry_on_middle_click: true,
+            open_text_entry_on_right_click: true,
             disable_pointer_locking: false,
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ParamTooltipInfo {
+pub struct ParamElementTooltipInfo {
     /// The parameter ID
     pub param_id: u32,
     /// The normalized value in the range `[0.0, 1.0]`
@@ -234,7 +244,7 @@ pub struct VirtualSliderBuilder<A: Clone + 'static, R: VirtualSliderRenderer> {
     pub on_gesture: Option<Box<dyn FnMut(ParamUpdate) -> A>>,
     pub on_right_click: Option<Box<dyn FnMut(ParamRightClickInfo) -> A>>,
     pub on_open_text_entry: Option<Box<dyn FnMut(ParamOpenTextEntryInfo) -> A>>,
-    pub on_tooltip_request: Option<Box<dyn FnMut(ParamTooltipInfo) -> A>>,
+    pub on_tooltip_request: Option<Box<dyn FnMut(ParamElementTooltipInfo) -> A>>,
     pub style: Rc<R::Style>,
     pub tooltip_align: Align2,
     pub param_id: u32,
@@ -301,7 +311,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer> VirtualSliderBuilder<A, R> {
         self
     }
 
-    pub fn on_tooltip_request<F: FnMut(ParamTooltipInfo) -> A + 'static>(
+    pub fn on_tooltip_request<F: FnMut(ParamElementTooltipInfo) -> A + 'static>(
         mut self,
         f: F,
         align: Align2,
@@ -383,7 +393,7 @@ pub struct VirtualSliderElement<A: Clone + 'static, R: VirtualSliderRenderer + '
     on_gesture: Option<Box<dyn FnMut(ParamUpdate) -> A>>,
     on_right_click: Option<Box<dyn FnMut(ParamRightClickInfo) -> A>>,
     on_open_text_entry: Option<Box<dyn FnMut(ParamOpenTextEntryInfo) -> A>>,
-    on_tooltip_request: Option<Box<dyn FnMut(ParamTooltipInfo) -> A>>,
+    on_tooltip_request: Option<Box<dyn FnMut(ParamElementTooltipInfo) -> A>>,
     tooltip_align: Align2,
 
     renderer: R,
@@ -703,37 +713,20 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                 position,
                 button,
                 click_count,
+                modifiers,
                 ..
             }) => {
                 if *disabled || !cx.rect.contains(position) {
                     return EventCaptureStatus::NotCaptured;
                 }
 
+                let mut open_text_entry = false;
+
                 if button == PointerButton::Auxiliary
                     && inner.config.open_text_entry_on_middle_click
+                    && self.on_open_text_entry.is_some()
                 {
-                    if let Some(f) = self.on_open_text_entry.as_mut() {
-                        finish_gesture(
-                            inner,
-                            cx,
-                            self.hovered,
-                            &mut self.state,
-                            &mut self.renderer,
-                            style,
-                            *disabled,
-                            &mut self.on_gesture,
-                        );
-
-                        cx.send_action((f)(ParamOpenTextEntryInfo {
-                            param_id: inner.param_id,
-                            normal_value: inner.normal_value(),
-                            stepped_value: inner.stepped_value(),
-                            bounds: cx.rect(),
-                        }))
-                        .unwrap();
-
-                        return EventCaptureStatus::Captured;
-                    }
+                    open_text_entry = true;
                 }
 
                 if button == PointerButton::Secondary {
@@ -758,11 +751,46 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                         .unwrap();
 
                         return EventCaptureStatus::Captured;
+                    } else if inner.config.open_text_entry_on_right_click
+                        && self.on_open_text_entry.is_some()
+                    {
+                        open_text_entry = true;
                     }
                 }
 
-                if button != PointerButton::Primary {
+                if button == PointerButton::Primary {
+                    if let Some(m) = inner.config.open_text_entry_modifier {
+                        if modifiers == m && self.on_open_text_entry.is_some() {
+                            open_text_entry = true;
+                        }
+                    }
+                }
+
+                if open_text_entry {
+                    if let Some(f) = self.on_open_text_entry.as_mut() {
+                        finish_gesture(
+                            inner,
+                            cx,
+                            self.hovered,
+                            &mut self.state,
+                            &mut self.renderer,
+                            style,
+                            *disabled,
+                            &mut self.on_gesture,
+                        );
+
+                        cx.send_action((f)(ParamOpenTextEntryInfo {
+                            param_id: inner.param_id,
+                            normal_value: inner.normal_value(),
+                            stepped_value: inner.stepped_value(),
+                            bounds: cx.rect(),
+                        }))
+                        .unwrap();
+                    }
+
                     return EventCaptureStatus::Captured;
+                } else if button != PointerButton::Primary {
+                    return EventCaptureStatus::NotCaptured;
                 }
 
                 finish_gesture(
@@ -850,7 +878,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
 
                 if cx.rect().contains(position) {
                     if let Some(f) = self.on_tooltip_request.as_mut() {
-                        cx.send_action((f)(ParamTooltipInfo {
+                        cx.send_action((f)(ParamElementTooltipInfo {
                             param_id: inner.param_id,
                             normal_value: inner.normal_value(),
                             stepped_value: inner.stepped_value(),

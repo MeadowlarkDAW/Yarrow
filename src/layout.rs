@@ -65,6 +65,51 @@ impl Align2 {
     };
 }
 
+impl Align2 {
+    pub fn align_floating_element(
+        &self,
+        bounds: Rect,
+        floating_size: Size,
+        padding: Padding,
+    ) -> Point {
+        match *self {
+            Align2::TOP_LEFT => Point::new(
+                bounds.min_x(),
+                bounds.min_y() - floating_size.height - padding.top,
+            ),
+            Align2::TOP_CENTER => Point::new(
+                bounds.min_x() + ((bounds.width() - floating_size.width) * 0.5),
+                bounds.min_y() - floating_size.height - padding.top,
+            ),
+            Align2::TOP_RIGHT => Point::new(
+                bounds.max_x() - floating_size.width,
+                bounds.min_y() - floating_size.height - padding.top,
+            ),
+            Align2::CENTER_LEFT => Point::new(
+                bounds.min_x() - floating_size.width - padding.left,
+                bounds.min_y() + ((bounds.height() - floating_size.height) * 0.5),
+            ),
+            Align2::CENTER => Point::new(
+                bounds.min_x() + ((bounds.width() - floating_size.width) * 0.5),
+                bounds.min_y() + ((bounds.height() - floating_size.height) * 0.5),
+            ),
+            Align2::CENTER_RIGHT => Point::new(
+                bounds.max_x() + padding.right,
+                bounds.min_y() + ((bounds.height() - floating_size.height) * 0.5),
+            ),
+            Align2::BOTTOM_LEFT => Point::new(bounds.min_x(), bounds.max_y() + padding.bottom),
+            Align2::BOTTOM_CENTER => Point::new(
+                bounds.min_x() + ((bounds.width() - floating_size.width) * 0.5),
+                bounds.max_y() + padding.bottom,
+            ),
+            Align2::BOTTOM_RIGHT => Point::new(
+                bounds.max_x() - floating_size.width,
+                bounds.max_y() + padding.bottom,
+            ),
+        }
+    }
+}
+
 /// Describes how to lay out some content within a given bounding
 /// rectangle.
 #[derive(Default, Debug, Clone, Copy, PartialEq)]

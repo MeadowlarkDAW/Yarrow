@@ -28,7 +28,6 @@ pub mod window;
 pub use action_queue::action_channel;
 pub use application::{AppConfig, AppContext, Application};
 pub use cursor_icon::CursorIcon;
-pub use event::AppWindowEvent;
 pub use view::{ScissorRectID, TooltipInfo, View, MAIN_SCISSOR_RECT};
 pub use window::{WindowContext, WindowID, MAIN_WINDOW};
 

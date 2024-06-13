@@ -13,6 +13,7 @@
 // ---------------------------------------------------------------------------------
 
 use super::ElementModificationType;
+use crate::layout::Align2;
 use crate::math::{Point, Rect, Size, ZIndex};
 use crate::stmpsc_queue;
 use crate::view::{ElementID, ElementModification};
@@ -212,6 +213,13 @@ impl ElementHandle {
             element_id: self.element_id,
             type_: ElementModificationType::CustomStateChanged,
         });
+    }
+
+    pub fn show_tooltip(&mut self, message: String, align: Align2) {
+        self.mod_queue_sender.send(ElementModification {
+            element_id: self.element_id,
+            type_: ElementModificationType::ShowTooltip { message, align },
+        })
     }
 
     pub(crate) fn id(&self) -> ElementID {
