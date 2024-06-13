@@ -950,16 +950,120 @@ impl TextInputInner {
         res: &mut TextInputUpdateResult,
     ) {
         for action in self.queued_actions.drain(..) {
-            perform_action(
-                action,
-                self.max_characters,
-                &mut self.text,
-                &mut self.buffer,
-                clipboard,
-                font_system,
-                res,
-                &mut self.do_send_action,
-            );
+            match action {
+                TextInputAction::Cut => {
+                    self.buffer.with_editor_mut(
+                        |editor, font_system| -> EditorBorrowStatus {
+                            let text_changed = if let Some(contents) = editor.copy_selection() {
+                                clipboard.write(ClipboardKind::Standard, contents);
+                                editor.delete_selection();
+                                editor.shape_as_needed(font_system, true);
+                                true
+                            } else {
+                                false
+                            };
+
+                            if text_changed {
+                                editor.with_buffer(|buffer| {
+                                    if let Some(run) = buffer.layout_runs().next() {
+                                        if self.text != run.text {
+                                            self.text = run.text.into();
+                                        }
+                                    } else {
+                                        self.text.clear();
+                                    }
+                                });
+
+                                self.do_send_action = true;
+                                res.needs_repaint = true;
+                            }
+
+                            EditorBorrowStatus {
+                                text_changed,
+                                has_text: !self.text.is_empty(),
+                            }
+                        },
+                        font_system,
+                    );
+                }
+                TextInputAction::Copy => {
+                    self.buffer.with_editor_mut(
+                        |editor, _| -> EditorBorrowStatus {
+                            if let Some(contents) = editor.copy_selection() {
+                                clipboard.write(ClipboardKind::Standard, contents);
+                            }
+
+                            EditorBorrowStatus {
+                                text_changed: false,
+                                has_text: !self.text.is_empty(),
+                            }
+                        },
+                        font_system,
+                    );
+                }
+                TextInputAction::Paste => {
+                    if self.text.len() < self.max_characters {
+                        if let Some(content) = clipboard.read(ClipboardKind::Standard) {
+                            let content = if self.text.len() + content.len() > self.max_characters {
+                                &content[0..self.max_characters - self.text.len()]
+                            } else {
+                                &content
+                            };
+
+                            let mut text_changed = false;
+
+                            self.buffer.with_editor_mut(
+                                |editor, font_system| -> EditorBorrowStatus {
+                                    editor.insert_string(&content, None);
+                                    editor.shape_as_needed(font_system, true);
+
+                                    editor.with_buffer(|buffer| {
+                                        if let Some(run) = buffer.layout_runs().next() {
+                                            if self.text != run.text {
+                                                self.text = run.text.into();
+                                                text_changed = true;
+                                            }
+                                        } else if !self.text.is_empty() {
+                                            self.text.clear();
+                                            text_changed = true;
+                                        }
+                                    });
+
+                                    EditorBorrowStatus {
+                                        text_changed,
+                                        has_text: !self.text.is_empty(),
+                                    }
+                                },
+                                font_system,
+                            );
+
+                            if text_changed {
+                                self.do_send_action = true;
+                                res.needs_repaint = true;
+                            }
+                        }
+                    }
+                }
+                TextInputAction::SelectAll => {
+                    self.buffer.with_editor_mut(
+                        |editor, _| -> EditorBorrowStatus {
+                            editor.set_selection(Selection::Line(Cursor {
+                                line: 0,
+                                index: 0,
+                                affinity: Affinity::Before,
+                            }));
+
+                            EditorBorrowStatus {
+                                text_changed: false,
+                                has_text: !self.text.is_empty(),
+                            }
+                        },
+                        font_system,
+                    );
+
+                    res.needs_repaint = true;
+                }
+            }
         }
     }
 
@@ -1199,132 +1303,6 @@ pub enum TextInputAction {
     Copy,
     Paste,
     SelectAll,
-}
-
-fn perform_action(
-    action: TextInputAction,
-    max_characters: usize,
-    text: &mut String,
-    buffer: &mut RcTextBuffer,
-    clipboard: &mut Clipboard,
-    font_system: &mut FontSystem,
-    res: &mut TextInputUpdateResult,
-    do_send_action: &mut bool,
-) {
-    match action {
-        TextInputAction::Cut => {
-            buffer.with_editor_mut(
-                |editor, font_system| -> EditorBorrowStatus {
-                    let text_changed = if let Some(contents) = editor.copy_selection() {
-                        clipboard.write(ClipboardKind::Standard, contents);
-                        editor.delete_selection();
-                        editor.shape_as_needed(font_system, true);
-                        true
-                    } else {
-                        false
-                    };
-
-                    if text_changed {
-                        editor.with_buffer(|buffer| {
-                            if let Some(run) = buffer.layout_runs().next() {
-                                if text != run.text {
-                                    *text = run.text.into();
-                                }
-                            } else {
-                                text.clear();
-                            }
-                        });
-
-                        *do_send_action = true;
-                        res.needs_repaint = true;
-                    }
-
-                    EditorBorrowStatus {
-                        text_changed,
-                        has_text: !text.is_empty(),
-                    }
-                },
-                font_system,
-            );
-        }
-        TextInputAction::Copy => {
-            buffer.with_editor_mut(
-                |editor, _| -> EditorBorrowStatus {
-                    if let Some(contents) = editor.copy_selection() {
-                        clipboard.write(ClipboardKind::Standard, contents);
-                    }
-
-                    EditorBorrowStatus {
-                        text_changed: false,
-                        has_text: !text.is_empty(),
-                    }
-                },
-                font_system,
-            );
-        }
-        TextInputAction::Paste => {
-            if text.len() < max_characters {
-                if let Some(content) = clipboard.read(ClipboardKind::Standard) {
-                    let content = if text.len() + content.len() > max_characters {
-                        &content[0..max_characters - text.len()]
-                    } else {
-                        &content
-                    };
-
-                    let mut text_changed = false;
-
-                    buffer.with_editor_mut(
-                        |editor, font_system| -> EditorBorrowStatus {
-                            editor.insert_string(&content, None);
-                            editor.shape_as_needed(font_system, true);
-
-                            editor.with_buffer(|buffer| {
-                                if let Some(run) = buffer.layout_runs().next() {
-                                    if text != run.text {
-                                        *text = run.text.into();
-                                        text_changed = true;
-                                    }
-                                } else if !text.is_empty() {
-                                    text.clear();
-                                    text_changed = true;
-                                }
-                            });
-
-                            EditorBorrowStatus {
-                                text_changed,
-                                has_text: !text.is_empty(),
-                            }
-                        },
-                        font_system,
-                    );
-
-                    if text_changed {
-                        *do_send_action = true;
-                        res.needs_repaint = true;
-                    }
-                }
-            }
-        }
-        TextInputAction::SelectAll => {
-            buffer.with_editor_mut(
-                |editor, _| -> EditorBorrowStatus {
-                    editor.set_selection(Selection::Line(Cursor {
-                        line: 0,
-                        index: 0,
-                        affinity: Affinity::Before,
-                    }));
-
-                    EditorBorrowStatus {
-                        text_changed: false,
-                        has_text: !text.is_empty(),
-                    }
-                },
-                font_system,
-            );
-
-            res.needs_repaint = true;
-        }
-    }
 }
 
 fn layout_text_bounds(
