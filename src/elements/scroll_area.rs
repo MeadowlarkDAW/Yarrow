@@ -675,7 +675,7 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                     return EventCaptureStatus::Captured;
                 }
             }
-            ElementEvent::ExclusiveFocus(false) => {
+            ElementEvent::Focus(false) => {
                 self.drag_state = None;
             }
             _ => {}

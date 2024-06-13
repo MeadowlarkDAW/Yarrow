@@ -15,6 +15,7 @@
 use std::time::Duration;
 use std::time::Instant;
 
+use element::ElementRenderCache;
 use keyboard_types::CompositionEvent;
 use rootvg::color::PackedSrgb;
 use rootvg::math::PhysicalSizeI32;
@@ -39,7 +40,6 @@ pub mod element;
 mod scissor_rect;
 
 use self::element::ChangeFocusRequest;
-use self::element::ElementTooltipInfo;
 use self::element::RenderContext;
 pub use self::scissor_rect::{ScissorRectID, MAIN_SCISSOR_RECT};
 
@@ -107,7 +107,7 @@ pub struct View<A: Clone + 'static> {
     elements_listening_to_pointer_event_need_sorted: bool,
     painted_elements: Vec<CachedElementPrimitives>,
     elements_listening_to_clicked_off: FxHashSet<ElementID>,
-    element_with_active_tooltip: Option<(ElementID, Rect)>,
+    element_with_active_tooltip: Option<ElementID>,
 
     physical_size: PhysicalSizeI32,
     logical_size: Size,
@@ -121,6 +121,8 @@ pub struct View<A: Clone + 'static> {
 
     view_needs_repaint: bool,
     window_visible: bool,
+
+    render_caches: FxHashMap<u32, Box<dyn ElementRenderCache>>,
 }
 
 impl<A: Clone + 'static> View<A> {
@@ -196,6 +198,8 @@ impl<A: Clone + 'static> View<A> {
             hide_tooltip_action: None,
 
             cursor_icon: CursorIcon::Default,
+
+            render_caches: FxHashMap::default(),
         }
     }
 
@@ -367,6 +371,14 @@ impl<A: Clone + 'static> View<A> {
                 font_system,
                 clipboard,
             );
+        }
+
+        if let Some(render_cache_id) = element_entry.element.global_render_cache_id() {
+            if !self.render_caches.contains_key(&render_cache_id) {
+                if let Some(render_cache) = element_entry.element.global_render_cache() {
+                    self.render_caches.insert(render_cache_id, render_cache);
+                }
+            }
         }
 
         self::element::new_element_handle(
@@ -717,13 +729,21 @@ impl<A: Clone + 'static> View<A> {
             PointerEvent::Moved { .. } => {
                 self.cursor_icon = CursorIcon::Default;
 
-                if let Some((element_id, bounds)) = self.element_with_active_tooltip.take() {
-                    if !bounds.contains(pos) {
+                if let Some(element_id) = self.element_with_active_tooltip.take() {
+                    let mut hide_tooltip = true;
+
+                    if let Some(element_entry) = self.element_arena.get(element_id.0) {
+                        if let Some(visible_rect) = element_entry.stack_data.visible_rect {
+                            hide_tooltip = !visible_rect.contains(pos);
+                        }
+                    }
+
+                    if hide_tooltip {
                         if let Some(action) = self.hide_tooltip_action.as_mut() {
                             self.action_sender.send((action)()).unwrap();
                         }
                     } else {
-                        self.element_with_active_tooltip = Some((element_id, bounds));
+                        self.element_with_active_tooltip = Some(element_id);
                     }
                 }
             }
@@ -1101,7 +1121,7 @@ impl<A: Clone + 'static> View<A> {
                     self.set_element_animating(modification.element_id, animating);
                 }
                 ElementModificationType::ChangeFocus(req) => match req {
-                    ChangeFocusRequest::StealExclusiveFocus => {
+                    ChangeFocusRequest::StealFocus => {
                         self.element_steal_focus(
                             modification.element_id,
                             false,
@@ -1133,8 +1153,8 @@ impl<A: Clone + 'static> View<A> {
                 ElementModificationType::StartScrollWheelTimeout => {
                     self.handle_element_start_scroll_wheel_timeout(modification.element_id);
                 }
-                ElementModificationType::ShowTooltip(info) => {
-                    self.handle_element_show_tooltip(modification.element_id, info);
+                ElementModificationType::ShowTooltip { message, align } => {
+                    self.handle_element_show_tooltip(modification.element_id, message, align);
                 }
             }
         }
@@ -1162,27 +1182,29 @@ impl<A: Clone + 'static> View<A> {
 
     fn handle_element_start_scroll_wheel_timeout(&mut self, element_id: ElementID) {
         if self.element_arena.contains(element_id.0) {
-            if let Some(start_instant) =
-                self.elements_with_scroll_wheel_timeout.get_mut(&element_id)
-            {
-                *start_instant = Some(Instant::now());
-            }
+            self.elements_with_scroll_wheel_timeout
+                .insert(element_id, Some(Instant::now()));
         }
     }
 
-    fn handle_element_show_tooltip(&mut self, element_id: ElementID, info: ElementTooltipInfo) {
-        if self.element_arena.get(element_id.0).is_none() {
+    fn handle_element_show_tooltip(
+        &mut self,
+        element_id: ElementID,
+        message: String,
+        align: Align2,
+    ) {
+        let Some(element_entry) = self.element_arena.get(element_id.0) else {
             // Element has been dropped. Do nothing and return.
             return;
         };
 
-        self.element_with_active_tooltip = Some((element_id, info.element_bounds));
+        self.element_with_active_tooltip = Some(element_id);
 
         if let Some(action) = self.show_tooltip_action.as_mut() {
             let info = TooltipInfo {
-                message: info.message,
-                element_bounds: info.element_bounds,
-                align: info.align,
+                message,
+                element_bounds: element_entry.stack_data.rect,
+                align,
                 window_id: self.window_id,
             };
 
@@ -1701,7 +1723,7 @@ impl<A: Clone + 'static> View<A> {
             .contains(ElementFlags::LISTENS_TO_FOCUS_CHANGE)
         {
             send_event_to_element(
-                ElementEvent::ExclusiveFocus(true),
+                ElementEvent::Focus(true),
                 element_entry,
                 element_id,
                 &self.current_focus_info,
@@ -1855,9 +1877,13 @@ impl<A: Clone + 'static> View<A> {
         self.scissor_rects[usize::from(element_entry.stack_data.scissor_rect_id)]
             .remove_element(&element_entry.stack_data, &mut self.element_arena);
 
-        if let Some((id, _)) = &self.element_with_active_tooltip {
+        if let Some(id) = &self.element_with_active_tooltip {
             if element_id == *id {
                 self.element_with_active_tooltip = None;
+
+                if let Some(action) = self.hide_tooltip_action.as_mut() {
+                    self.action_sender.send((action)()).unwrap();
+                }
             }
         }
 
@@ -1890,6 +1916,10 @@ impl<A: Clone + 'static> View<A> {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
+        for render_cache in self.render_caches.values_mut() {
+            render_cache.pre_render();
+        }
+
         {
             let mut vg = vg.begin(self.physical_size, self.scale_factor);
 
@@ -1905,6 +1935,14 @@ impl<A: Clone + 'static> View<A> {
 
                     let element_entry = self.element_arena.get_mut(cache.element_id.0).unwrap();
 
+                    let render_cache = if let Some(render_cache_id) =
+                        element_entry.element.global_render_cache_id()
+                    {
+                        self.render_caches.get_mut(&render_cache_id)
+                    } else {
+                        None
+                    };
+
                     element_entry.element.render_primitives(
                         RenderContext {
                             font_system,
@@ -1913,6 +1951,7 @@ impl<A: Clone + 'static> View<A> {
                             visible_bounds: element_entry.stack_data.visible_rect.unwrap(),
                             scale: self.scale_factor,
                             window_size: self.logical_size,
+                            render_cache,
                         },
                         &mut cache.primitives,
                     );
@@ -1935,6 +1974,10 @@ impl<A: Clone + 'static> View<A> {
             font_system,
         )
         .unwrap(); // TODO: handle this error properly.
+
+        for render_cache in self.render_caches.values_mut() {
+            render_cache.post_render();
+        }
 
         pre_present_notify();
 
@@ -2116,10 +2159,10 @@ fn send_event_to_element<A: Clone + 'static>(
         });
     }
 
-    if let Some(info) = cx.requested_show_tooltip {
+    if let Some((message, align)) = cx.requested_show_tooltip {
         mod_queue_sender.send_to_front(ElementModification {
             element_id,
-            type_: ElementModificationType::ShowTooltip(info),
+            type_: ElementModificationType::ShowTooltip { message, align },
         });
     }
 
@@ -2155,7 +2198,7 @@ fn release_focus_for_element<A: Clone + 'static>(
         .contains(ElementFlags::LISTENS_TO_FOCUS_CHANGE)
     {
         send_event_to_element(
-            ElementEvent::ExclusiveFocus(false),
+            ElementEvent::Focus(false),
             element_entry,
             element_id,
             current_focus_info,
@@ -2173,9 +2216,7 @@ fn release_focus_for_element<A: Clone + 'static>(
         if prev_element_id != element_id {
             mod_queue_sender.send_to_front(ElementModification {
                 element_id: prev_element_id,
-                type_: ElementModificationType::ChangeFocus(
-                    ChangeFocusRequest::StealExclusiveFocus,
-                ),
+                type_: ElementModificationType::ChangeFocus(ChangeFocusRequest::StealFocus),
             });
         }
     }

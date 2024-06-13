@@ -24,6 +24,7 @@ pub struct MyStyle {
     pub tooltip_style: Rc<LabelStyle>,
     pub tab_style: Rc<TabStyle>,
     pub scroll_bar_style: Rc<ScrollBarStyle>,
+    pub knob_style_1: Rc<KnobStyle>,
 
     pub top_panel_height: f32,
     pub panel_border_width: f32,
@@ -38,6 +39,9 @@ pub struct MyStyle {
 
     pub drop_down_btn_width: f32,
     pub text_input_size: Size,
+    pub floating_text_input_size: Size,
+    pub floating_text_input_align: Align2,
+    pub floating_text_input_padding: Padding,
 
     pub clear_color: RGBA8,
 }
@@ -127,6 +131,7 @@ impl MyStyle {
                 ..Default::default()
             }),
             scroll_bar_style: Rc::new(ScrollBarStyle::default()),
+            knob_style_1: Rc::new(KnobStyle::default()),
 
             top_panel_height: 30.0,
             panel_border_width: 1.0,
@@ -141,6 +146,9 @@ impl MyStyle {
 
             drop_down_btn_width: 100.0,
             text_input_size: Size::new(240.0, 30.0),
+            floating_text_input_size: Size::new(100.0, 30.0),
+            floating_text_input_align: Align2::BOTTOM_CENTER,
+            floating_text_input_padding: Padding::new(5.0, 5.0, 5.0, 5.0),
 
             clear_color: RGBA8::new(15, 15, 15, 255),
         }

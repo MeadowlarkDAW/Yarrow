@@ -8,6 +8,10 @@ pub use crate::elements::dual_button::{DualButton, DualButtonStyle};
 pub use crate::elements::dual_label::{DualLabel, DualLabelLayout, DualLabelStyle};
 pub use crate::elements::dual_tab::{DualTab, DualTabGroup, DualTabGroupOption, DualTabStyle};
 pub use crate::elements::dual_toggle_button::{DualToggleButton, DualToggleButtonStyle};
+pub use crate::elements::knob::{
+    Knob, KnobAngleRange, KnobBackStyle, KnobBackStyleQuad, KnobNotchStyle, KnobNotchStyleQuad,
+    KnobStyle,
+};
 pub use crate::elements::label::{Label, LabelStyle};
 pub use crate::elements::quad::{QuadElement, QuadStyle};
 pub use crate::elements::radio_button::{RadioButton, RadioButtonGroup, RadioButtonStyle};
@@ -15,9 +19,16 @@ pub use crate::elements::resize_handle::{ResizeHandle, ResizeHandleLayout, Resiz
 pub use crate::elements::scroll_area::{ScrollArea, ScrollBarStyle};
 pub use crate::elements::switch::{Switch, SwitchStyle};
 pub use crate::elements::tab::{IndicatorLinePlacement, Tab, TabGroup, TabGroupOption, TabStyle};
-pub use crate::elements::text_input::{TextInput, TextInputStyle};
+pub use crate::elements::text_input::{
+    FloatingTextInput, TextInput, TextInputAction, TextInputStyle,
+};
 pub use crate::elements::toggle_button::{ToggleButton, ToggleButtonStyle};
 pub use crate::elements::tooltip::Tooltip;
+pub use crate::elements::virtual_slider::{
+    param_normal_to_quantized, param_quantized_to_normal, AutomationInfo, GestureState,
+    ParamElementTooltipInfo, ParamMarker, ParamMarkersConfig, ParamOpenTextEntryInfo,
+    ParamRightClickInfo, ParamUpdate, ParamerMarkerType, VirtualSlider, VirtualSliderConfig,
+};
 pub use crate::event::*;
 pub use crate::layout::*;
 pub use crate::math::{

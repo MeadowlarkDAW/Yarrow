@@ -8,6 +8,7 @@ use crate::vg::gradient::Gradient;
 use crate::vg::quad::{Border, Radius};
 
 pub const DEFAULT_ACCENT_COLOR: RGBA8 = RGBA8::new(179, 123, 95, 255);
+pub const DEFAULT_ACCENT_HOVER_COLOR: RGBA8 = RGBA8::new(200, 137, 106, 255);
 pub const DEFAULT_TEXT_ATTRIBUTES: Attrs<'static> = Attrs {
     color_opt: None,
     family: Family::SansSerif,

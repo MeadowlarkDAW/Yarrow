@@ -12,8 +12,7 @@ use crate::math::{Rect, Size, ZIndex};
 use crate::style::{Background, BorderStyle, QuadStyle, DEFAULT_TEXT_ATTRIBUTES};
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
-    Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, ElementTooltipInfo,
-    RenderContext,
+    Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
 };
 use crate::view::{ScissorRectID, MAIN_SCISSOR_RECT};
 use crate::window::WindowContext;
@@ -538,11 +537,7 @@ impl<A: Clone + 'static> Element<A> for ButtonElement<A> {
             }
             ElementEvent::Pointer(PointerEvent::HoverTimeout { .. }) => {
                 if let Some(message) = &self.tooltip_message {
-                    cx.show_tooltip(ElementTooltipInfo {
-                        message: message.clone(),
-                        element_bounds: cx.rect(),
-                        align: self.tooltip_align,
-                    });
+                    cx.show_tooltip(message.clone(), self.tooltip_align);
                 }
             }
             _ => {}

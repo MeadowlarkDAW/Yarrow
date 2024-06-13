@@ -54,7 +54,7 @@ pub enum ElementEvent {
     SizeChanged,
     PositionChanged,
     ZIndexChanged,
-    ExclusiveFocus(bool),
+    Focus(bool),
     ClickedOff,
     Init,
 }
@@ -231,8 +231,9 @@ impl PointerEvent {
 ///
 /// Note, this is only relevant for `Event::Pointer`, `Event::Keyboard`,
 /// and `Event::TextComposition`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventCaptureStatus {
+    #[default]
     NotCaptured,
     Captured,
 }

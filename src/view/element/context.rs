@@ -19,14 +19,15 @@ use rootvg::text::glyphon::FontSystem;
 
 use crate::action_queue::ActionSender;
 use crate::clipboard::Clipboard;
+use crate::layout::Align2;
 use crate::math::{Rect, ScaleFactor, ZIndex};
 use crate::CursorIcon;
 
-use super::ElementTooltipInfo;
+use super::ElementRenderCache;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ChangeFocusRequest {
-    StealExclusiveFocus,
+    StealFocus,
     StealTemporaryFocus,
     ReleaseFocus,
 }
@@ -47,7 +48,7 @@ pub struct ElementContext<'a, A: Clone + 'static> {
 
     pub(crate) listen_to_pointer_clicked_off: bool,
     pub(crate) requested_rect: Option<Rect>,
-    pub(crate) requested_show_tooltip: Option<ElementTooltipInfo>,
+    pub(crate) requested_show_tooltip: Option<(String, Align2)>,
     pub(crate) change_focus_request: Option<ChangeFocusRequest>,
 
     pub(crate) rect: Rect,
@@ -183,7 +184,7 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
     ///
     /// By default every newly created element does not have focus.
     pub fn steal_focus(&mut self) {
-        self.change_focus_request = Some(ChangeFocusRequest::StealExclusiveFocus);
+        self.change_focus_request = Some(ChangeFocusRequest::StealFocus);
     }
 
     /// Request to temporarily steal focus.
@@ -240,8 +241,12 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
         self.hover_timeout_requested = true;
     }
 
-    pub fn show_tooltip(&mut self, info: ElementTooltipInfo) {
-        self.requested_show_tooltip = Some(info);
+    pub fn start_scroll_wheel_timeout(&mut self) {
+        self.scroll_wheel_timeout_requested = true;
+    }
+
+    pub fn show_tooltip(&mut self, message: String, align: Align2) {
+        self.requested_show_tooltip = Some((message, align));
     }
 }
 
@@ -262,4 +267,6 @@ pub struct RenderContext<'a> {
     /// The size of the window. This can be useful to reposition/resize elements
     /// like drop-down menus to fit within the window.
     pub window_size: Size,
+    /// The optional global render cache.
+    pub render_cache: Option<&'a mut Box<dyn ElementRenderCache>>,
 }

@@ -5,6 +5,7 @@ pub mod dual_button;
 pub mod dual_label;
 pub mod dual_tab;
 pub mod dual_toggle_button;
+pub mod knob;
 pub mod label;
 pub mod quad;
 pub mod radio_button;
