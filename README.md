@@ -19,6 +19,7 @@
 **A retained-mode GUI library in Rust with extreme performance and control, geared towards audio software.**
 
 ![gallery screenshot](screenshots/gallery-basic-elements.png)
+![gallery screenshot](screenshots/gallery-knobs-and-sliders.png)
 
 </div>
 
