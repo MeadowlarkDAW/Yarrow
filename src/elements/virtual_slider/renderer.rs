@@ -4,7 +4,7 @@ use rootvg::PrimitiveGroup;
 
 use crate::view::element::{ElementRenderCache, RenderContext};
 
-use super::{AutomationInfo, ParamMarkersConfig};
+use super::{AutomationInfo, ParamMarkersConfig, SteppedValue};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct UpdateResult {
@@ -35,7 +35,7 @@ pub struct VirtualSliderRenderInfo<'a> {
     pub normal_value: f64,
     pub default_normal: f64,
     pub automation_info: AutomationInfo,
-    pub num_quantized_steps: Option<u32>,
+    pub stepped_value: Option<SteppedValue>,
     pub state: VirtualSliderState,
     pub markers: &'a ParamMarkersConfig,
     pub bipolar: bool,

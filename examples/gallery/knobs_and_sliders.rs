@@ -119,18 +119,23 @@ impl Elements {
 
         match action {
             Action::ParamUpdate(info) => {
-                self.show_param_tooltip(info.param_id, info.is_gesturing(), cx);
+                self.show_param_tooltip(info.param_info, info.is_gesturing(), cx);
 
                 if !info.is_gesturing() {
                     // Set the tooltip to auto-hide when gesturing is finished.
                     cx.view.auto_hide_tooltip();
                 }
             }
-            Action::ShowParamTooltip(info) => self.show_param_tooltip(info.param_id, false, cx),
+            Action::ShowParamTooltip(info) => self.show_param_tooltip(info.param_info, false, cx),
             Action::OpenTextInput(info) => {
-                self.text_input_param_id = Some(info.param_id);
+                self.text_input_param_id = Some(info.param_info.id);
+                let text = match info.param_info.value() {
+                    ParamValue::Normal(n) => format!("{:.4}", n),
+                    ParamValue::Stepped(s) => format!("{}", s),
+                };
+
                 self.floating_text_input.show(
-                    Some(&format!("{:.4}", info.normal_value)),
+                    Some(&text),
                     None,
                     info.bounds,
                     style.floating_text_input_align,
@@ -141,13 +146,23 @@ impl Elements {
             Action::FloatingTextInput(new_text) => {
                 if let Some(param_id) = self.text_input_param_id.take() {
                     if let Some(new_text) = new_text {
-                        if let Ok(new_val) = new_text.parse::<f64>() {
-                            match param_id {
-                                0 => self.knob_0.set_normal_value(new_val),
-                                1 => self.knob_1.set_normal_value(new_val),
-                                2 => self.knob_2.set_normal_value(new_val),
-                                _ => {}
+                        match param_id {
+                            0 => {
+                                if let Ok(v) = new_text.parse::<f64>() {
+                                    self.knob_0.set_normal_value(v)
+                                }
                             }
+                            1 => {
+                                if let Ok(v) = new_text.parse::<f64>() {
+                                    self.knob_1.set_normal_value(v)
+                                }
+                            }
+                            2 => {
+                                if let Ok(v) = new_text.parse::<u32>() {
+                                    self.knob_2.set_stepped_value(v)
+                                }
+                            }
+                            _ => {}
                         }
                     }
                 }
@@ -164,14 +179,14 @@ impl Elements {
 
     fn show_param_tooltip(
         &mut self,
-        param_id: u32,
+        param_info: ParamInfo,
         is_gesturing: bool,
         cx: &WindowContext<'_, MyAction>,
     ) {
-        let (normal_val, el) = match param_id {
-            0 => (self.knob_0.normal_value(), &mut self.knob_0.el),
-            1 => (self.knob_1.normal_value(), &mut self.knob_1.el),
-            2 => (self.knob_2.normal_value(), &mut self.knob_2.el),
+        let el = match param_info.id {
+            0 => &mut self.knob_0.el,
+            1 => &mut self.knob_1.el,
+            2 => &mut self.knob_2.el,
             _ => return,
         };
 
@@ -183,13 +198,18 @@ impl Elements {
             }
         }
 
+        let message = match param_info.value() {
+            ParamValue::Normal(n) => format!("{:.4}", n),
+            ParamValue::Stepped(s) => format!("{}", s),
+        };
+
         el.show_tooltip(
-            format!("{:.4}", normal_val),
+            message,
             Align2::TOP_CENTER,
             // Don't auto-hide the tooltip when gesturing, otherwise
             // the tooltip may flicker.
             !is_gesturing,
-        )
+        );
     }
 
     pub fn layout(

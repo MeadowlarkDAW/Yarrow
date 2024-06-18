@@ -21,14 +21,41 @@ impl GestureState {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SteppedValue {
+    pub value: u32,
+    pub num_steps: u32,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct ParamUpdate {
+pub enum ParamValue {
+    Normal(f64),
+    Stepped(u32),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ParamInfo {
     /// The parameter ID
-    pub param_id: u32,
+    pub id: u32,
     /// The normalized value in the range `[0.0, 1.0]`
     pub normal_value: f64,
     /// The stepped value (if this parameter is stepped)
-    pub stepped_value: Option<u32>,
+    pub stepped_value: Option<SteppedValue>,
+}
+
+impl ParamInfo {
+    pub const fn value(&self) -> ParamValue {
+        if let Some(s) = self.stepped_value {
+            ParamValue::Stepped(s.value)
+        } else {
+            ParamValue::Normal(self.normal_value)
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ParamUpdate {
+    pub param_info: ParamInfo,
     /// The current state of gesturing (dragging)
     ///
     /// If this is update is not the result of the user gesturing,
@@ -53,12 +80,6 @@ enum BeginGestureType {
     ScrollWheel,
 }
 
-#[derive(Clone, Copy)]
-struct SteppedParamState {
-    value: u32,
-    num_steps: u32,
-}
-
 /// A reusable "virtual slider" struct that can be used to make
 /// elements like knobs and sliders.
 pub struct VirtualSliderInner {
@@ -70,7 +91,7 @@ pub struct VirtualSliderInner {
     normal_value: f64,
     default_normal: f64,
     continuous_gesture_normal: f64,
-    stepped_state: Option<SteppedParamState>,
+    stepped_value: Option<SteppedValue>,
     current_gesture: Option<BeginGestureType>,
 }
 
@@ -84,14 +105,14 @@ impl VirtualSliderInner {
         drag_vertically: bool,
         scroll_vertically: bool,
     ) -> Self {
-        let (normal_value, default_normal, stepped_state) =
+        let (normal_value, default_normal, stepped_value) =
             if let Some(num_steps) = num_quantized_steps {
                 let stepped_value = param_normal_to_quantized(normal_value, num_steps);
 
                 (
                     param_quantized_to_normal(stepped_value, num_steps),
                     param_snap_normal(default_normal, num_steps),
-                    Some(SteppedParamState {
+                    Some(SteppedValue {
                         value: stepped_value,
                         num_steps,
                     }),
@@ -111,7 +132,7 @@ impl VirtualSliderInner {
             scroll_vertically,
             normal_value,
             default_normal,
-            stepped_state,
+            stepped_value,
             continuous_gesture_normal: normal_value,
             current_gesture: None,
         }
@@ -127,9 +148,7 @@ impl VirtualSliderInner {
             });
 
             Some(ParamUpdate {
-                param_id: self.param_id,
-                normal_value: self.normal_value,
-                stepped_value: self.stepped_value(),
+                param_info: self.param_info(),
                 gesture_state: Some(GestureState::GestureStarted),
             })
         }
@@ -142,9 +161,7 @@ impl VirtualSliderInner {
             self.current_gesture = Some(BeginGestureType::ScrollWheel);
 
             Some(ParamUpdate {
-                param_id: self.param_id,
-                normal_value: self.normal_value,
-                stepped_value: self.stepped_value(),
+                param_info: self.param_info(),
                 gesture_state: Some(GestureState::GestureStarted),
             })
         }
@@ -281,11 +298,11 @@ impl VirtualSliderInner {
 
         self.continuous_gesture_normal = new_gesture_normal;
 
-        let value_changed = if let Some(stepped_state) = &mut self.stepped_state {
-            let new_val = param_normal_to_quantized(new_gesture_normal, stepped_state.num_steps);
-            self.normal_value = param_quantized_to_normal(new_val, stepped_state.num_steps);
-            let changed = stepped_state.value != new_val;
-            stepped_state.value = new_val;
+        let value_changed = if let Some(stepped_value) = &mut self.stepped_value {
+            let new_val = param_normal_to_quantized(new_gesture_normal, stepped_value.num_steps);
+            self.normal_value = param_quantized_to_normal(new_val, stepped_value.num_steps);
+            let changed = stepped_value.value != new_val;
+            stepped_value.value = new_val;
             changed
         } else {
             let changed = self.normal_value != new_gesture_normal;
@@ -295,9 +312,7 @@ impl VirtualSliderInner {
 
         if value_changed {
             Some(ParamUpdate {
-                param_id: self.param_id,
-                normal_value: self.normal_value,
-                stepped_value: self.stepped_value(),
+                param_info: self.param_info(),
                 gesture_state: Some(GestureState::Gesturing),
             })
         } else {
@@ -307,9 +322,7 @@ impl VirtualSliderInner {
 
     pub fn finish_gesture(&mut self) -> Option<ParamUpdate> {
         self.current_gesture.take().map(|_| ParamUpdate {
-            param_id: self.param_id,
-            normal_value: self.normal_value,
-            stepped_value: self.stepped_value(),
+            param_info: self.param_info(),
             gesture_state: Some(GestureState::GestureFinished),
         })
     }
@@ -321,18 +334,14 @@ impl VirtualSliderInner {
             self.normal_value = self.default_normal;
 
             Some(ParamUpdate {
-                param_id: self.param_id,
-                normal_value: self.normal_value,
-                stepped_value: self.stepped_value(),
+                param_info: self.param_info(),
                 gesture_state: Some(GestureState::GestureFinished),
             })
         } else if self.normal_value != self.default_normal {
             self.normal_value = self.default_normal;
 
             Some(ParamUpdate {
-                param_id: self.param_id,
-                normal_value: self.normal_value,
-                stepped_value: self.stepped_value(),
+                param_info: self.param_info(),
                 gesture_state: None,
             })
         } else {
@@ -340,12 +349,50 @@ impl VirtualSliderInner {
         }
     }
 
-    pub fn stepped_value(&self) -> Option<u32> {
-        self.stepped_state.map(|s| s.value)
+    pub fn stepped_value(&self) -> Option<SteppedValue> {
+        self.stepped_value
     }
 
-    pub fn num_quantized_steps(&self) -> Option<u32> {
-        self.stepped_state.map(|s| s.num_steps)
+    pub fn value(&self) -> ParamValue {
+        if let Some(stepped_value) = self.stepped_value {
+            ParamValue::Stepped(stepped_value.value)
+        } else {
+            ParamValue::Normal(self.normal_value)
+        }
+    }
+
+    pub fn param_info(&self) -> ParamInfo {
+        ParamInfo {
+            id: self.param_id,
+            normal_value: self.normal_value,
+            stepped_value: self.stepped_value,
+        }
+    }
+
+    pub fn set_value(&mut self, new_val: ParamValue) -> Option<ParamUpdate> {
+        match new_val {
+            ParamValue::Normal(n) => self.set_normal_value(n),
+            ParamValue::Stepped(s) => self.set_stepped_value(s),
+        }
+    }
+
+    pub fn set_stepped_value(&mut self, mut new_val: u32) -> Option<ParamUpdate> {
+        let Some(stepped_value) = &mut self.stepped_value else {
+            return None;
+        };
+
+        if stepped_value.num_steps < 2 {
+            return None;
+        }
+
+        new_val = new_val.min(stepped_value.num_steps - 1);
+
+        if stepped_value.value == new_val {
+            return None;
+        }
+
+        let num_steps = stepped_value.num_steps;
+        self.set_normal_value(param_quantized_to_normal(new_val, num_steps))
     }
 
     /// Set the normalized value of the virtual slider.
@@ -353,10 +400,10 @@ impl VirtualSliderInner {
     /// If the slider is currently gesturing, then the gesture will
     /// be cancelled.
     pub fn set_normal_value(&mut self, new_normal: f64) -> Option<ParamUpdate> {
-        let new_normal = if let Some(stepped_state) = &mut self.stepped_state {
-            stepped_state.value = param_normal_to_quantized(new_normal, stepped_state.num_steps);
+        let new_normal = if let Some(stepped_value) = &mut self.stepped_value {
+            stepped_value.value = param_normal_to_quantized(new_normal, stepped_value.num_steps);
 
-            param_quantized_to_normal(stepped_state.value, stepped_state.num_steps)
+            param_quantized_to_normal(stepped_value.value, stepped_value.num_steps)
         } else {
             new_normal.clamp(0.0, 1.0)
         };
@@ -374,9 +421,7 @@ impl VirtualSliderInner {
 
         if state_changed {
             Some(ParamUpdate {
-                param_id: self.param_id,
-                normal_value: self.normal_value,
-                stepped_value: self.stepped_value(),
+                param_info: self.param_info(),
                 gesture_state,
             })
         } else {
@@ -396,8 +441,8 @@ impl VirtualSliderInner {
     }
 
     pub fn snap_normal(&self, normal: f64) -> f64 {
-        if let Some(stepped_state) = self.stepped_state {
-            param_snap_normal(normal, stepped_state.num_steps)
+        if let Some(stepped_value) = self.stepped_value {
+            param_snap_normal(normal, stepped_value.num_steps)
         } else {
             normal.clamp(0.0, 1.0)
         }

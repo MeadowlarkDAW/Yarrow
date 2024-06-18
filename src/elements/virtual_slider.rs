@@ -29,12 +29,7 @@ pub use renderer::*;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ParamOpenTextEntryInfo {
-    /// The parameter ID
-    pub param_id: u32,
-    /// The normalized value in the range `[0.0, 1.0]`
-    pub normal_value: f64,
-    /// The stepped value (if this parameter is stepped)
-    pub stepped_value: Option<u32>,
+    pub param_info: ParamInfo,
     /// The bounding rectangle of this element
     pub bounds: Rect,
 }
@@ -219,24 +214,14 @@ impl Default for VirtualSliderConfig {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParamElementTooltipInfo {
-    /// The parameter ID
-    pub param_id: u32,
-    /// The normalized value in the range `[0.0, 1.0]`
-    pub normal_value: f64,
-    /// The stepped value (if this parameter is stepped)
-    pub stepped_value: Option<u32>,
+    pub param_info: ParamInfo,
     pub bounding_rect: Rect,
     pub tooltip_align: Align2,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParamRightClickInfo {
-    /// The parameter ID
-    pub param_id: u32,
-    /// The normalized value in the range `[0.0, 1.0]`
-    pub normal_value: f64,
-    /// The stepped value (if this parameter is stepped)
-    pub stepped_value: Option<u32>,
+    pub param_info: ParamInfo,
     pub pointer_pos: Point,
 }
 
@@ -446,7 +431,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
             automation_info_changed: false,
             needs_repaint: false,
             disabled,
-            queued_new_normal: None,
+            queued_new_val: None,
         }));
 
         let element_builder = ElementBuilder {
@@ -509,7 +494,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
             automation_info_changed,
             disabled,
             needs_repaint,
-            queued_new_normal,
+            queued_new_val,
         } = &mut *shared_state;
 
         let send_param_update =
@@ -586,7 +571,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                         normal_value: inner.normal_value(),
                         default_normal: inner.default_normal(),
                         automation_info: automation_info.clone(),
-                        num_quantized_steps: inner.num_quantized_steps(),
+                        stepped_value: inner.stepped_value(),
                         state: self.state,
                         bipolar: *bipolar,
                         markers,
@@ -642,9 +627,9 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                     cx.set_animating(res.animating);
                 }
 
-                if let Some(new_normal) = queued_new_normal.take() {
-                    if inner.normal_value() != new_normal {
-                        if let Some(param_update) = inner.set_normal_value(new_normal) {
+                if let Some(new_val) = queued_new_val.take() {
+                    if inner.value() != new_val {
+                        if let Some(param_update) = inner.set_value(new_val) {
                             send_param_update(
                                 param_update,
                                 cx,
@@ -763,9 +748,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                         );
 
                         cx.send_action((f)(ParamRightClickInfo {
-                            param_id: inner.param_id,
-                            normal_value: inner.normal_value(),
-                            stepped_value: inner.stepped_value(),
+                            param_info: inner.param_info(),
                             pointer_pos: position,
                         }))
                         .unwrap();
@@ -800,9 +783,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                         );
 
                         cx.send_action((f)(ParamOpenTextEntryInfo {
-                            param_id: inner.param_id,
-                            normal_value: inner.normal_value(),
-                            stepped_value: inner.stepped_value(),
+                            param_info: inner.param_info(),
                             bounds: cx.rect(),
                         }))
                         .unwrap();
@@ -901,9 +882,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                 if cx.rect().contains(position) {
                     if let Some(f) = self.on_tooltip_request.as_mut() {
                         cx.send_action((f)(ParamElementTooltipInfo {
-                            param_id: inner.param_id,
-                            normal_value: inner.normal_value(),
-                            stepped_value: inner.stepped_value(),
+                            param_info: inner.param_info(),
                             bounding_rect: cx.rect(),
                             tooltip_align: self.tooltip_align,
                         }))
@@ -987,7 +966,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                 normal_value: shared_state.inner.normal_value(),
                 default_normal: shared_state.inner.default_normal(),
                 automation_info: shared_state.automation_info.clone(),
-                num_quantized_steps: shared_state.inner.num_quantized_steps(),
+                stepped_value: shared_state.inner.stepped_value(),
                 state: self.state,
                 bipolar: shared_state.bipolar,
                 markers: &shared_state.markers,
@@ -1034,7 +1013,7 @@ struct SharedState<R: VirtualSliderRenderer> {
     automation_info_changed: bool,
     disabled: bool,
     needs_repaint: bool,
-    queued_new_normal: Option<f64>,
+    queued_new_val: Option<ParamValue>,
 }
 
 /// A handle to a [`VirtualSliderElement`].
@@ -1053,8 +1032,37 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
 
     pub fn set_normal_value(&mut self, new_normal: f64) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-        shared_state.queued_new_normal = Some(new_normal);
-        self.el.notify_custom_state_change();
+
+        if shared_state.inner.normal_value() != new_normal {
+            shared_state.queued_new_val = Some(ParamValue::Normal(new_normal));
+            self.el.notify_custom_state_change();
+        }
+    }
+
+    pub fn set_stepped_value(&mut self, new_val: u32) {
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+
+        if let Some(stepped_value) = shared_state.inner.stepped_value() {
+            if stepped_value.value != new_val {
+                shared_state.queued_new_val = Some(ParamValue::Stepped(new_val));
+                self.el.notify_custom_state_change();
+            }
+        }
+    }
+
+    pub fn set_value(&mut self, new_val: ParamValue) {
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+
+        if shared_state.inner.value() != new_val {
+            if let ParamValue::Stepped(_) = new_val {
+                if shared_state.inner.stepped_value().is_none() {
+                    return;
+                }
+            }
+
+            shared_state.queued_new_val = Some(new_val);
+            self.el.notify_custom_state_change();
+        }
     }
 
     pub fn set_default_normal(&mut self, new_normal: f64) {
@@ -1083,9 +1091,14 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.normal_value() != shared_state.inner.default_normal() {
-            shared_state.queued_new_normal = Some(shared_state.inner.default_normal());
+            shared_state.queued_new_val =
+                Some(ParamValue::Normal(shared_state.inner.default_normal()));
             self.el.notify_custom_state_change();
         }
+    }
+
+    pub fn param_info(&self) -> ParamInfo {
+        RefCell::borrow(&self.shared_state).inner.param_info()
     }
 
     pub fn normal_value(&self) -> f64 {
@@ -1096,14 +1109,15 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
         RefCell::borrow(&self.shared_state).inner.default_normal()
     }
 
-    pub fn stepped_value(&self) -> Option<u32> {
+    pub fn stepped_value(&self) -> Option<SteppedValue> {
         RefCell::borrow(&self.shared_state).inner.stepped_value()
     }
 
-    pub fn num_quantized_steps(&self) -> Option<u32> {
+    pub fn value(&self) -> ParamValue {
         RefCell::borrow(&self.shared_state)
             .inner
-            .num_quantized_steps()
+            .param_info()
+            .value()
     }
 
     pub fn set_markers(&mut self, markers: ParamMarkersConfig) {

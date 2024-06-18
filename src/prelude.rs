@@ -26,8 +26,9 @@ pub use crate::elements::toggle_button::{ToggleButton, ToggleButtonStyle};
 pub use crate::elements::tooltip::Tooltip;
 pub use crate::elements::virtual_slider::{
     param_normal_to_quantized, param_quantized_to_normal, AutomationInfo, GestureState,
-    ParamElementTooltipInfo, ParamMarker, ParamMarkersConfig, ParamOpenTextEntryInfo,
-    ParamRightClickInfo, ParamUpdate, ParamerMarkerType, VirtualSlider, VirtualSliderConfig,
+    ParamElementTooltipInfo, ParamInfo, ParamMarker, ParamMarkersConfig, ParamOpenTextEntryInfo,
+    ParamRightClickInfo, ParamUpdate, ParamValue, ParamerMarkerType, SteppedValue, VirtualSlider,
+    VirtualSliderConfig,
 };
 pub use crate::event::*;
 pub use crate::layout::*;

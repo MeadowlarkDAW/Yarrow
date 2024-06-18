@@ -174,7 +174,7 @@ impl VirtualSliderRenderer for KnobRenderer {
                     &info.markers,
                     back_bounds,
                     info.bipolar,
-                    info.num_quantized_steps,
+                    info.stepped_value.map(|s| s.num_steps),
                     style.angle_range,
                     primitives,
                 );
