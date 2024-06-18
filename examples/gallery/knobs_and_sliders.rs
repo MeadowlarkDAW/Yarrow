@@ -14,8 +14,15 @@ pub enum Action {
 }
 
 pub struct Elements {
+    knob_0: Knob,
+    knob_0_label: Label,
+
     knob_1: Knob,
     knob_1_label: Label,
+
+    knob_2: Knob,
+    knob_2_label: Label,
+
     scroll_area: ScrollArea,
     floating_text_input: FloatingTextInput,
 
@@ -24,7 +31,7 @@ pub struct Elements {
 
 impl Elements {
     pub fn new(style: &MyStyle, cx: &mut WindowContext<'_, MyAction>) -> Self {
-        let knob_1 = Knob::builder(0, &style.knob_style_1)
+        let knob_0 = Knob::builder(0, &style.knob_style_1)
             .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
             .on_open_text_entry(|info| Action::OpenTextInput(info).into())
             .on_tooltip_request(
@@ -33,12 +40,45 @@ impl Elements {
             )
             .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
             .z_index(MAIN_Z_INDEX)
+            .build(cx);
+        let knob_0_label = Label::builder(&style.label_no_bg_style)
+            .text("Normal")
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
+            .z_index(MAIN_Z_INDEX)
+            .build(cx);
+
+        let knob_1 = Knob::builder(1, &style.knob_style_1)
+            .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
+            .on_open_text_entry(|info| Action::OpenTextInput(info).into())
+            .on_tooltip_request(
+                |info| Action::ShowParamTooltip(info).into(),
+                Align2::TOP_CENTER,
+            )
+            .bipolar(true)
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
+            .z_index(MAIN_Z_INDEX)
             .normal_value(0.5)
             .default_normal(0.5)
             .build(cx);
-
         let knob_1_label = Label::builder(&style.label_no_bg_style)
-            .text("Knob 1")
+            .text("Bipolar")
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
+            .z_index(MAIN_Z_INDEX)
+            .build(cx);
+
+        let knob_2 = Knob::builder(2, &style.knob_style_2)
+            .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
+            .on_open_text_entry(|info| Action::OpenTextInput(info).into())
+            .on_tooltip_request(
+                |info| Action::ShowParamTooltip(info).into(),
+                Align2::TOP_CENTER,
+            )
+            .num_quantized_steps(Some(5))
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
+            .z_index(MAIN_Z_INDEX)
+            .build(cx);
+        let knob_2_label = Label::builder(&style.label_no_bg_style)
+            .text("Stepped")
             .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
             .z_index(MAIN_Z_INDEX)
             .build(cx);
@@ -55,8 +95,12 @@ impl Elements {
             .build(cx);
 
         Self {
+            knob_0,
+            knob_0_label,
             knob_1,
             knob_1_label,
+            knob_2,
+            knob_2_label,
             scroll_area,
             floating_text_input,
 
@@ -99,7 +143,9 @@ impl Elements {
                     if let Some(new_text) = new_text {
                         if let Ok(new_val) = new_text.parse::<f64>() {
                             match param_id {
-                                0 => self.knob_1.set_normal_value(new_val),
+                                0 => self.knob_0.set_normal_value(new_val),
+                                1 => self.knob_1.set_normal_value(new_val),
+                                2 => self.knob_2.set_normal_value(new_val),
                                 _ => {}
                             }
                         }
@@ -123,7 +169,9 @@ impl Elements {
         cx: &WindowContext<'_, MyAction>,
     ) {
         let (normal_val, el) = match param_id {
-            0 => (self.knob_1.normal_value(), &mut self.knob_1.el),
+            0 => (self.knob_0.normal_value(), &mut self.knob_0.el),
+            1 => (self.knob_1.normal_value(), &mut self.knob_1.el),
+            2 => (self.knob_2.normal_value(), &mut self.knob_2.el),
             _ => return,
         };
 
@@ -161,10 +209,25 @@ impl Elements {
 
         let start_pos = Point::new(style.content_padding, style.content_padding);
 
-        self.knob_1
-            .el
-            .set_rect(Rect::new(start_pos, Size::new(35.0, 35.0)));
+        self.knob_0.el.set_rect(Rect::new(
+            start_pos,
+            Size::new(style.knob_size, style.knob_size),
+        ));
+        self.knob_0_label.layout_aligned(
+            Point::new(
+                self.knob_0.el.rect().center().x,
+                self.knob_0.el.rect().max_y() + style.param_label_padding,
+            ),
+            Align2::TOP_CENTER,
+        );
 
+        self.knob_1.el.set_rect(Rect::new(
+            Point::new(
+                self.knob_0.el.rect().max_x() + style.param_spacing,
+                start_pos.y,
+            ),
+            Size::new(style.knob_size, style.knob_size),
+        ));
         self.knob_1_label.layout_aligned(
             Point::new(
                 self.knob_1.el.rect().center().x,
@@ -173,24 +236,47 @@ impl Elements {
             Align2::TOP_CENTER,
         );
 
+        self.knob_2.el.set_rect(Rect::new(
+            Point::new(
+                self.knob_1.el.rect().max_x() + style.param_spacing,
+                start_pos.y,
+            ),
+            Size::new(style.knob_size, style.knob_size),
+        ));
+        self.knob_2_label.layout_aligned(
+            Point::new(
+                self.knob_2.el.rect().center().x,
+                self.knob_2.el.rect().max_y() + style.param_label_padding,
+            ),
+            Align2::TOP_CENTER,
+        );
+
         self.scroll_area.set_content_size(Size::new(
-            self.knob_1.el.rect().max_x() + style.content_padding,
-            self.knob_1.el.rect().max_y() + style.content_padding,
+            self.knob_0.el.rect().max_x() + style.content_padding,
+            self.knob_0.el.rect().max_y() + style.content_padding,
         ));
     }
 
     pub fn set_hidden(&mut self, hidden: bool) {
         // Destructuring helps to make sure you didn't miss any elements.
         let Self {
+            knob_0,
+            knob_0_label,
             knob_1,
             knob_1_label,
+            knob_2,
+            knob_2_label,
             scroll_area,
             floating_text_input,
             text_input_param_id: _,
         } = self;
 
+        knob_0.el.set_hidden(hidden);
+        knob_0_label.el.set_hidden(hidden);
         knob_1.el.set_hidden(hidden);
         knob_1_label.el.set_hidden(hidden);
+        knob_2.el.set_hidden(hidden);
+        knob_2_label.el.set_hidden(hidden);
         scroll_area.el.set_hidden(hidden);
         floating_text_input.hide();
     }

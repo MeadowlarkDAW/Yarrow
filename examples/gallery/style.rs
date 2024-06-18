@@ -1,5 +1,6 @@
 use std::rc::Rc;
 use std::sync::Arc;
+use yarrow::elements::knob::KnobMarkersStyle;
 use yarrow::prelude::*;
 
 const ICON_FONT: &'static [u8] =
@@ -25,6 +26,7 @@ pub struct MyStyle {
     pub tab_style: Rc<TabStyle>,
     pub scroll_bar_style: Rc<ScrollBarStyle>,
     pub knob_style_1: Rc<KnobStyle>,
+    pub knob_style_2: Rc<KnobStyle>,
 
     pub top_panel_height: f32,
     pub panel_border_width: f32,
@@ -37,6 +39,8 @@ pub struct MyStyle {
     pub tab_group_padding: f32,
     pub tag_group_spacing: f32,
     pub param_label_padding: f32,
+    pub knob_size: f32,
+    pub param_spacing: f32,
 
     pub drop_down_btn_width: f32,
     pub text_input_size: Size,
@@ -133,6 +137,11 @@ impl MyStyle {
             }),
             scroll_bar_style: Rc::new(ScrollBarStyle::default()),
             knob_style_1: Rc::new(KnobStyle::default()),
+            knob_style_2: Rc::new(KnobStyle {
+                notch: KnobNotchStyle::Line(Default::default()),
+                markers: KnobMarkersStyle::Dots(Default::default()),
+                ..Default::default()
+            }),
 
             top_panel_height: 30.0,
             panel_border_width: 1.0,
@@ -145,6 +154,8 @@ impl MyStyle {
             tab_group_padding: 1.0,
             tag_group_spacing: 1.0,
             param_label_padding: 5.0,
+            knob_size: 40.0,
+            param_spacing: 30.0,
 
             drop_down_btn_width: 100.0,
             text_input_size: Size::new(240.0, 30.0),

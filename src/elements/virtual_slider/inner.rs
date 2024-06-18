@@ -413,22 +413,22 @@ impl VirtualSliderInner {
 }
 
 pub fn param_quantized_to_normal(value: u32, num_steps: u32) -> f64 {
-    if value == 0 || num_steps == 0 {
+    if value == 0 || num_steps < 2 {
         0.0
-    } else if value >= num_steps {
+    } else if value >= num_steps - 1 {
         1.0
     } else {
-        f64::from(value) / f64::from(num_steps)
+        f64::from(value) / f64::from(num_steps - 1)
     }
 }
 
 pub fn param_normal_to_quantized(normal: f64, num_steps: u32) -> u32 {
-    if normal <= 0.0 || num_steps == 0 {
+    if normal <= 0.0 || num_steps < 2 {
         0
     } else if normal >= 1.0 {
-        num_steps
+        num_steps - 1
     } else {
-        (normal * f64::from(num_steps)).round() as u32
+        (normal * f64::from(num_steps - 1)).round() as u32
     }
 }
 

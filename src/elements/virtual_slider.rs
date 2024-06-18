@@ -92,7 +92,7 @@ impl ParamMarkersConfig {
                             });
                         }
                     } else {
-                        let num_steps_recip = (num_steps as f32).recip();
+                        let num_steps_recip = ((num_steps - 1) as f32).recip();
 
                         for i in 0..(num_steps - 1) {
                             (f)(&ParamMarker {
