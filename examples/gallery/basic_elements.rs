@@ -300,25 +300,16 @@ impl Elements {
 
         // The position of an element is relative to the scissor rect it is
         // assigned to.
-        self.click_me_btn.el.set_rect(Rect::new(
-            start_pos,
-            self.click_me_btn.desired_padded_size(),
+        self.click_me_btn.layout(start_pos);
+
+        self.label.layout(Point::new(
+            self.click_me_btn.el.rect().max_x() + style.element_padding,
+            start_pos.y,
         ));
 
-        self.label.el.set_rect(Rect::new(
-            Point::new(
-                self.click_me_btn.el.rect().max_x() + style.element_padding,
-                start_pos.y,
-            ),
-            self.label.desired_padded_size(),
-        ));
-
-        self.dual_label.el.set_rect(Rect::new(
-            Point::new(
-                self.label.el.rect().max_x() + style.element_padding,
-                start_pos.y,
-            ),
-            self.dual_label.desired_padded_size(),
+        self.dual_label.layout(Point::new(
+            self.label.el.rect().max_x() + style.element_padding,
+            start_pos.y,
         ));
 
         let mut toggle_btn_rect = Rect::new(
@@ -329,23 +320,17 @@ impl Elements {
             self.toggle_btn.desired_padded_size(),
         );
 
-        self.switch.el.set_rect(Rect::new(
-            Point::new(
-                start_pos.x,
-                toggle_btn_rect.center().y - (self.switch.min_size().height * 0.5),
-            ),
-            self.switch.min_size(),
-        ));
+        self.switch.layout_aligned(
+            Point::new(start_pos.x, toggle_btn_rect.center().y),
+            Align2::CENTER_LEFT,
+        );
 
         toggle_btn_rect.origin.x = self.switch.el.rect().max_x() + style.element_padding;
         self.toggle_btn.el.set_rect(toggle_btn_rect);
 
-        self.dual_toggle_btn.el.set_rect(Rect::new(
-            Point::new(
-                toggle_btn_rect.max_x() + style.element_padding,
-                self.toggle_btn.el.rect().min_y(),
-            ),
-            self.dual_toggle_btn.desired_padded_size(),
+        self.dual_toggle_btn.layout(Point::new(
+            toggle_btn_rect.max_x() + style.element_padding,
+            self.toggle_btn.el.rect().min_y(),
         ));
 
         self.drop_down_menu_btn.el.set_rect(Rect::new(

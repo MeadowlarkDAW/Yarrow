@@ -107,7 +107,7 @@ pub struct View<A: Clone + 'static> {
     elements_listening_to_pointer_event_need_sorted: bool,
     painted_elements: Vec<CachedElementPrimitives>,
     elements_listening_to_clicked_off: FxHashSet<ElementID>,
-    element_with_active_tooltip: Option<ElementID>,
+    element_with_active_tooltip: Option<ActiveTooltipInfo>,
 
     physical_size: PhysicalSizeI32,
     logical_size: Size,
@@ -115,6 +115,7 @@ pub struct View<A: Clone + 'static> {
     hover_timeout_duration: Duration,
     scroll_wheel_timeout_duration: Duration,
     window_id: WindowID,
+    prev_pointer_pos: Option<Point>,
 
     show_tooltip_action: Option<Box<dyn FnMut(TooltipInfo) -> A>>,
     hide_tooltip_action: Option<Box<dyn FnMut() -> A>>,
@@ -190,6 +191,7 @@ impl<A: Clone + 'static> View<A> {
             hover_timeout_duration,
             scroll_wheel_timeout_duration,
             window_id,
+            prev_pointer_pos: None,
 
             view_needs_repaint: true,
             window_visible: true,
@@ -397,6 +399,12 @@ impl<A: Clone + 'static> View<A> {
         self.element_arena
             .get(handle.id().0)
             .map(|entry| entry.stack_data.rect)
+    }
+
+    pub fn auto_hide_tooltip(&mut self) {
+        if let Some(info) = &mut self.element_with_active_tooltip {
+            info.auto_hide = true;
+        }
     }
 
     pub(crate) fn resize(&mut self, physical_size: PhysicalSizeI32, scale_factor: ScaleFactor) {
@@ -633,6 +641,8 @@ impl<A: Clone + 'static> View<A> {
             }
         }
 
+        self.prev_pointer_pos = None;
+
         // TODO: Release exclusive focus if the pointer is locked.
     }
 
@@ -715,6 +725,29 @@ impl<A: Clone + 'static> View<A> {
                 }
             }
         }
+
+        if let Some(info) = self.element_with_active_tooltip {
+            let mut hide_tooltip = true;
+
+            if info.auto_hide {
+                if let Some(element_entry) = self.element_arena.get(info.element_id.0) {
+                    if let Some(pos) = self.prev_pointer_pos {
+                        if let Some(visible_rect) = &element_entry.stack_data.visible_rect {
+                            hide_tooltip = !visible_rect.contains(pos);
+                        }
+                    }
+                }
+            } else {
+                hide_tooltip = false;
+            }
+
+            if hide_tooltip {
+                self.element_with_active_tooltip = None;
+                if let Some(action) = self.hide_tooltip_action.as_mut() {
+                    self.action_sender.send((action)()).unwrap();
+                }
+            }
+        }
     }
 
     fn handle_pointer_event(
@@ -729,23 +762,26 @@ impl<A: Clone + 'static> View<A> {
             PointerEvent::Moved { .. } => {
                 self.cursor_icon = CursorIcon::Default;
 
-                if let Some(element_id) = self.element_with_active_tooltip.take() {
-                    let mut hide_tooltip = true;
+                if let Some(info) = self.element_with_active_tooltip {
+                    if info.auto_hide {
+                        let mut hide_tooltip = true;
 
-                    if let Some(element_entry) = self.element_arena.get(element_id.0) {
-                        if let Some(visible_rect) = element_entry.stack_data.visible_rect {
-                            hide_tooltip = !visible_rect.contains(pos);
+                        if let Some(element_entry) = self.element_arena.get(info.element_id.0) {
+                            if let Some(visible_rect) = element_entry.stack_data.visible_rect {
+                                hide_tooltip = !visible_rect.contains(pos);
+                            }
                         }
-                    }
 
-                    if hide_tooltip {
-                        if let Some(action) = self.hide_tooltip_action.as_mut() {
-                            self.action_sender.send((action)()).unwrap();
+                        if hide_tooltip {
+                            self.element_with_active_tooltip = None;
+                            if let Some(action) = self.hide_tooltip_action.as_mut() {
+                                self.action_sender.send((action)()).unwrap();
+                            }
                         }
-                    } else {
-                        self.element_with_active_tooltip = Some(element_id);
                     }
                 }
+
+                self.prev_pointer_pos = Some(pos);
             }
             PointerEvent::PointerLeft => {
                 for (element_id, _) in self.hovered_elements.iter_mut() {
@@ -772,6 +808,8 @@ impl<A: Clone + 'static> View<A> {
                         self.action_sender.send((action)()).unwrap();
                     }
                 }
+
+                self.prev_pointer_pos = None;
 
                 return EventCaptureStatus::NotCaptured;
             }
@@ -1153,8 +1191,17 @@ impl<A: Clone + 'static> View<A> {
                 ElementModificationType::StartScrollWheelTimeout => {
                     self.handle_element_start_scroll_wheel_timeout(modification.element_id);
                 }
-                ElementModificationType::ShowTooltip { message, align } => {
-                    self.handle_element_show_tooltip(modification.element_id, message, align);
+                ElementModificationType::ShowTooltip {
+                    message,
+                    align,
+                    auto_hide,
+                } => {
+                    self.handle_element_show_tooltip(
+                        modification.element_id,
+                        message,
+                        align,
+                        auto_hide,
+                    );
                 }
             }
         }
@@ -1164,6 +1211,20 @@ impl<A: Clone + 'static> View<A> {
 
     pub fn view_needs_repaint(&self) -> bool {
         self.view_needs_repaint
+    }
+
+    pub fn element_is_hovered(&self, element: &ElementHandle) -> bool {
+        let Some(element_entry) = self.element_arena.get(element.id().0) else {
+            return false;
+        };
+
+        if let Some(pos) = self.prev_pointer_pos {
+            if let Some(visible_rect) = &element_entry.stack_data.visible_rect {
+                return visible_rect.contains(pos);
+            }
+        }
+
+        false
     }
 
     fn handle_element_listen_to_click_off(&mut self, element_id: ElementID) {
@@ -1192,13 +1253,17 @@ impl<A: Clone + 'static> View<A> {
         element_id: ElementID,
         message: String,
         align: Align2,
+        auto_hide: bool,
     ) {
         let Some(element_entry) = self.element_arena.get(element_id.0) else {
             // Element has been dropped. Do nothing and return.
             return;
         };
 
-        self.element_with_active_tooltip = Some(element_id);
+        self.element_with_active_tooltip = Some(ActiveTooltipInfo {
+            element_id,
+            auto_hide,
+        });
 
         if let Some(action) = self.show_tooltip_action.as_mut() {
             let info = TooltipInfo {
@@ -1877,8 +1942,8 @@ impl<A: Clone + 'static> View<A> {
         self.scissor_rects[usize::from(element_entry.stack_data.scissor_rect_id)]
             .remove_element(&element_entry.stack_data, &mut self.element_arena);
 
-        if let Some(id) = &self.element_with_active_tooltip {
-            if element_id == *id {
+        if let Some(info) = &self.element_with_active_tooltip {
+            if element_id == info.element_id {
                 self.element_with_active_tooltip = None;
 
                 if let Some(action) = self.hide_tooltip_action.as_mut() {
@@ -2066,6 +2131,12 @@ struct FocusInfo {
     listens_to_keys: bool,
 }
 
+#[derive(Clone, Copy)]
+struct ActiveTooltipInfo {
+    element_id: ElementID,
+    auto_hide: bool,
+}
+
 fn send_event_to_element<A: Clone + 'static>(
     event: ElementEvent,
     element_entry: &mut ElementEntry<A>,
@@ -2159,10 +2230,14 @@ fn send_event_to_element<A: Clone + 'static>(
         });
     }
 
-    if let Some((message, align)) = cx.requested_show_tooltip {
+    if let Some(req) = cx.requested_show_tooltip {
         mod_queue_sender.send_to_front(ElementModification {
             element_id,
-            type_: ElementModificationType::ShowTooltip { message, align },
+            type_: ElementModificationType::ShowTooltip {
+                message: req.message,
+                align: req.align,
+                auto_hide: req.auto_hide,
+            },
         });
     }
 

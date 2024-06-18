@@ -32,6 +32,12 @@ pub(crate) enum ChangeFocusRequest {
     ReleaseFocus,
 }
 
+pub(crate) struct ShowTooltipRequest {
+    pub message: String,
+    pub align: Align2,
+    pub auto_hide: bool,
+}
+
 /// A context for this element instance. This is used to request actions from the
 /// UI library.
 pub struct ElementContext<'a, A: Clone + 'static> {
@@ -48,7 +54,7 @@ pub struct ElementContext<'a, A: Clone + 'static> {
 
     pub(crate) listen_to_pointer_clicked_off: bool,
     pub(crate) requested_rect: Option<Rect>,
-    pub(crate) requested_show_tooltip: Option<(String, Align2)>,
+    pub(crate) requested_show_tooltip: Option<ShowTooltipRequest>,
     pub(crate) change_focus_request: Option<ChangeFocusRequest>,
 
     pub(crate) rect: Rect,
@@ -245,8 +251,12 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
         self.scroll_wheel_timeout_requested = true;
     }
 
-    pub fn show_tooltip(&mut self, message: String, align: Align2) {
-        self.requested_show_tooltip = Some((message, align));
+    pub fn show_tooltip(&mut self, message: String, align: Align2, auto_hide: bool) {
+        self.requested_show_tooltip = Some(ShowTooltipRequest {
+            message,
+            align,
+            auto_hide,
+        });
     }
 }
 

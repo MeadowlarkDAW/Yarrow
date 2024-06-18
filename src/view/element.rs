@@ -135,7 +135,11 @@ pub(super) enum ElementModificationType {
     ListenToClickOff,
     StartHoverTimeout,
     StartScrollWheelTimeout,
-    ShowTooltip { message: String, align: Align2 },
+    ShowTooltip {
+        message: String,
+        align: Align2,
+        auto_hide: bool,
+    },
 }
 
 // I get a warning about leaking `ElementID` if I make `ElementHandle::new()`

@@ -42,5 +42,7 @@ pub use crate::vg::color::RGBA8;
 pub use crate::vg::text::glyphon::fontdb::Source as FontSource;
 pub use crate::vg::text::glyphon::FontSystem;
 pub use crate::vg::text::{Align as TextAlign, Attrs, Family, TextProperties, Weight};
-pub use crate::view::{ScissorRectID, TooltipInfo, View, MAIN_SCISSOR_RECT};
+pub use crate::view::{
+    element::ElementHandle, ScissorRectID, TooltipInfo, View, MAIN_SCISSOR_RECT,
+};
 pub use crate::window::*;

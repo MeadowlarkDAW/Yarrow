@@ -315,19 +315,18 @@ impl MyApp {
                 length: window_size.height,
             });
 
-        let menu_btn_size = elements.menu_btn.desired_padded_size();
-        let menu_btn_rect = Rect::new(
+        elements.menu_btn.layout_aligned(
             Point::new(
                 self.style.menu_btn_padding,
-                (self.style.top_panel_height - menu_btn_size.height) * 0.5,
+                self.style.top_panel_height * 0.5,
             ),
-            menu_btn_size,
+            Align2::CENTER_LEFT,
         );
-        elements.menu_btn.el.set_rect(menu_btn_rect);
 
-        elements
-            .menu
-            .set_position(Point::new(menu_btn_rect.min_x(), menu_btn_rect.max_y()));
+        elements.menu.set_position(Point::new(
+            elements.menu_btn.el.rect().min_x(),
+            elements.menu_btn.el.rect().max_y(),
+        ));
 
         elements.tab_group.layout(
             Point::new(

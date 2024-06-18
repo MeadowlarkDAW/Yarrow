@@ -97,7 +97,7 @@ impl Default for KnobBackStyleQuad {
                 },
                 ..idle_style
             },
-            size: SizeType::Scale(0.8),
+            size: SizeType::Scale(0.7),
         }
     }
 }
@@ -146,7 +146,7 @@ impl KnobNotchStyleQuad {
 
         let center_offset = match self.edge_offset {
             SizeType::FixedPoints(points) => (back_bounds.width() * 0.5) - points,
-            SizeType::Scale(scale) => (back_bounds.width() - (back_bounds.width() * scale)) * 0.5,
+            SizeType::Scale(scale) => (back_bounds.width() * 0.5) - (back_bounds.width() * scale),
         };
 
         let notch_angle = angle_range.min() + (angle_range.span() * normal_val as f32)
@@ -183,8 +183,8 @@ impl Default for KnobNotchStyleQuad {
                 bg: Background::Solid(RGBA8::new(105, 105, 105, 255)),
                 ..idle_style
             },
-            size: SizeType::FixedPoints(5.0),
-            edge_offset: SizeType::FixedPoints(5.5),
+            size: SizeType::Scale(0.2),
+            edge_offset: SizeType::Scale(0.18),
         }
     }
 }

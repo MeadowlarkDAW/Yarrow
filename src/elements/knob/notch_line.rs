@@ -109,7 +109,7 @@ impl Default for KnobNotchStyleLine {
             bg: KnobNotchStyleLineBg::default(),
             width: SizeType::Scale(0.075),
             height: SizeType::Scale(0.25),
-            edge_offset: SizeType::FixedPoints(5.0),
+            edge_offset: SizeType::Scale(0.08),
         }
     }
 }
@@ -139,7 +139,13 @@ impl KnobNotchLinePrimitives {
             SizeType::Scale(scale) => back_size * scale,
         };
 
-        let rect = Rect::new(Point::new(line_size.width * -0.5, edge_offset), line_size);
+        let rect = Rect::new(
+            Point::new(
+                line_size.width * -0.5,
+                (back_size * 0.5) - line_size.height - edge_offset,
+            ),
+            line_size,
+        );
 
         match &style.bg {
             KnobNotchStyleLineBg::Solid {

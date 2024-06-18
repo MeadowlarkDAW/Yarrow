@@ -273,7 +273,7 @@ impl<A: Clone + 'static> Element<A> for SwitchElement<A> {
             }
             ElementEvent::Pointer(PointerEvent::HoverTimeout { .. }) => {
                 if let Some(message) = &self.tooltip_message {
-                    cx.show_tooltip(message.clone(), self.tooltip_align);
+                    cx.show_tooltip(message.clone(), self.tooltip_align, true);
                 }
             }
             _ => {}
@@ -427,5 +427,15 @@ impl Switch {
             shared_state.disabled = disabled;
             self.el.notify_custom_state_change();
         }
+    }
+
+    pub fn layout(&mut self, origin: Point) {
+        let size = self.min_size();
+        self.el.set_rect(Rect::new(origin, size));
+    }
+
+    pub fn layout_aligned(&mut self, point: Point, align: Align2) {
+        let size = self.min_size();
+        self.el.set_rect(align.align_rect_to_point(point, size));
     }
 }

@@ -36,6 +36,7 @@ pub struct MyStyle {
     pub menu_btn_padding: f32,
     pub tab_group_padding: f32,
     pub tag_group_spacing: f32,
+    pub param_label_padding: f32,
 
     pub drop_down_btn_width: f32,
     pub text_input_size: Size,
@@ -143,6 +144,7 @@ impl MyStyle {
             menu_btn_padding: 3.0,
             tab_group_padding: 1.0,
             tag_group_spacing: 1.0,
+            param_label_padding: 5.0,
 
             drop_down_btn_width: 100.0,
             text_input_size: Size::new(240.0, 30.0),

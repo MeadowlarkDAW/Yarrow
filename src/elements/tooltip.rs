@@ -28,7 +28,7 @@ impl TooltipBuilder {
         Self {
             text_offset: Point::default(),
             style: Rc::clone(style),
-            padding: Padding::new(5.0, 5.0, 5.0, 5.0),
+            padding: Padding::new(10.0, 10.0, 10.0, 10.0),
             z_index: 0,
             scissor_rect_id: MAIN_SCISSOR_RECT,
         }
@@ -40,7 +40,7 @@ impl TooltipBuilder {
 
     /// The padding between the tooltip and the element that is being hovered.
     ///
-    /// By default this has a padding with all values set to `5.0`.
+    /// By default this has a padding with all values set to `10.0`.
     pub const fn padding(mut self, padding: Padding) -> Self {
         self.padding = padding;
         self

@@ -52,24 +52,28 @@ impl KnobStyle {
 #[derive(Debug, Clone, PartialEq)]
 pub enum KnobBackStyle {
     Quad(KnobBackStyleQuad),
+    None,
 }
 
 impl KnobBackStyle {
     pub fn states_differ(&self, a: VirtualSliderState, b: VirtualSliderState) -> bool {
         match self {
             Self::Quad(s) => s.states_differ(a, b),
+            Self::None => false,
         }
     }
 
     pub fn size(&self) -> SizeType {
         match self {
             Self::Quad(s) => s.size,
+            Self::None => SizeType::Scale(1.0),
         }
     }
 
     pub fn back_bounds(&self, element_size: Size) -> Rect {
         match self {
             Self::Quad(s) => s.back_bounds(element_size),
+            Self::None => Rect::from_size(element_size),
         }
     }
 }
@@ -84,6 +88,7 @@ impl Default for KnobBackStyle {
 pub enum KnobNotchStyle {
     Quad(KnobNotchStyleQuad),
     Line(KnobNotchStyleLine),
+    None,
 }
 
 impl KnobNotchStyle {
@@ -91,6 +96,7 @@ impl KnobNotchStyle {
         match self {
             Self::Quad(s) => s.states_differ(a, b),
             Self::Line(s) => s.states_differ(a, b),
+            Self::None => false,
         }
     }
 }
@@ -105,6 +111,7 @@ impl Default for KnobNotchStyle {
 pub enum KnobMarkersStyle {
     Dots(KnobMarkersDotStyle),
     Arc(KnobMarkersArcStyle),
+    None,
 }
 
 impl KnobMarkersStyle {
@@ -112,6 +119,7 @@ impl KnobMarkersStyle {
         match self {
             Self::Dots(_) => false,
             Self::Arc(s) => s.states_differ(a, b),
+            Self::None => false,
         }
     }
 }
@@ -157,6 +165,7 @@ impl VirtualSliderRenderer for KnobRenderer {
             KnobBackStyle::Quad(s) => {
                 primitives.add(s.create_primitive(info.state, back_bounds));
             }
+            KnobBackStyle::None => {}
         }
 
         match &style.markers {
@@ -201,6 +210,7 @@ impl VirtualSliderRenderer for KnobRenderer {
                     primitives.add_mesh(front_mesh);
                 }
             }
+            KnobMarkersStyle::None => {}
         }
 
         match &style.notch {
@@ -244,6 +254,7 @@ impl VirtualSliderRenderer for KnobRenderer {
                     back_bounds,
                 ));
             }
+            KnobNotchStyle::None => {}
         }
     }
 

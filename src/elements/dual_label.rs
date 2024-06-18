@@ -7,7 +7,7 @@ use rootvg::text::{Align, RcTextBuffer, TextPrimitive, TextProperties};
 use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus};
-use crate::layout::Padding;
+use crate::layout::{Align2, Padding};
 use crate::math::{Point, Rect, Size, ZIndex};
 use crate::style::{QuadStyle, DEFAULT_TEXT_ATTRIBUTES};
 use crate::vg::color::{self, RGBA8};
@@ -714,6 +714,16 @@ impl DualLabel {
         if changed {
             self.el.notify_custom_state_change();
         }
+    }
+
+    pub fn layout(&mut self, origin: Point) {
+        let size = self.desired_padded_size();
+        self.el.set_rect(Rect::new(origin, size));
+    }
+
+    pub fn layout_aligned(&mut self, point: Point, align: Align2) {
+        let size = self.desired_padded_size();
+        self.el.set_rect(align.align_rect_to_point(point, size));
     }
 }
 

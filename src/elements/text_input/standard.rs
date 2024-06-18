@@ -276,7 +276,7 @@ impl<A: Clone + 'static> Element<A> for TextInputElement<A> {
             ElementEvent::ClickedOff => inner.on_clicked_off(),
             ElementEvent::Pointer(PointerEvent::HoverTimeout { .. }) => {
                 if let Some(message) = &self.tooltip_message {
-                    cx.show_tooltip(message.clone(), self.tooltip_align);
+                    cx.show_tooltip(message.clone(), self.tooltip_align, true);
                 }
 
                 TextInputUpdateResult::default()

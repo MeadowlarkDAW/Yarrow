@@ -15,6 +15,7 @@ pub enum Action {
 
 pub struct Elements {
     knob_1: Knob,
+    knob_1_label: Label,
     scroll_area: ScrollArea,
     floating_text_input: FloatingTextInput,
 
@@ -36,6 +37,12 @@ impl Elements {
             .default_normal(0.5)
             .build(cx);
 
+        let knob_1_label = Label::builder(&style.label_no_bg_style)
+            .text("Knob 1")
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
+            .z_index(MAIN_Z_INDEX)
+            .build(cx);
+
         let scroll_area = ScrollArea::builder(&style.scroll_bar_style)
             .on_scrolled(|scroll_offset| Action::ScrollOffsetChanged(scroll_offset).into())
             .z_index(0)
@@ -49,6 +56,7 @@ impl Elements {
 
         Self {
             knob_1,
+            knob_1_label,
             scroll_area,
             floating_text_input,
 
@@ -66,8 +74,15 @@ impl Elements {
         let needs_layout = false;
 
         match action {
-            Action::ParamUpdate(_param_update) => {}
-            Action::ShowParamTooltip(info) => self.show_param_tooltip(info.param_id),
+            Action::ParamUpdate(info) => {
+                self.show_param_tooltip(info.param_id, info.is_gesturing(), cx);
+
+                if !info.is_gesturing() {
+                    // Set the tooltip to auto-hide when gesturing is finished.
+                    cx.view.auto_hide_tooltip();
+                }
+            }
+            Action::ShowParamTooltip(info) => self.show_param_tooltip(info.param_id, false, cx),
             Action::OpenTextInput(info) => {
                 self.text_input_param_id = Some(info.param_id);
                 self.floating_text_input.show(
@@ -101,14 +116,32 @@ impl Elements {
         needs_layout
     }
 
-    fn show_param_tooltip(&mut self, param_id: u32) {
-        match param_id {
-            0 => self.knob_1.el.show_tooltip(
-                format!("Knob 1: {:.4}", self.knob_1.normal_value()),
-                Align2::TOP_CENTER,
-            ),
-            _ => {}
+    fn show_param_tooltip(
+        &mut self,
+        param_id: u32,
+        is_gesturing: bool,
+        cx: &WindowContext<'_, MyAction>,
+    ) {
+        let (normal_val, el) = match param_id {
+            0 => (self.knob_1.normal_value(), &mut self.knob_1.el),
+            _ => return,
+        };
+
+        if !is_gesturing {
+            // Don't show if the element is not being gestured and
+            // it is not currently hovered.
+            if !cx.view.element_is_hovered(el) {
+                return;
+            }
         }
+
+        el.show_tooltip(
+            format!("{:.4}", normal_val),
+            Align2::TOP_CENTER,
+            // Don't auto-hide the tooltip when gesturing, otherwise
+            // the tooltip may flicker.
+            !is_gesturing,
+        )
     }
 
     pub fn layout(
@@ -132,6 +165,14 @@ impl Elements {
             .el
             .set_rect(Rect::new(start_pos, Size::new(35.0, 35.0)));
 
+        self.knob_1_label.layout_aligned(
+            Point::new(
+                self.knob_1.el.rect().center().x,
+                self.knob_1.el.rect().max_y() + style.param_label_padding,
+            ),
+            Align2::TOP_CENTER,
+        );
+
         self.scroll_area.set_content_size(Size::new(
             self.knob_1.el.rect().max_x() + style.content_padding,
             self.knob_1.el.rect().max_y() + style.content_padding,
@@ -142,12 +183,14 @@ impl Elements {
         // Destructuring helps to make sure you didn't miss any elements.
         let Self {
             knob_1,
+            knob_1_label,
             scroll_area,
             floating_text_input,
             text_input_param_id: _,
         } = self;
 
         knob_1.el.set_hidden(hidden);
+        knob_1_label.el.set_hidden(hidden);
         scroll_area.el.set_hidden(hidden);
         floating_text_input.hide();
     }

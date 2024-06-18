@@ -446,6 +446,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
             automation_info_changed: false,
             needs_repaint: false,
             disabled,
+            queued_new_normal: None,
         }));
 
         let element_builder = ElementBuilder {
@@ -508,6 +509,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
             automation_info_changed,
             disabled,
             needs_repaint,
+            queued_new_normal,
         } = &mut *shared_state;
 
         let send_param_update =
@@ -639,6 +641,22 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                     }
                     cx.set_animating(res.animating);
                 }
+
+                if let Some(new_normal) = queued_new_normal.take() {
+                    if inner.normal_value() != new_normal {
+                        if let Some(param_update) = inner.set_normal_value(new_normal) {
+                            send_param_update(
+                                param_update,
+                                cx,
+                                &mut self.renderer,
+                                style,
+                                None,
+                                self.state,
+                                &mut self.on_gesture,
+                            );
+                        }
+                    }
+                }
             }
             ElementEvent::Pointer(PointerEvent::Moved {
                 position,
@@ -688,6 +706,8 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                         &mut self.on_gesture,
                     );
                 }
+
+                return EventCaptureStatus::Captured;
             }
             ElementEvent::Pointer(PointerEvent::PointerLeft) => {
                 if self.hovered {
@@ -870,6 +890,8 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                 if cx.has_focus() {
                     cx.release_focus();
                 }
+
+                return EventCaptureStatus::Captured;
             }
             ElementEvent::Pointer(PointerEvent::HoverTimeout { position }) => {
                 if *disabled {
@@ -1012,6 +1034,7 @@ struct SharedState<R: VirtualSliderRenderer> {
     automation_info_changed: bool,
     disabled: bool,
     needs_repaint: bool,
+    queued_new_normal: Option<f64>,
 }
 
 /// A handle to a [`VirtualSliderElement`].
@@ -1030,12 +1053,8 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
 
     pub fn set_normal_value(&mut self, new_normal: f64) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
-        let state_changed = shared_state.inner.set_normal_value(new_normal).is_some();
-        if state_changed {
-            shared_state.needs_repaint = true;
-            self.el.notify_custom_state_change();
-        }
+        shared_state.queued_new_normal = Some(new_normal);
+        self.el.notify_custom_state_change();
     }
 
     pub fn set_default_normal(&mut self, new_normal: f64) {
@@ -1063,9 +1082,8 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
     pub fn reset_to_default(&mut self) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
-        let state_changed = shared_state.inner.reset_to_default().is_some();
-        if state_changed {
-            shared_state.needs_repaint = true;
+        if shared_state.inner.normal_value() != shared_state.inner.default_normal() {
+            shared_state.queued_new_normal = Some(shared_state.inner.default_normal());
             self.el.notify_custom_state_change();
         }
     }

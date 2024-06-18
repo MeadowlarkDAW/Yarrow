@@ -215,10 +215,14 @@ impl ElementHandle {
         });
     }
 
-    pub fn show_tooltip(&mut self, message: String, align: Align2) {
+    pub fn show_tooltip(&mut self, message: String, align: Align2, auto_hide: bool) {
         self.mod_queue_sender.send(ElementModification {
             element_id: self.element_id,
-            type_: ElementModificationType::ShowTooltip { message, align },
+            type_: ElementModificationType::ShowTooltip {
+                message,
+                align,
+                auto_hide,
+            },
         })
     }
 

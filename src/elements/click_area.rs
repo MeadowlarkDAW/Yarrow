@@ -207,7 +207,7 @@ impl<A: Clone + 'static> Element<A> for ClickAreaElement<A> {
             }
             ElementEvent::Pointer(PointerEvent::HoverTimeout { .. }) => {
                 if let Some(message) = &self.tooltip_message {
-                    cx.show_tooltip(message.clone(), self.tooltip_align);
+                    cx.show_tooltip(message.clone(), self.tooltip_align, true);
                 }
             }
             _ => {}

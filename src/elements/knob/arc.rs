@@ -52,9 +52,9 @@ pub enum KnobMarkersArcStyle {
 impl Default for KnobMarkersArcStyle {
     fn default() -> Self {
         Self::Solid {
-            width: SizeType::FixedPoints(4.0),
-            back_width: SizeType::FixedPoints(4.0),
-            edge_offset: SizeType::FixedPoints(4.0),
+            width: SizeType::Scale(0.15),
+            back_width: SizeType::Scale(0.15),
+            edge_offset: SizeType::Scale(0.15),
             line_cap: LineCap::Round,
             idle_color: DEFAULT_ACCENT_COLOR,
             hovered_color: DEFAULT_ACCENT_HOVER_COLOR,

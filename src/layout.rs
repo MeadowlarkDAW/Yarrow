@@ -66,6 +66,21 @@ impl Align2 {
 }
 
 impl Align2 {
+    pub fn align_rect_to_point(&self, point: Point, size: Size) -> Rect {
+        let x = match self.horizontal {
+            Align::Start => point.x,
+            Align::Center => point.x - (size.width * 0.5),
+            Align::End => point.x - size.width,
+        };
+        let y = match self.vertical {
+            Align::Start => point.y,
+            Align::Center => point.y - (size.height * 0.5),
+            Align::End => point.y - size.height,
+        };
+
+        Rect::new(Point::new(x, y), size)
+    }
+
     pub fn align_floating_element(
         &self,
         bounds: Rect,

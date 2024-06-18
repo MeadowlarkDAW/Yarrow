@@ -580,7 +580,7 @@ impl<A: Clone + 'static> Element<A> for ToggleButtonElement<A> {
             }
             ElementEvent::Pointer(PointerEvent::HoverTimeout { .. }) => {
                 if let Some(message) = &self.tooltip_message {
-                    cx.show_tooltip(message.clone(), self.tooltip_align);
+                    cx.show_tooltip(message.clone(), self.tooltip_align, true);
                 }
             }
             _ => {}
@@ -706,5 +706,15 @@ impl ToggleButton {
         if changed {
             self.el.notify_custom_state_change();
         }
+    }
+
+    pub fn layout(&mut self, origin: Point) {
+        let size = self.desired_padded_size();
+        self.el.set_rect(Rect::new(origin, size));
+    }
+
+    pub fn layout_aligned(&mut self, point: Point, align: Align2) {
+        let size = self.desired_padded_size();
+        self.el.set_rect(align.align_rect_to_point(point, size));
     }
 }

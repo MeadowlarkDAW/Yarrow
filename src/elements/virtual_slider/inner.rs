@@ -15,6 +15,12 @@ pub enum GestureState {
     GestureFinished,
 }
 
+impl GestureState {
+    pub fn is_gesturing(&self) -> bool {
+        *self != GestureState::GestureFinished
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ParamUpdate {
     /// The parameter ID
@@ -24,7 +30,18 @@ pub struct ParamUpdate {
     /// The stepped value (if this parameter is stepped)
     pub stepped_value: Option<u32>,
     /// The current state of gesturing (dragging)
-    pub gesture_state: GestureState,
+    ///
+    /// If this is update is not the result of the user gesturing,
+    /// then this will be `None`.
+    pub gesture_state: Option<GestureState>,
+}
+
+impl ParamUpdate {
+    pub fn is_gesturing(&self) -> bool {
+        self.gesture_state
+            .map(|g| g.is_gesturing())
+            .unwrap_or(false)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -113,7 +130,7 @@ impl VirtualSliderInner {
                 param_id: self.param_id,
                 normal_value: self.normal_value,
                 stepped_value: self.stepped_value(),
-                gesture_state: GestureState::GestureStarted,
+                gesture_state: Some(GestureState::GestureStarted),
             })
         }
     }
@@ -128,7 +145,7 @@ impl VirtualSliderInner {
                 param_id: self.param_id,
                 normal_value: self.normal_value,
                 stepped_value: self.stepped_value(),
-                gesture_state: GestureState::GestureStarted,
+                gesture_state: Some(GestureState::GestureStarted),
             })
         }
     }
@@ -281,7 +298,7 @@ impl VirtualSliderInner {
                 param_id: self.param_id,
                 normal_value: self.normal_value,
                 stepped_value: self.stepped_value(),
-                gesture_state: GestureState::Gesturing,
+                gesture_state: Some(GestureState::Gesturing),
             })
         } else {
             None
@@ -293,7 +310,7 @@ impl VirtualSliderInner {
             param_id: self.param_id,
             normal_value: self.normal_value,
             stepped_value: self.stepped_value(),
-            gesture_state: GestureState::GestureFinished,
+            gesture_state: Some(GestureState::GestureFinished),
         })
     }
 
@@ -307,7 +324,7 @@ impl VirtualSliderInner {
                 param_id: self.param_id,
                 normal_value: self.normal_value,
                 stepped_value: self.stepped_value(),
-                gesture_state: GestureState::GestureFinished,
+                gesture_state: Some(GestureState::GestureFinished),
             })
         } else if self.normal_value != self.default_normal {
             self.normal_value = self.default_normal;
@@ -316,7 +333,7 @@ impl VirtualSliderInner {
                 param_id: self.param_id,
                 normal_value: self.normal_value,
                 stepped_value: self.stepped_value(),
-                gesture_state: GestureState::GestureFinished,
+                gesture_state: None,
             })
         } else {
             None
@@ -334,7 +351,7 @@ impl VirtualSliderInner {
     /// Set the normalized value of the virtual slider.
     ///
     /// If the slider is currently gesturing, then the gesture will
-    /// be canceled.
+    /// be cancelled.
     pub fn set_normal_value(&mut self, new_normal: f64) -> Option<ParamUpdate> {
         let new_normal = if let Some(stepped_state) = &mut self.stepped_state {
             stepped_state.value = param_normal_to_quantized(new_normal, stepped_state.num_steps);
@@ -348,14 +365,19 @@ impl VirtualSliderInner {
 
         self.normal_value = new_normal;
         self.continuous_gesture_normal = new_normal;
-        self.current_gesture = None;
+
+        let gesture_state = if let Some(_) = self.current_gesture.take() {
+            Some(GestureState::GestureFinished)
+        } else {
+            None
+        };
 
         if state_changed {
             Some(ParamUpdate {
                 param_id: self.param_id,
                 normal_value: self.normal_value,
                 stepped_value: self.stepped_value(),
-                gesture_state: GestureState::GestureFinished,
+                gesture_state,
             })
         } else {
             None
