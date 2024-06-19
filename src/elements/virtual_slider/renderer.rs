@@ -39,6 +39,7 @@ pub struct VirtualSliderRenderInfo<'a> {
     pub state: VirtualSliderState,
     pub markers: &'a ParamMarkersConfig,
     pub bipolar: bool,
+    pub horizontal: bool,
 }
 
 pub trait VirtualSliderRenderer: Default + 'static {

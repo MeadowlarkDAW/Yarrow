@@ -239,8 +239,9 @@ pub struct VirtualSliderBuilder<A: Clone + 'static, R: VirtualSliderRenderer> {
     pub markers: ParamMarkersConfig,
     pub bipolar: bool,
     pub config: VirtualSliderConfig,
-    pub drag_vertically: bool,
-    pub scroll_vertically: bool,
+    pub drag_horizontally: bool,
+    pub scroll_horizontally: bool,
+    pub horizontal: bool,
     pub z_index: ZIndex,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
@@ -264,8 +265,9 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer> VirtualSliderBuilder<A, R> {
             markers: ParamMarkersConfig::Default,
             bipolar: false,
             config: VirtualSliderConfig::default(),
-            drag_vertically: true,
-            scroll_vertically: true,
+            drag_horizontally: false,
+            scroll_horizontally: false,
+            horizontal: false,
             z_index: 0,
             bounding_rect: Rect::default(),
             manually_hidden: false,
@@ -336,13 +338,18 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer> VirtualSliderBuilder<A, R> {
         self
     }
 
-    pub const fn drag_vertically(mut self, drag_vertically: bool) -> Self {
-        self.drag_vertically = drag_vertically;
+    pub const fn drag_horizontally(mut self, drag_horizontally: bool) -> Self {
+        self.drag_horizontally = drag_horizontally;
         self
     }
 
-    pub const fn scroll_vertically(mut self, scroll_vertically: bool) -> Self {
-        self.scroll_vertically = scroll_vertically;
+    pub const fn scroll_horizontally(mut self, scroll_horizontally: bool) -> Self {
+        self.scroll_horizontally = scroll_horizontally;
+        self
+    }
+
+    pub const fn horizontal(mut self, horizontal: bool) -> Self {
+        self.horizontal = horizontal;
         self
     }
 
@@ -380,6 +387,7 @@ pub struct VirtualSliderElement<A: Clone + 'static, R: VirtualSliderRenderer + '
     on_open_text_entry: Option<Box<dyn FnMut(ParamOpenTextEntryInfo) -> A>>,
     on_tooltip_request: Option<Box<dyn FnMut(ParamElementTooltipInfo) -> A>>,
     tooltip_align: Align2,
+    horizontal: bool,
 
     renderer: R,
     hovered: bool,
@@ -405,8 +413,9 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
             markers,
             bipolar,
             config,
-            drag_vertically,
-            scroll_vertically,
+            drag_horizontally,
+            scroll_horizontally,
+            horizontal,
             z_index,
             bounding_rect,
             manually_hidden,
@@ -421,8 +430,8 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
                 default_normal,
                 num_quantized_steps,
                 config,
-                drag_vertically,
-                scroll_vertically,
+                drag_horizontally,
+                scroll_horizontally,
             ),
             style,
             automation_info: AutomationInfo::default(),
@@ -442,6 +451,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
                 on_open_text_entry,
                 on_tooltip_request,
                 tooltip_align,
+                horizontal,
                 renderer: R::default(),
                 hovered: false,
                 state: if disabled {
@@ -575,6 +585,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                         state: self.state,
                         bipolar: *bipolar,
                         markers,
+                        horizontal: self.horizontal,
                     },
                 );
                 if res.repaint {
@@ -970,6 +981,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                 state: self.state,
                 bipolar: shared_state.bipolar,
                 markers: &shared_state.markers,
+                horizontal: self.horizontal,
             },
             cx,
             primitives,

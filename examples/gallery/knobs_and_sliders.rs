@@ -23,6 +23,11 @@ pub struct Elements {
     knob_2: Knob,
     knob_2_label: Label,
 
+    slider_3: Slider,
+    slider_4: Slider,
+    slider_5: Slider,
+    slider_6: Slider,
+
     scroll_area: ScrollArea,
     floating_text_input: FloatingTextInput,
 
@@ -83,6 +88,60 @@ impl Elements {
             .z_index(MAIN_Z_INDEX)
             .build(cx);
 
+        let slider_3 = Slider::builder(3, &style.slider_style_1)
+            .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
+            .on_open_text_entry(|info| Action::OpenTextInput(info).into())
+            .on_tooltip_request(
+                |info| Action::ShowParamTooltip(info).into(),
+                Align2::TOP_CENTER,
+            )
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
+            .z_index(MAIN_Z_INDEX)
+            .build(cx);
+
+        let slider_4 = Slider::builder(4, &style.slider_style_1)
+            .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
+            .on_open_text_entry(|info| Action::OpenTextInput(info).into())
+            .on_tooltip_request(
+                |info| Action::ShowParamTooltip(info).into(),
+                Align2::TOP_CENTER,
+            )
+            .bipolar(true)
+            .default_normal(0.5)
+            .normal_value(0.5)
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
+            .z_index(MAIN_Z_INDEX)
+            .build(cx);
+
+        let slider_5 = Slider::builder(5, &style.slider_style_1)
+            .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
+            .on_open_text_entry(|info| Action::OpenTextInput(info).into())
+            .on_tooltip_request(
+                |info| Action::ShowParamTooltip(info).into(),
+                Align2::TOP_CENTER,
+            )
+            .horizontal(true)
+            .drag_horizontally(true)
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
+            .z_index(MAIN_Z_INDEX)
+            .build(cx);
+
+        let slider_6 = Slider::builder(6, &style.slider_style_1)
+            .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
+            .on_open_text_entry(|info| Action::OpenTextInput(info).into())
+            .on_tooltip_request(
+                |info| Action::ShowParamTooltip(info).into(),
+                Align2::TOP_CENTER,
+            )
+            .horizontal(true)
+            .drag_horizontally(true)
+            .bipolar(true)
+            .default_normal(0.5)
+            .normal_value(0.5)
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
+            .z_index(MAIN_Z_INDEX)
+            .build(cx);
+
         let scroll_area = ScrollArea::builder(&style.scroll_bar_style)
             .on_scrolled(|scroll_offset| Action::ScrollOffsetChanged(scroll_offset).into())
             .z_index(0)
@@ -101,6 +160,10 @@ impl Elements {
             knob_1_label,
             knob_2,
             knob_2_label,
+            slider_3,
+            slider_4,
+            slider_5,
+            slider_6,
             scroll_area,
             floating_text_input,
 
@@ -162,6 +225,26 @@ impl Elements {
                                     self.knob_2.set_stepped_value(v)
                                 }
                             }
+                            3 => {
+                                if let Ok(v) = new_text.parse::<f64>() {
+                                    self.slider_3.set_normal_value(v)
+                                }
+                            }
+                            4 => {
+                                if let Ok(v) = new_text.parse::<f64>() {
+                                    self.slider_4.set_normal_value(v)
+                                }
+                            }
+                            5 => {
+                                if let Ok(v) = new_text.parse::<f64>() {
+                                    self.slider_5.set_normal_value(v)
+                                }
+                            }
+                            6 => {
+                                if let Ok(v) = new_text.parse::<f64>() {
+                                    self.slider_6.set_normal_value(v)
+                                }
+                            }
                             _ => {}
                         }
                     }
@@ -187,12 +270,16 @@ impl Elements {
             0 => &mut self.knob_0.el,
             1 => &mut self.knob_1.el,
             2 => &mut self.knob_2.el,
+            3 => &mut self.slider_3.el,
+            4 => &mut self.slider_4.el,
+            5 => &mut self.slider_5.el,
+            6 => &mut self.slider_6.el,
             _ => return,
         };
 
+        // Don't show if the element is not being gestured and
+        // it is not currently hovered.
         if !is_gesturing {
-            // Don't show if the element is not being gestured and
-            // it is not currently hovered.
             if !cx.view.element_is_hovered(el) {
                 return;
             }
@@ -271,9 +358,41 @@ impl Elements {
             Align2::TOP_CENTER,
         );
 
+        self.slider_3.el.set_rect(Rect::new(
+            Point::new(
+                start_pos.x,
+                self.knob_0_label.el.rect().max_y() + style.element_padding,
+            ),
+            Size::new(22.0, 100.0),
+        ));
+
+        self.slider_4.el.set_rect(Rect::new(
+            Point::new(
+                self.slider_3.el.rect().max_x() + style.param_spacing,
+                self.slider_3.el.rect().min_y(),
+            ),
+            Size::new(22.0, 100.0),
+        ));
+
+        self.slider_5.el.set_rect(Rect::new(
+            Point::new(
+                self.slider_4.el.rect().max_x() + style.param_spacing,
+                self.slider_4.el.rect().min_y(),
+            ),
+            Size::new(100.0, 22.0),
+        ));
+
+        self.slider_6.el.set_rect(Rect::new(
+            Point::new(
+                self.slider_5.el.rect().min_x(),
+                self.slider_5.el.rect().max_y() + style.element_padding,
+            ),
+            Size::new(100.0, 22.0),
+        ));
+
         self.scroll_area.set_content_size(Size::new(
-            self.knob_0.el.rect().max_x() + style.content_padding,
-            self.knob_0.el.rect().max_y() + style.content_padding,
+            self.slider_6.el.rect().max_x() + style.content_padding,
+            self.slider_4.el.rect().max_y() + style.content_padding,
         ));
     }
 
@@ -286,6 +405,10 @@ impl Elements {
             knob_1_label,
             knob_2,
             knob_2_label,
+            slider_3,
+            slider_4,
+            slider_5,
+            slider_6,
             scroll_area,
             floating_text_input,
             text_input_param_id: _,
@@ -297,6 +420,10 @@ impl Elements {
         knob_1_label.el.set_hidden(hidden);
         knob_2.el.set_hidden(hidden);
         knob_2_label.el.set_hidden(hidden);
+        slider_3.el.set_hidden(hidden);
+        slider_4.el.set_hidden(hidden);
+        slider_5.el.set_hidden(hidden);
+        slider_6.el.set_hidden(hidden);
         scroll_area.el.set_hidden(hidden);
         floating_text_input.hide();
     }

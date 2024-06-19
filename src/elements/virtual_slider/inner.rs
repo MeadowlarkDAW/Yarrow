@@ -85,8 +85,8 @@ enum BeginGestureType {
 pub struct VirtualSliderInner {
     pub param_id: u32,
     pub config: VirtualSliderConfig,
-    pub drag_vertically: bool,
-    pub scroll_vertically: bool,
+    pub drag_horizontally: bool,
+    pub scroll_horizontally: bool,
 
     normal_value: f64,
     default_normal: f64,
@@ -102,8 +102,8 @@ impl VirtualSliderInner {
         default_normal: f64,
         num_quantized_steps: Option<u32>,
         config: VirtualSliderConfig,
-        drag_vertically: bool,
-        scroll_vertically: bool,
+        drag_horizontally: bool,
+        scroll_horizontally: bool,
     ) -> Self {
         let (normal_value, default_normal, stepped_value) =
             if let Some(num_steps) = num_quantized_steps {
@@ -128,8 +128,8 @@ impl VirtualSliderInner {
         Self {
             param_id,
             config,
-            drag_vertically,
-            scroll_vertically,
+            drag_horizontally,
+            scroll_horizontally,
             normal_value,
             default_normal,
             stepped_value,
@@ -193,10 +193,10 @@ impl VirtualSliderInner {
 
             let (new_gesture_normal, reset_start_pos) = if use_pointer_delta {
                 let delta = pointer_delta.unwrap();
-                let delta_points = if self.drag_vertically {
-                    -delta.y
-                } else {
+                let delta_points = if self.drag_horizontally {
                     delta.x
+                } else {
+                    -delta.y
                 };
 
                 let mut delta_normal = delta_points * self.config.drag_scalar;
@@ -209,10 +209,10 @@ impl VirtualSliderInner {
                     true,
                 )
             } else if apply_fine_adjustment_scalar {
-                let delta_points = if self.drag_vertically {
-                    pointer_start_pos.y - pointer_pos.y
-                } else {
+                let delta_points = if self.drag_horizontally {
                     pointer_pos.x - pointer_start_pos.x
+                } else {
+                    pointer_start_pos.y - pointer_pos.y
                 };
 
                 let delta_normal =
@@ -224,10 +224,10 @@ impl VirtualSliderInner {
                 )
             } else {
                 // Use absolute positions instead of deltas for a "better feel".
-                let offset = if self.drag_vertically {
-                    pointer_start_pos.y - pointer_pos.y
-                } else {
+                let offset = if self.drag_horizontally {
                     pointer_pos.x - pointer_start_pos.x
+                } else {
+                    pointer_start_pos.y - pointer_pos.y
                 };
 
                 (
@@ -269,10 +269,10 @@ impl VirtualSliderInner {
             WheelDeltaType::Pages(_) => Vector::default(),
         };
 
-        let delta_points = if self.drag_vertically {
-            delta.y
-        } else {
+        let delta_points = if self.scroll_horizontally {
             delta.x
+        } else {
+            delta.y
         };
 
         if delta_points == 0.0 {

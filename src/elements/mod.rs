@@ -11,6 +11,7 @@ pub mod quad;
 pub mod radio_button;
 pub mod resize_handle;
 pub mod scroll_area;
+pub mod slider;
 pub mod switch;
 pub mod tab;
 pub mod text_input;

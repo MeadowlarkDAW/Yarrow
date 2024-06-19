@@ -1,11 +1,8 @@
-use std::rc::Rc;
-
-use arc::CachedKnobMarkerArcFrontMesh;
-use cache::{KnobRenderCache, KnobRenderCacheInner};
 use rootvg::{
     math::{Rect, Size},
     PrimitiveGroup,
 };
+use std::rc::Rc;
 
 use crate::{
     layout::SizeType,
@@ -15,6 +12,9 @@ use crate::{
 use super::virtual_slider::{
     UpdateResult, VirtualSlider, VirtualSliderRenderInfo, VirtualSliderRenderer, VirtualSliderState,
 };
+
+use self::arc::CachedKnobMarkerArcFrontMesh;
+use self::cache::{KnobRenderCache, KnobRenderCacheInner};
 
 mod angle_range;
 mod arc;

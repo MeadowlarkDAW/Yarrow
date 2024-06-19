@@ -27,6 +27,7 @@ pub struct MyStyle {
     pub scroll_bar_style: Rc<ScrollBarStyle>,
     pub knob_style_1: Rc<KnobStyle>,
     pub knob_style_2: Rc<KnobStyle>,
+    pub slider_style_1: Rc<SliderStyle>,
 
     pub top_panel_height: f32,
     pub panel_border_width: f32,
@@ -142,6 +143,7 @@ impl MyStyle {
                 markers: KnobMarkersStyle::Dots(Default::default()),
                 ..Default::default()
             }),
+            slider_style_1: Rc::new(SliderStyle::default()),
 
             top_panel_height: 30.0,
             panel_border_width: 1.0,
