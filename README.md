@@ -6,7 +6,7 @@
 
 # Yarrow
 
-> **WORK IN PROGRESS. This library is currently in an unstable pre-alpha state and is missing features. Check the [roadmap] for more details.**
+> **WORK IN PROGRESS. This library is currently in an unstable alpha state and is missing features. Check the [roadmap] for more details.**
 
 ```
 '%%' '%% '%%'
@@ -16,7 +16,7 @@
       |      
 ```
 
-**A retained-mode GUI library in Rust with extreme performance and control, geared towards audio software.**
+**A modern retained-mode GUI library in Rust with extreme performance and control, geared towards audio software.**
 
 ![gallery screenshot](screenshots/gallery-basic-elements.png)
 ![gallery screenshot](screenshots/gallery-knobs-and-sliders.png)
@@ -25,7 +25,7 @@
 
 # What to Expect
 
-The goal of Yarrow is different from most other modern GUI libraries. Instead of aiming for an "elegant" declarative API, Yarrow aims to provide a novel and easy-to-use retained-mode API with lots of control over how elements are styled, laid-out, interacted with, and rendered *(\*easy compared to other retained-mode frameworks)*. As such this library is not optimized for quick prototyping, and instead works best for applications which already have a design mocked up.
+The goal of Yarrow is different from most other modern GUI libraries. Instead of focusing on "elegance" and typical declarative styling and layout concepts, Yarrow instead provides a powerful and novel retained-mode API with lots of control over exactly how elements are styled, laid-out, interacted with, and rendered. State management is also somewhat inspired by the [Elm]/[Iced] architectures.
 
 The main focus is audio software. Only features that are needed for the [Meadowlark DAW Project](https://github.com/MeadowlarkDAW/Meadowlark) and its audio plugins are planned.
 
@@ -50,7 +50,7 @@ Yarrow takes a novel approach to GUI. Instead of having you think of your GUI in
 
 Yarrow is not declarative. Elements are added and removed dynamically at runtime. Each newly created element returns a handle to that element.
 
-Yarrow uses an event-driven update system partly inspired by the Elm architecture. Elements cannot mutate application state, they can only send actions (events) to a global action queue. Actions are processed in single monolithic user-defined action handler method. Inside this method, the user mutates their state and updates elements accordingly.
+Yarrow uses an event-driven update system somewhat inspired by the [Elm]/[Iced] architectures. Elements cannot mutate application state, they can only send actions (events) to a global action queue. Actions are processed in a single monolithic user-defined action handler method. Inside this method, the user mutates their state and updates elements accordingly.
 
 There is no "cascading" styling system, instead each element just defines its own custom style struct.
 
@@ -68,3 +68,5 @@ To get started, read the [book] (TODO).
 
 [wgpu]: https://wgpu.rs
 [roadmap]: ROADMAP.md
+[Elm]: https://elm-lang.org
+[Iced]: https://github.com/iced-rs/iced
