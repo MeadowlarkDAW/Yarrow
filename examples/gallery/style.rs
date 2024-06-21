@@ -25,6 +25,7 @@ pub struct MyStyle {
     pub tooltip_style: Rc<LabelStyle>,
     pub tab_style: Rc<TabStyle>,
     pub scroll_bar_style: Rc<ScrollBarStyle>,
+    pub paragraph_style: Rc<LabelStyle>,
     pub knob_style_1: Rc<KnobStyle>,
     pub knob_style_2: Rc<KnobStyle>,
     pub slider_style_1: Rc<SliderStyle>,
@@ -137,6 +138,7 @@ impl MyStyle {
                 ..Default::default()
             }),
             scroll_bar_style: Rc::new(ScrollBarStyle::default()),
+            paragraph_style: Rc::new(LabelStyle::default_paragraph_style()),
             knob_style_1: Rc::new(KnobStyle::default()),
             knob_style_2: Rc::new(KnobStyle {
                 notch: KnobNotchStyle::Line(Default::default()),

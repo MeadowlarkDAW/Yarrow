@@ -43,8 +43,9 @@ pub trait Application {
     fn on_tick(&mut self, dt: f64, cx: &mut AppContext<Self::Action>) {}
 
     #[allow(unused)]
-    fn on_request_to_close_main_window(
+    fn on_request_to_close_window(
         &mut self,
+        window_id: WindowID,
         host_will_force_close: bool,
         cx: &mut AppContext<Self::Action>,
     ) -> WindowCloseRequest {
@@ -122,6 +123,11 @@ impl<A: Clone + 'static> AppContext<A> {
             .push((window_id, WindowRequest::SetTitle(title)));
     }
 
+    pub fn open_window(&mut self, window_id: WindowID, config: WindowConfig) {
+        self.window_requests
+            .push((window_id, WindowRequest::Create(config)));
+    }
+
     pub fn tick_interval(&self) -> Duration {
         self.tick_interval
     }
@@ -150,4 +156,5 @@ pub(crate) enum WindowRequest {
     Focus,
     Close,
     SetTitle(String),
+    Create(WindowConfig),
 }

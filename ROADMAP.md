@@ -2,14 +2,15 @@
 
 *(The following list is in no particular order.)*
 
-- [ ] Paragraph element
+- [x] Paragraph element
 - [ ] Separator element
 - [ ] Progress bar element
-- [ ] Multi-window example in gallery demo
+- [x] Multi-window example in gallery demo
 - [ ] Implement [pointer-locking](https://developer.mozilla.org/en-US/docs/Web/API/Pointer_Lock_API) support
 - [ ] "Virtual Slider" elements:
-    - [X] Knob element
-    - [ ] Slider element
+    - [x] Knob element
+    - [x] Slider element (modern style)
+    - [ ] Slider element (classic style)
     - [ ] TextureKnob element
     - [ ] TextureSlider element
     - [ ] Number spinner element

@@ -13,6 +13,7 @@ pub use crate::elements::knob::{
     KnobStyle,
 };
 pub use crate::elements::label::{Label, LabelStyle};
+pub use crate::elements::paragraph::Paragraph;
 pub use crate::elements::quad::{QuadElement, QuadStyle};
 pub use crate::elements::radio_button::{RadioButton, RadioButtonGroup, RadioButtonStyle};
 pub use crate::elements::resize_handle::{ResizeHandle, ResizeHandleLayout, ResizeHandleStyle};

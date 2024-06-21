@@ -1,136 +1,55 @@
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
-use rootvg::quad::QuadPrimitive;
 use rootvg::text::glyphon::FontSystem;
-use rootvg::text::{RcTextBuffer, TextPrimitive, TextProperties};
+use rootvg::text::{RcTextBuffer, TextPrimitive};
 use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::{Align, Align2, Padding};
 use crate::math::{Point, Rect, Size, ZIndex};
-use crate::style::{Background, BorderStyle, QuadStyle, DEFAULT_TEXT_ATTRIBUTES};
-use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
 };
 use crate::view::{ScissorRectID, MAIN_SCISSOR_RECT};
 use crate::window::WindowContext;
 
-/// The style of a [`Label`] element
-#[derive(Debug, Clone, PartialEq)]
-pub struct LabelStyle {
-    /// The text properties.
-    pub properties: TextProperties,
+use super::label::{LabelPrimitives, LabelStyle};
 
-    /// The color of the font
-    ///
-    /// By default this is set to `color::WHITE`.
-    pub font_color: RGBA8,
+// TODO: Add ability to select, copy, and right-click text.
 
-    /// The vertical alignment of the text.
-    ///
-    /// By default this is set to `Align::Center`.
-    pub vertical_align: Align,
-
-    /// The minimum size of the clipped text area.
-    ///
-    /// By default this is set to `Size::new(5.0, 5.0)`.
-    pub min_clipped_size: Size,
-
-    /// The style of the padded background rectangle behind the text.
-    ///
-    /// Set to `QuadStyle::TRANSPARENT` for no background rectangle.
-    ///
-    /// By default this is set to `QuadStyle::TRANSPARENT`.
-    pub back_quad: QuadStyle,
-
-    /// The padding between the text and the bounding rectangle.
-    ///
-    /// By default this has all values set to `0.0`.
-    pub padding: Padding,
-}
-
-impl LabelStyle {
-    pub fn default_tooltip_style() -> Self {
-        Self {
-            back_quad: QuadStyle {
-                bg: Background::Solid(RGBA8::new(30, 30, 30, 255)),
-                border: BorderStyle {
-                    radius: 4.0.into(),
-                    width: 1.0,
-                    color: RGBA8::new(105, 105, 105, 255),
-                    ..Default::default()
-                },
-            },
-            padding: Padding::new(5.0, 5.0, 5.0, 5.0),
-            ..Default::default()
-        }
-    }
-
-    pub fn default_paragraph_style() -> Self {
-        Self {
-            properties: TextProperties {
-                attrs: DEFAULT_TEXT_ATTRIBUTES,
-                shaping: rootvg::text::Shaping::Advanced,
-                wrap: rootvg::text::Wrap::WordOrGlyph,
-                ..Default::default()
-            },
-            ..Default::default()
-        }
-    }
-}
-
-impl Default for LabelStyle {
-    fn default() -> Self {
-        Self {
-            properties: TextProperties {
-                attrs: DEFAULT_TEXT_ATTRIBUTES,
-                shaping: rootvg::text::Shaping::Basic,
-                ..Default::default()
-            },
-            font_color: color::WHITE,
-            vertical_align: Align::Center,
-            min_clipped_size: Size::new(5.0, 5.0),
-            back_quad: QuadStyle::TRANSPARENT,
-            padding: Padding::default(),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct LabelPrimitives {
-    pub text: Option<TextPrimitive>,
-    pub bg_quad: Option<QuadPrimitive>,
-}
-
-/// A reusable label struct that can be used by other elements.
-pub struct LabelInner {
+/// A reusable Paragraph struct that can be used by other elements.
+pub struct ParagraphInner {
     /// An offset that can be used mainly to correct the position of icon glyphs.
     /// This does not effect the position of the background quad.
     pub text_offset: Point,
     text: String,
     text_buffer: RcTextBuffer,
+    bounds_width: f32,
     unclipped_text_size: Size,
     text_size_needs_calculated: bool,
     prev_bounds_size: Size,
     text_bounds_rect: Rect,
 }
 
-impl LabelInner {
+impl ParagraphInner {
     pub fn new(
         text: impl Into<String>,
         style: &LabelStyle,
+        bounds_width: f32,
         font_system: &mut FontSystem,
         text_offset: Point,
     ) -> Self {
         let text: String = text.into();
 
-        // Use a temporary size for the text buffer.
+        let width = (bounds_width - style.padding.left - style.padding.right)
+            .max(style.padding.left + style.padding.right + style.min_clipped_size.width);
+
+        // Use a temporary height for the text buffer.
         let text_buffer = RcTextBuffer::new(
             &text,
             style.properties,
-            Size::new(1000.0, 200.0),
+            Size::new(width, 1000.0),
             false,
             font_system,
         );
@@ -139,6 +58,7 @@ impl LabelInner {
             text_offset,
             text,
             text_buffer,
+            bounds_width,
             // This will be overwritten later.
             unclipped_text_size: Size::default(),
             text_size_needs_calculated: true,
@@ -188,6 +108,32 @@ impl LabelInner {
 
     pub fn text(&self) -> &str {
         &self.text
+    }
+
+    pub fn set_bounds_width(
+        &mut self,
+        bounds_width: f32,
+        style: &LabelStyle,
+        font_system: &mut FontSystem,
+    ) {
+        if self.bounds_width != bounds_width {
+            self.bounds_width = bounds_width;
+
+            let text_width = self.text_width(style);
+
+            self.text_buffer
+                .set_bounds(Size::new(text_width, 1000.0), font_system);
+            self.text_size_needs_calculated = true;
+        }
+    }
+
+    pub fn bounds_width(&self) -> f32 {
+        self.bounds_width
+    }
+
+    pub fn text_width(&self, style: &LabelStyle) -> f32 {
+        (self.bounds_width - style.padding.left - style.padding.right)
+            .max(style.padding.left + style.padding.right + style.min_clipped_size.width)
     }
 
     pub fn set_style(&mut self, style: &LabelStyle, font_system: &mut FontSystem) {
@@ -270,9 +216,10 @@ impl LabelInner {
     }
 }
 
-pub struct LabelBuilder {
+pub struct ParagraphBuilder {
     pub text: String,
     pub text_offset: Point,
+    pub bounds_width: Option<f32>,
     pub style: Rc<LabelStyle>,
     pub z_index: ZIndex,
     pub bounding_rect: Rect,
@@ -280,11 +227,12 @@ pub struct LabelBuilder {
     pub scissor_rect_id: ScissorRectID,
 }
 
-impl LabelBuilder {
+impl ParagraphBuilder {
     pub fn new(style: &Rc<LabelStyle>) -> Self {
         Self {
             text: String::new(),
             text_offset: Point::default(),
+            bounds_width: None,
             style: Rc::clone(style),
             z_index: 0,
             bounding_rect: Rect::default(),
@@ -293,8 +241,8 @@ impl LabelBuilder {
         }
     }
 
-    pub fn build<A: Clone + 'static>(self, cx: &mut WindowContext<'_, A>) -> Label {
-        LabelElement::create(self, cx)
+    pub fn build<A: Clone + 'static>(self, cx: &mut WindowContext<'_, A>) -> Paragraph {
+        ParagraphElement::create(self, cx)
     }
 
     pub fn text(mut self, text: impl Into<String>) -> Self {
@@ -306,6 +254,11 @@ impl LabelBuilder {
     /// This does not effect the position of the background quad.
     pub const fn text_offset(mut self, offset: Point) -> Self {
         self.text_offset = offset;
+        self
+    }
+
+    pub const fn bounds_width(mut self, width: f32) -> Self {
+        self.bounds_width = Some(width);
         self
     }
 
@@ -330,19 +283,20 @@ impl LabelBuilder {
     }
 }
 
-/// A label element with an optional quad background.
-pub struct LabelElement {
+/// A Paragraph element with an optional quad background.
+pub struct ParagraphElement {
     shared_state: Rc<RefCell<SharedState>>,
 }
 
-impl LabelElement {
+impl ParagraphElement {
     pub fn create<A: Clone + 'static>(
-        builder: LabelBuilder,
+        builder: ParagraphBuilder,
         cx: &mut WindowContext<'_, A>,
-    ) -> Label {
-        let LabelBuilder {
+    ) -> Paragraph {
+        let ParagraphBuilder {
             text,
             text_offset,
+            bounds_width,
             style,
             z_index,
             bounding_rect,
@@ -350,8 +304,10 @@ impl LabelElement {
             scissor_rect_id,
         } = builder;
 
+        let bounds_width = bounds_width.unwrap_or(bounding_rect.width());
+
         let shared_state = Rc::new(RefCell::new(SharedState {
-            inner: LabelInner::new(text, &style, cx.font_system, text_offset),
+            inner: ParagraphInner::new(text, &style, bounds_width, cx.font_system, text_offset),
             style,
         }));
 
@@ -369,11 +325,11 @@ impl LabelElement {
             .view
             .add_element(element_builder, cx.font_system, cx.clipboard);
 
-        Label { el, shared_state }
+        Paragraph { el, shared_state }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for LabelElement {
+impl<A: Clone + 'static> Element<A> for ParagraphElement {
     fn flags(&self) -> ElementFlags {
         ElementFlags::PAINTS
     }
@@ -394,14 +350,14 @@ impl<A: Clone + 'static> Element<A> for LabelElement {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
         let SharedState { inner, style } = &mut *shared_state;
 
-        let label_primitives =
+        let paragraph_primitives =
             inner.render_primitives(Rect::from_size(cx.bounds_size), style, cx.font_system);
 
-        if let Some(quad_primitive) = label_primitives.bg_quad {
+        if let Some(quad_primitive) = paragraph_primitives.bg_quad {
             primitives.add(quad_primitive);
         }
 
-        if let Some(text_primitive) = label_primitives.text {
+        if let Some(text_primitive) = paragraph_primitives.text {
             primitives.set_z_index(1);
             primitives.add_text(text_primitive);
         }
@@ -409,19 +365,19 @@ impl<A: Clone + 'static> Element<A> for LabelElement {
 }
 
 struct SharedState {
-    inner: LabelInner,
+    inner: ParagraphInner,
     style: Rc<LabelStyle>,
 }
 
-/// A handle to a [`LabelElement`], a label with an optional quad background.
-pub struct Label {
+/// A handle to a [`ParagraphElement`], a Paragraph with an optional quad background.
+pub struct Paragraph {
     pub el: ElementHandle,
     shared_state: Rc<RefCell<SharedState>>,
 }
 
-impl Label {
-    pub fn builder(style: &Rc<LabelStyle>) -> LabelBuilder {
-        LabelBuilder::new(style)
+impl Paragraph {
+    pub fn builder(style: &Rc<LabelStyle>) -> ParagraphBuilder {
+        ParagraphBuilder::new(style)
     }
 
     /// Returns the size of the padded background rectangle if it were to
@@ -456,6 +412,20 @@ impl Label {
 
     pub fn text<'a>(&'a self) -> Ref<'a, str> {
         Ref::map(RefCell::borrow(&self.shared_state), |s| s.inner.text())
+    }
+
+    pub fn set_bounds_width(&mut self, width: f32, font_system: &mut FontSystem) {
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+        let SharedState { inner, style } = &mut *shared_state;
+
+        if inner.bounds_width() != width {
+            inner.set_bounds_width(width, style, font_system);
+            self.el.notify_custom_state_change();
+        }
+    }
+
+    pub fn bounds_width(&self) -> f32 {
+        RefCell::borrow(&self.shared_state).inner.bounds_width()
     }
 
     pub fn set_style(&mut self, style: &Rc<LabelStyle>, font_sytem: &mut FontSystem) {

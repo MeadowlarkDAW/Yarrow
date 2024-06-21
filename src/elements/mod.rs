@@ -7,6 +7,7 @@ pub mod dual_tab;
 pub mod dual_toggle_button;
 pub mod knob;
 pub mod label;
+pub mod paragraph;
 pub mod quad;
 pub mod radio_button;
 pub mod resize_handle;

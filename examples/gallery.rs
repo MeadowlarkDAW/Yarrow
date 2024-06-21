@@ -1,3 +1,5 @@
+#[path = "gallery/about_window.rs"]
+mod about_window;
 #[path = "gallery/basic_elements.rs"]
 mod basic_elements;
 #[path = "gallery/knobs_and_sliders.rs"]
@@ -62,6 +64,7 @@ pub fn main() {
 enum MyAction {
     BasicElements(basic_elements::Action),
     KnobsAndSliders(knobs_and_sliders::Action),
+    AboutWindow(about_window::Action),
     LeftPanelResized(f32),
     LeftPanelResizeFinished(f32),
     MenuItemSelected(MenuOption),
@@ -69,6 +72,7 @@ enum MyAction {
     ShowTooltip((TooltipInfo, WindowID)),
     HideTooltip(WindowID),
     TabSelected(MyTab),
+    OpenAboutWindow,
 }
 
 impl From<basic_elements::Action> for MyAction {
@@ -80,6 +84,12 @@ impl From<basic_elements::Action> for MyAction {
 impl From<knobs_and_sliders::Action> for MyAction {
     fn from(a: knobs_and_sliders::Action) -> Self {
         MyAction::KnobsAndSliders(a)
+    }
+}
+
+impl From<about_window::Action> for MyAction {
+    fn from(a: about_window::Action) -> Self {
+        MyAction::AboutWindow(a)
     }
 }
 
@@ -99,12 +109,13 @@ struct MainWindowElements {
 }
 
 struct MyApp {
-    _action_sender: ActionSender<MyAction>,
+    action_sender: ActionSender<MyAction>,
     action_receiver: ActionReceiver<MyAction>,
 
     // Yarrow is designed to work even when a window is not currently
     // open (useful in an audio plugin context).
     main_window_elements: Option<MainWindowElements>,
+    about_window_elements: Option<about_window::Elements>,
 
     style: MyStyle,
     did_load_fonts: bool,
@@ -117,9 +128,10 @@ impl MyApp {
         action_receiver: ActionReceiver<MyAction>,
     ) -> Self {
         Self {
-            _action_sender: action_sender,
+            action_sender: action_sender,
             action_receiver,
             main_window_elements: None,
+            about_window_elements: None,
             style: MyStyle::new(),
             did_load_fonts: false,
             current_tab: MyTab::BasicElements,
@@ -210,6 +222,7 @@ impl MyApp {
     }
 
     fn handle_action(&mut self, action: MyAction, cx: &mut AppContext<MyAction>) {
+        #[cfg(debug_assertions)]
         dbg!(&action);
 
         let Some(elements) = self.main_window_elements.as_mut() else {
@@ -233,11 +246,29 @@ impl MyApp {
                     &mut main_window_cx,
                 );
             }
+            MyAction::AboutWindow(action) => {
+                if let Some(mut about_window_cx) = cx.window_context(about_window::ABOUT_WINDOW_ID)
+                {
+                    let close_about_window = self
+                        .about_window_elements
+                        .as_mut()
+                        .unwrap()
+                        .handle_action(action, &mut about_window_cx);
+
+                    if close_about_window {
+                        cx.close_window(about_window::ABOUT_WINDOW_ID);
+                    }
+                }
+            }
             MyAction::LeftPanelResized(_new_span) => {
                 needs_layout = true;
             }
             MyAction::LeftPanelResizeFinished(_new_span) => {}
-            MyAction::MenuItemSelected(_option) => {}
+            MyAction::MenuItemSelected(option) => {
+                if option == MenuOption::About {
+                    self.action_sender.send(MyAction::OpenAboutWindow).unwrap();
+                }
+            }
             MyAction::OpenMenu => {
                 elements.menu.open(None);
             }
@@ -262,6 +293,9 @@ impl MyApp {
                     .knobs_and_sliders
                     .set_hidden(tab != MyTab::KnobsAndSliders);
                 needs_layout = true;
+            }
+            MyAction::OpenAboutWindow => {
+                cx.open_window(about_window::ABOUT_WINDOW_ID, about_window::window_config());
             }
         }
 
@@ -397,12 +431,27 @@ impl Application for MyApp {
                         |info| MyAction::ShowTooltip((info, MAIN_WINDOW)),
                         || MyAction::HideTooltip(MAIN_WINDOW),
                     );
+                } else if window_id == about_window::ABOUT_WINDOW_ID {
+                    let mut about_window_cx =
+                        cx.window_context(about_window::ABOUT_WINDOW_ID).unwrap();
+
+                    self.about_window_elements = Some(about_window::Elements::new(
+                        &self.style,
+                        &mut about_window_cx,
+                    ));
                 }
             }
             AppWindowEvent::WindowResized => {
                 if window_id == MAIN_WINDOW {
                     let mut main_window_cx = cx.window_context(MAIN_WINDOW).unwrap();
                     self.layout_main_window(&mut main_window_cx);
+                }
+            }
+            AppWindowEvent::WindowClosed => {
+                if window_id == about_window::ABOUT_WINDOW_ID {
+                    // When a window is closed, all handles to elements belonging to the
+                    // window are invalidated.
+                    self.about_window_elements = None;
                 }
             }
             _ => {}
@@ -427,7 +476,8 @@ impl Application for MyApp {
             && event.modifiers.ctrl()
             && !event.repeat
         {
-            println!("program-wide keyboard shortcut activated: Ctrl+A")
+            println!("program-wide keyboard shortcut activated: Ctrl+A");
+            self.action_sender.send(MyAction::OpenAboutWindow).unwrap();
         }
     }
 }

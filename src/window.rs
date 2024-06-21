@@ -1,8 +1,7 @@
 use keyboard_types::{CompositionEvent, Modifiers};
 use rootvg::math::{to_logical_size_i32, PhysicalPoint, Point};
-use rootvg::surface::{DefaultSurface, DefaultSurfaceConfig};
+use rootvg::surface::{DefaultSurface, DefaultSurfaceConfig, NewSurfaceError};
 use rootvg::text::glyphon::FontSystem;
-use std::error::Error;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -19,7 +18,7 @@ use crate::{view::ViewConfig, View};
 #[cfg(feature = "winit")]
 mod winit_backend;
 #[cfg(feature = "winit")]
-pub use winit_backend::run_blocking;
+pub use winit_backend::{run_blocking, OpenWindowError};
 
 pub type WindowID = u32;
 
@@ -75,7 +74,7 @@ impl<A: Clone + 'static> WindowState<A> {
         surface_config: DefaultSurfaceConfig,
         action_sender: ActionSender<A>,
         id: WindowID,
-    ) -> Result<Self, Box<dyn Error>> {
+    ) -> Result<Self, NewSurfaceError> {
         let surface = DefaultSurface::new(
             physical_size,
             scale_factor,
@@ -377,8 +376,10 @@ impl<A: Clone + 'static> Drop for WindowState<A> {
 pub struct WindowConfig {
     pub title: String,
     pub size: Size,
+    pub resizable: bool,
     pub view_config: ViewConfig,
     pub surface_config: DefaultSurfaceConfig,
+    pub focus_on_creation: bool,
 }
 
 impl Default for WindowConfig {
@@ -386,8 +387,10 @@ impl Default for WindowConfig {
         Self {
             title: String::from("Window"),
             size: Size::new(400.0, 250.0),
+            resizable: true,
             view_config: ViewConfig::default(),
             surface_config: DefaultSurfaceConfig::default(),
+            focus_on_creation: true,
         }
     }
 }

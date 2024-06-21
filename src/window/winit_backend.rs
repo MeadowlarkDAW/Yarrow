@@ -22,7 +22,7 @@ use crate::math::{PhysicalSizeI32, ScaleFactor};
 use crate::window::{WindowID, MAIN_WINDOW};
 use crate::AppConfig;
 
-use super::{WindowCloseRequest, WindowState};
+use super::{WindowCloseRequest, WindowConfig, WindowState};
 
 mod convert;
 
@@ -67,7 +67,7 @@ impl<A: Application> AppHandler<A> {
         })
     }
 
-    fn on_tick(&mut self) {
+    fn on_tick(&mut self, event_loop: &ActiveEventLoop) {
         let now = Instant::now();
         let dt = (now - self.prev_tick_instant).as_secs_f64();
         self.prev_tick_instant = now;
@@ -78,16 +78,16 @@ impl<A: Application> AppHandler<A> {
             window_state.on_animation_tick(dt, &mut self.context.font_system);
         }
 
-        self.process_updates();
+        self.process_updates(event_loop);
     }
 
-    fn process_updates(&mut self) {
+    fn process_updates(&mut self, event_loop: &ActiveEventLoop) {
         self.drain_cursor_moved_events();
 
         loop {
             let any_actions_processed = self.poll_actions();
 
-            self.drain_window_requests();
+            self.drain_window_requests(event_loop);
 
             let mut any_updates_processed = false;
             for window_state in self.context.window_map.values_mut() {
@@ -129,45 +129,104 @@ impl<A: Application> AppHandler<A> {
         return any_actions_processed;
     }
 
-    fn drain_window_requests(&mut self) {
+    fn drain_window_requests(&mut self, event_loop: &ActiveEventLoop) {
         let mut windows_to_close: Vec<WindowID> = Vec::new();
-        for request in self.context.window_requests.iter() {
-            let Some(window_state) = self.context.window_map.get_mut(&request.0) else {
-                continue;
-            };
+        let mut successful_open_requests: Vec<WindowID> = Vec::new();
+        let mut failed_open_requests: Vec<(WindowID, OpenWindowError)> = Vec::new();
 
-            match &request.1 {
+        for (window_id, request) in self.context.window_requests.drain(..) {
+            match request {
                 WindowRequest::Resize(new_size) => {
-                    match window_state
-                        .winit_window
-                        .request_inner_size(LogicalSize::new(new_size.width, new_size.height))
-                    {
-                        Some(_new_size) => {
-                            // TODO: Log info
+                    if let Some(window_state) = self.context.window_map.get_mut(&window_id) {
+                        match window_state
+                            .winit_window
+                            .request_inner_size(LogicalSize::new(new_size.width, new_size.height))
+                        {
+                            Some(_) => {}
+                            None => {
+                                log::warn!(
+                                    "Failed to set inner size {:?} for window {}",
+                                    LogicalSize::new(new_size.width, new_size.height),
+                                    window_id
+                                );
+                            }
                         }
-                        None => {
-                            // TODO: Log warning
-                        }
+                    } else {
+                        log::warn!("Ignored request to set window size for window {}, window does not exist", window_id);
                     }
                 }
                 WindowRequest::Minimize(minimized) => {
-                    window_state.winit_window.set_minimized(*minimized);
+                    if let Some(window_state) = self.context.window_map.get_mut(&window_id) {
+                        window_state.winit_window.set_minimized(minimized);
+                    } else {
+                        log::warn!(
+                            "Ignored request to minimize window {}, window does not exist",
+                            window_id
+                        );
+                    }
                 }
                 WindowRequest::Maximize(maximized) => {
-                    window_state.winit_window.set_maximized(*maximized);
+                    if let Some(window_state) = self.context.window_map.get_mut(&window_id) {
+                        window_state.winit_window.set_maximized(maximized);
+                    } else {
+                        log::warn!(
+                            "Ignored request to maximize window {}, window does not exist",
+                            window_id
+                        );
+                    }
                 }
                 WindowRequest::Focus => {
-                    window_state.winit_window.focus_window();
+                    if let Some(window_state) = self.context.window_map.get_mut(&window_id) {
+                        window_state.winit_window.focus_window();
+                    } else {
+                        log::warn!(
+                            "Ignored request to focus window {}, window does not exist",
+                            window_id
+                        );
+                    }
                 }
                 WindowRequest::Close => {
-                    windows_to_close.push(request.0);
+                    if self.context.window_map.contains_key(&window_id) {
+                        windows_to_close.push(window_id);
+                    } else {
+                        log::warn!(
+                            "Ignored request to focus window {}, window does not exist",
+                            window_id
+                        );
+                    }
                 }
                 WindowRequest::SetTitle(title) => {
-                    window_state.winit_window.set_title(title);
+                    if let Some(window_state) = self.context.window_map.get_mut(&window_id) {
+                        window_state.winit_window.set_title(&title);
+                    } else {
+                        log::warn!(
+                            "Ignored request to set title for window {}, window does not exist",
+                            window_id
+                        );
+                    }
+                }
+                WindowRequest::Create(config) => {
+                    if self.context.window_map.contains_key(&window_id) {
+                        log::warn!(
+                            "Ignored request to create window {}, window already exists",
+                            window_id
+                        );
+                        continue;
+                    }
+
+                    match create_window(window_id, config, event_loop, &self.action_sender) {
+                        Ok((window, window_state)) => {
+                            self.winit_window_map
+                                .insert(window.id(), (window_id, window));
+                            self.context.window_map.insert(window_id, window_state);
+
+                            successful_open_requests.push(window_id);
+                        }
+                        Err(e) => failed_open_requests.push((window_id, e)),
+                    }
                 }
             }
         }
-        self.context.window_requests.clear();
 
         for window_id in windows_to_close {
             let winit_window_id = self
@@ -180,6 +239,23 @@ impl<A: Application> AppHandler<A> {
 
             self.winit_window_map.remove(&winit_window_id);
             self.context.window_map.remove(&window_id);
+        }
+
+        for window_id in successful_open_requests.drain(..) {
+            self.user_app.on_window_event(
+                AppWindowEvent::WindowOpened,
+                window_id,
+                &mut self.context,
+            );
+        }
+
+        for (window_id, error) in failed_open_requests.drain(..) {
+            log::error!("Failed to open window {}: {}", window_id, &error);
+            self.user_app.on_window_event(
+                AppWindowEvent::OpenWindowFailed(error),
+                window_id,
+                &mut self.context,
+            );
         }
     }
 
@@ -194,7 +270,7 @@ impl<A: Application> AppHandler<A> {
 }
 
 impl<A: Application> WinitApplicationHandler for AppHandler<A> {
-    fn new_events(&mut self, _event_loop: &ActiveEventLoop, cause: StartCause) {
+    fn new_events(&mut self, event_loop: &ActiveEventLoop, cause: StartCause) {
         self.tick_wait_cancelled = false;
 
         match cause {
@@ -202,10 +278,10 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                 requested_resume, ..
             } => {
                 if requested_resume == self.requested_tick_resume {
-                    self.on_tick();
+                    self.on_tick(event_loop);
                 } else if let Some(pointer_resume_instant) = self.requested_cursor_debounce_resume {
                     if pointer_resume_instant == requested_resume {
-                        self.process_updates();
+                        self.process_updates(event_loop);
                     }
                 }
             }
@@ -218,66 +294,18 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
         if !self.got_first_resumed_event {
             self.got_first_resumed_event = true;
 
-            let (main_window, main_window_state) = {
-                let main_window_config = self.user_app.main_window_config();
-
-                #[allow(unused_mut)]
-                let mut main_window_attributes = WinitWindow::default_attributes()
-                    .with_title(main_window_config.title)
-                    .with_inner_size(winit::dpi::LogicalSize::new(
-                        main_window_config.size.width,
-                        main_window_config.size.height,
-                    ));
-
-                #[cfg(all(
-                    any(
-                        target_os = "linux",
-                        target_os = "freebsd",
-                        target_os = "openbsd",
-                        target_os = "netbsd",
-                        target_os = "dragonfly"
-                    ),
-                    not(target_family = "wasm")
-                ))]
-                if let Some(token) = event_loop.read_token_from_env() {
-                    winit::platform::startup_notify::reset_activation_token_env();
-                    log::info!("Using token {:?} to activate a window", token);
-                    main_window_attributes = main_window_attributes.with_activation_token(token);
+            let (main_window, main_window_state) = match create_window(
+                MAIN_WINDOW,
+                self.user_app.main_window_config(),
+                event_loop,
+                &self.action_sender,
+            ) {
+                Ok(w) => w,
+                Err(e) => {
+                    log::error!("Failed to open main window: {}", e);
+                    event_loop.exit();
+                    return;
                 }
-
-                let main_window = match event_loop.create_window(main_window_attributes) {
-                    Ok(w) => Arc::new(w),
-                    Err(e) => {
-                        log::error!("Failed to open main window: {}", e);
-                        event_loop.exit();
-                        return;
-                    }
-                };
-
-                let physical_size = main_window.inner_size();
-                let physical_size =
-                    PhysicalSizeI32::new(physical_size.width as i32, physical_size.height as i32);
-                let scale_factor: ScaleFactor = main_window.scale_factor().into();
-
-                let main_window_state = match WindowState::new(
-                    &main_window,
-                    main_window_config.size,
-                    physical_size,
-                    scale_factor,
-                    main_window_config.view_config,
-                    main_window_config.surface_config,
-                    self.action_sender.clone(),
-                    MAIN_WINDOW,
-                ) {
-                    Ok(w) => w,
-                    Err(e) => {
-                        log::error!("Failed to create window surface: {}", e);
-                        event_loop.exit();
-                        return;
-                    }
-                };
-
-                (main_window, main_window_state)
             };
 
             let find_millihertz =
@@ -345,7 +373,7 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                 &mut self.context,
             );
 
-            self.process_updates();
+            self.process_updates(event_loop);
         }
     }
 
@@ -365,11 +393,24 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
         match event {
             WinitWindowEvent::CloseRequested => {
                 if window_id == MAIN_WINDOW {
-                    match self
-                        .user_app
-                        .on_request_to_close_main_window(false, &mut self.context)
-                    {
+                    match self.user_app.on_request_to_close_window(
+                        MAIN_WINDOW,
+                        false,
+                        &mut self.context,
+                    ) {
                         WindowCloseRequest::CloseImmediately => event_loop.exit(),
+                        WindowCloseRequest::DoNotCloseYet => {}
+                    }
+                } else {
+                    match self.user_app.on_request_to_close_window(
+                        window_id,
+                        false,
+                        &mut self.context,
+                    ) {
+                        WindowCloseRequest::CloseImmediately => {
+                            self.winit_window_map.remove(&winit_window_id);
+                            self.context.window_map.remove(&window_id);
+                        }
                         WindowCloseRequest::DoNotCloseYet => {}
                     }
                 }
@@ -521,7 +562,7 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                     .unwrap()
                     .handle_mouse_button(button, state.is_pressed(), &mut self.context.font_system);
 
-                self.process_updates();
+                self.process_updates(event_loop);
             }
             WinitWindowEvent::CursorLeft { device_id: _ } => {
                 self.context
@@ -614,7 +655,7 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
         }
 
         if process_updates {
-            self.process_updates();
+            self.process_updates(event_loop);
         }
     }
 
@@ -625,7 +666,7 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
             let mut next_instant = if self.prev_tick_instant + self.context.tick_interval > now {
                 self.prev_tick_instant + self.context.tick_interval
             } else {
-                self.on_tick();
+                self.on_tick(event_loop);
 
                 now + self.context.tick_interval
             };
@@ -656,4 +697,67 @@ pub fn run_blocking<A: Application>(
     let mut app_handler = AppHandler::new(app, action_sender)?;
 
     event_loop.run_app(&mut app_handler).map_err(Into::into)
+}
+
+fn create_window<A: Clone + 'static>(
+    id: WindowID,
+    config: WindowConfig,
+    event_loop: &ActiveEventLoop,
+    action_sender: &ActionSender<A>,
+) -> Result<(Arc<winit::window::Window>, WindowState<A>), OpenWindowError> {
+    #[allow(unused_mut)]
+    let mut attributes = WinitWindow::default_attributes()
+        .with_title(config.title.clone())
+        .with_inner_size(winit::dpi::LogicalSize::new(
+            config.size.width,
+            config.size.height,
+        ))
+        .with_resizable(config.resizable)
+        .with_active(config.focus_on_creation);
+
+    #[cfg(all(
+        any(
+            target_os = "linux",
+            target_os = "freebsd",
+            target_os = "openbsd",
+            target_os = "netbsd",
+            target_os = "dragonfly"
+        ),
+        not(target_family = "wasm")
+    ))]
+    if config.focus_on_creation {
+        if let Some(token) = event_loop.read_token_from_env() {
+            winit::platform::startup_notify::reset_activation_token_env();
+            log::info!("Using token {:?} to activate a window", token);
+            attributes = attributes.with_activation_token(token);
+        }
+    }
+
+    let window = event_loop.create_window(attributes).map(|w| Arc::new(w))?;
+
+    let physical_size = window.inner_size();
+    let physical_size =
+        PhysicalSizeI32::new(physical_size.width as i32, physical_size.height as i32);
+    let scale_factor: ScaleFactor = window.scale_factor().into();
+
+    let window_state = WindowState::new(
+        &window,
+        config.size,
+        physical_size,
+        scale_factor,
+        config.view_config,
+        config.surface_config,
+        action_sender.clone(),
+        id,
+    )?;
+
+    Ok((window, window_state))
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum OpenWindowError {
+    #[error("{0}")]
+    OsError(#[from] winit::error::OsError),
+    #[error("{0}")]
+    SurfaceError(#[from] rootvg::surface::NewSurfaceError),
 }

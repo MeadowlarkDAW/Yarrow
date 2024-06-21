@@ -15,9 +15,9 @@
 pub use keyboard_types::{Code, CompositionEvent, KeyState, Location, Modifiers};
 use rootvg::math::Vector;
 
-use crate::math::Point;
+use crate::{math::Point, window::OpenWindowError};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum AppWindowEvent {
     WindowOpened,
     WindowClosed,
@@ -26,6 +26,7 @@ pub enum AppWindowEvent {
     WindowHidden,
     WindowFocused,
     WindowUnfocused,
+    OpenWindowFailed(OpenWindowError),
 }
 
 pub(crate) enum CanvasEvent {
