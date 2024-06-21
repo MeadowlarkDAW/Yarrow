@@ -28,6 +28,8 @@ pub struct Elements {
     slider_5: Slider,
     slider_6: Slider,
 
+    separator: Separator,
+
     scroll_area: ScrollArea,
     floating_text_input: FloatingTextInput,
 
@@ -153,6 +155,11 @@ impl Elements {
             .z_index(200)
             .build(cx);
 
+        let separator = Separator::builder(&style.separator_style)
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
+            .z_index(MAIN_Z_INDEX)
+            .build(cx);
+
         Self {
             knob_0,
             knob_0_label,
@@ -166,6 +173,7 @@ impl Elements {
             slider_6,
             scroll_area,
             floating_text_input,
+            separator,
 
             text_input_param_id: None,
         }
@@ -358,10 +366,21 @@ impl Elements {
             Align2::TOP_CENTER,
         );
 
+        self.separator.el.set_rect(Rect::new(
+            Point::new(
+                start_pos.x,
+                self.knob_2_label.el.rect().max_y() + style.element_padding,
+            ),
+            Size::new(
+                content_rect.width() - style.content_padding - style.content_padding,
+                style.separator_width,
+            ),
+        ));
+
         self.slider_3.el.set_rect(Rect::new(
             Point::new(
                 start_pos.x,
-                self.knob_0_label.el.rect().max_y() + style.element_padding,
+                self.separator.el.rect().max_y() + style.element_padding,
             ),
             Size::new(22.0, 100.0),
         ));
@@ -411,6 +430,7 @@ impl Elements {
             slider_6,
             scroll_area,
             floating_text_input,
+            separator,
             text_input_param_id: _,
         } = self;
 
@@ -425,6 +445,7 @@ impl Elements {
         slider_5.el.set_hidden(hidden);
         slider_6.el.set_hidden(hidden);
         scroll_area.el.set_hidden(hidden);
+        separator.el.set_hidden(hidden);
         floating_text_input.hide();
     }
 }

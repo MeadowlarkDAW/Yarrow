@@ -18,6 +18,7 @@ pub use crate::elements::quad::{QuadElement, QuadStyle};
 pub use crate::elements::radio_button::{RadioButton, RadioButtonGroup, RadioButtonStyle};
 pub use crate::elements::resize_handle::{ResizeHandle, ResizeHandleLayout, ResizeHandleStyle};
 pub use crate::elements::scroll_area::{ScrollArea, ScrollBarStyle};
+pub use crate::elements::separator::{Separator, SeparatorSizeType, SeparatorStyle};
 pub use crate::elements::slider::{Slider, SliderFillMode, SliderStyle, SliderStyleModern};
 pub use crate::elements::switch::{Switch, SwitchStyle};
 pub use crate::elements::tab::{IndicatorLinePlacement, Tab, TabGroup, TabGroupOption, TabStyle};

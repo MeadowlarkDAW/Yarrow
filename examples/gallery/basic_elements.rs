@@ -71,6 +71,8 @@ pub struct Elements {
     right_click_area: ClickArea,
     right_click_menu: DropDownMenu,
     scroll_area: ScrollArea,
+    separator_1: Separator,
+    separator_2: Separator,
 }
 
 impl Elements {
@@ -207,6 +209,16 @@ impl Elements {
             .z_index(SCROLL_AREA_Z_INDEX)
             .build(cx);
 
+        let separator_1 = Separator::builder(&style.separator_style)
+            .z_index(MAIN_Z_INDEX)
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
+            .build(cx);
+
+        let separator_2 = Separator::builder(&style.separator_style)
+            .z_index(MAIN_Z_INDEX)
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
+            .build(cx);
+
         Self {
             label,
             dual_label,
@@ -222,6 +234,8 @@ impl Elements {
             right_click_area,
             right_click_menu,
             scroll_area,
+            separator_1,
+            separator_2,
         }
     }
 
@@ -333,8 +347,19 @@ impl Elements {
             self.toggle_btn.el.rect().min_y(),
         ));
 
-        self.drop_down_menu_btn.el.set_rect(Rect::new(
+        self.separator_1.el.set_rect(Rect::new(
             Point::new(start_pos.x, toggle_btn_rect.max_y() + style.element_padding),
+            Size::new(
+                content_rect.width() - style.content_padding - style.content_padding,
+                style.separator_width,
+            ),
+        ));
+
+        self.drop_down_menu_btn.el.set_rect(Rect::new(
+            Point::new(
+                start_pos.x,
+                self.separator_1.el.rect().max_y() + style.element_padding,
+            ),
             Size::new(
                 style.drop_down_btn_width,
                 self.drop_down_menu_btn.desired_padded_size().height,
@@ -352,10 +377,21 @@ impl Elements {
             Point::default(),
         );
 
-        self.text_input.el.set_rect(Rect::new(
+        self.separator_2.el.set_rect(Rect::new(
             Point::new(
                 start_pos.x,
                 self.radio_group.bounds().max_y() + style.element_padding,
+            ),
+            Size::new(
+                content_rect.width() - style.content_padding - style.content_padding,
+                style.separator_width,
+            ),
+        ));
+
+        self.text_input.el.set_rect(Rect::new(
+            Point::new(
+                start_pos.x,
+                self.separator_2.el.rect().max_y() + style.element_padding,
             ),
             style.text_input_size,
         ));
@@ -383,6 +419,8 @@ impl Elements {
             right_click_area,
             right_click_menu,
             scroll_area,
+            separator_1,
+            separator_2,
         } = self;
 
         label.el.set_hidden(hidden);
@@ -399,5 +437,7 @@ impl Elements {
         right_click_area.el.set_hidden(hidden);
         right_click_menu.el.set_hidden(hidden);
         scroll_area.el.set_hidden(hidden);
+        separator_1.el.set_hidden(hidden);
+        separator_2.el.set_hidden(hidden);
     }
 }

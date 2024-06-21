@@ -27,6 +27,7 @@ pub enum Action {
 
 pub struct Elements {
     _paragraph: Paragraph,
+    _separator: Separator,
     _close_btn: Button,
 }
 
@@ -48,19 +49,33 @@ impl Elements {
             Align2::BOTTOM_CENTER,
         );
 
+        let separator = Separator::builder(&style.separator_style)
+            .bounding_rect(Rect::new(
+                Point::new(
+                    style.content_padding,
+                    close_btn.el.rect().min_y() - style.element_padding,
+                ),
+                Size::new(
+                    window_size.width - style.content_padding - style.content_padding,
+                    style.separator_width,
+                ),
+            ))
+            .build(cx);
+
         let paragraph = Paragraph::builder(&style.paragraph_style)
             .text(ABOUT_TEXT)
             .bounding_rect(Rect::new(
                 Point::new(style.content_padding, style.content_padding),
                 Size::new(
                     window_size.width - style.content_padding - style.content_padding,
-                    close_btn.el.rect().min_y() - style.content_padding,
+                    separator.el.rect().min_y() - style.element_padding,
                 ),
             ))
             .build(cx);
 
         Self {
             _paragraph: paragraph,
+            _separator: separator,
             _close_btn: close_btn,
         }
     }

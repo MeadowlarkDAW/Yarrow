@@ -3,7 +3,7 @@
 *(The following list is in no particular order.)*
 
 - [x] Paragraph element
-- [ ] Separator element
+- [x] Separator element
 - [ ] Progress bar element
 - [x] Multi-window example in gallery demo
 - [ ] Implement [pointer-locking](https://developer.mozilla.org/en-US/docs/Web/API/Pointer_Lock_API) support

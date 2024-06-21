@@ -26,6 +26,7 @@ pub struct MyStyle {
     pub tab_style: Rc<TabStyle>,
     pub scroll_bar_style: Rc<ScrollBarStyle>,
     pub paragraph_style: Rc<LabelStyle>,
+    pub separator_style: Rc<SeparatorStyle>,
     pub knob_style_1: Rc<KnobStyle>,
     pub knob_style_2: Rc<KnobStyle>,
     pub slider_style_1: Rc<SliderStyle>,
@@ -49,6 +50,7 @@ pub struct MyStyle {
     pub floating_text_input_size: Size,
     pub floating_text_input_align: Align2,
     pub floating_text_input_padding: Padding,
+    pub separator_width: f32,
 
     pub clear_color: RGBA8,
 }
@@ -139,6 +141,7 @@ impl MyStyle {
             }),
             scroll_bar_style: Rc::new(ScrollBarStyle::default()),
             paragraph_style: Rc::new(LabelStyle::default_paragraph_style()),
+            separator_style: Rc::new(SeparatorStyle::default()),
             knob_style_1: Rc::new(KnobStyle::default()),
             knob_style_2: Rc::new(KnobStyle {
                 notch: KnobNotchStyle::Line(Default::default()),
@@ -166,6 +169,7 @@ impl MyStyle {
             floating_text_input_size: Size::new(100.0, 30.0),
             floating_text_input_align: Align2::BOTTOM_CENTER,
             floating_text_input_padding: Padding::new(5.0, 5.0, 5.0, 5.0),
+            separator_width: 1.0,
 
             clear_color: RGBA8::new(15, 15, 15, 255),
         }
