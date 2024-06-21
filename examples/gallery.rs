@@ -35,9 +35,9 @@ impl MenuOption {
 
     pub fn right_text(&self) -> &'static str {
         match self {
-            Self::Hello => "Ctrl+H",
-            Self::World => "Ctrl+W",
-            Self::About => "",
+            Self::Hello => "",
+            Self::World => "",
+            Self::About => "Ctrl+A",
         }
     }
 }
