@@ -19,6 +19,13 @@ pub enum Align {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StartEndAlign {
+    #[default]
+    Start,
+    End,
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Align2 {
     pub horizontal: Align,
     pub vertical: Align,

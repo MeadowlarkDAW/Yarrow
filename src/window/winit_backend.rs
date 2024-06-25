@@ -22,7 +22,7 @@ use crate::math::{PhysicalSizeI32, ScaleFactor};
 use crate::window::{WindowID, MAIN_WINDOW};
 use crate::AppConfig;
 
-use super::{WindowCloseRequest, WindowConfig, WindowState};
+use super::{ScaleFactorConfig, WindowCloseRequest, WindowConfig, WindowState};
 
 mod convert;
 
@@ -201,6 +201,20 @@ impl<A: Application> AppHandler<A> {
                     } else {
                         log::warn!(
                             "Ignored request to set title for window {}, window does not exist",
+                            window_id
+                        );
+                    }
+                }
+                WindowRequest::SetScaleFactor(config) => {
+                    if let Some(window_state) = self.context.window_map.get_mut(&window_id) {
+                        if let Some(_requested_physical_size) =
+                            window_state.set_scale_factor_config(config)
+                        {
+                            // TODO: Find a way to resize winit window from code.
+                        }
+                    } else {
+                        log::warn!(
+                            "Ignored request to set scale factor for window {}, window does not exist",
                             window_id
                         );
                     }
@@ -464,12 +478,10 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
             } => {
                 let window_state = self.context.window_map.get_mut(&window_id).unwrap();
 
-                let new_size =
-                    crate::math::to_physical_size(window_state.logical_size(), scale_factor.into());
-                let new_size = PhysicalSizeI32::new(
-                    new_size.width.round() as i32,
-                    new_size.height.round() as i32,
-                );
+                let new_size: PhysicalSizeI32 =
+                    crate::math::to_physical_size(window_state.logical_size(), scale_factor.into())
+                        .round()
+                        .cast();
                 let new_inner_size = winit::dpi::PhysicalSize {
                     width: new_size.width as u32,
                     height: new_size.height as u32,
@@ -708,12 +720,27 @@ fn create_window<A: Clone + 'static>(
     #[allow(unused_mut)]
     let mut attributes = WinitWindow::default_attributes()
         .with_title(config.title.clone())
-        .with_inner_size(winit::dpi::LogicalSize::new(
-            config.size.width,
-            config.size.height,
-        ))
         .with_resizable(config.resizable)
         .with_active(config.focus_on_creation);
+
+    match config.scale_factor {
+        ScaleFactorConfig::System => {
+            attributes = attributes.with_inner_size(winit::dpi::LogicalSize::new(
+                config.size.width,
+                config.size.height,
+            ));
+        }
+        ScaleFactorConfig::Custom(scale_factor) => {
+            let size: PhysicalSizeI32 = crate::math::to_physical_size(config.size, scale_factor)
+                .round()
+                .cast();
+
+            attributes = attributes.with_inner_size(winit::dpi::PhysicalSize {
+                width: size.width as u32,
+                height: size.height as u32,
+            });
+        }
+    }
 
     #[cfg(all(
         any(
@@ -738,13 +765,14 @@ fn create_window<A: Clone + 'static>(
     let physical_size = window.inner_size();
     let physical_size =
         PhysicalSizeI32::new(physical_size.width as i32, physical_size.height as i32);
-    let scale_factor: ScaleFactor = window.scale_factor().into();
+    let system_scale_factor: ScaleFactor = window.scale_factor().into();
 
     let window_state = WindowState::new(
         &window,
         config.size,
         physical_size,
-        scale_factor,
+        system_scale_factor,
+        config.scale_factor,
         config.view_config,
         config.surface_config,
         action_sender.clone(),

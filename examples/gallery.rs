@@ -403,6 +403,7 @@ impl Application for MyApp {
         WindowConfig {
             title: String::from("Yarrow Gallery Demo"),
             size: Size::new(700.0, 400.0),
+            //scale_factor: ScaleFactorConfig::Custom(1.0.into()),
             ..Default::default()
         }
     }

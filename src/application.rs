@@ -4,7 +4,9 @@ use std::{error::Error, time::Duration};
 
 use crate::{
     event::{AppWindowEvent, KeyboardEvent},
-    window::{WindowCloseRequest, WindowConfig, WindowContext, WindowID, WindowState},
+    window::{
+        ScaleFactorConfig, WindowCloseRequest, WindowConfig, WindowContext, WindowID, WindowState,
+    },
 };
 
 pub trait Application {
@@ -123,6 +125,11 @@ impl<A: Clone + 'static> AppContext<A> {
             .push((window_id, WindowRequest::SetTitle(title)));
     }
 
+    pub fn set_scale_factor_config(&mut self, window_id: WindowID, config: ScaleFactorConfig) {
+        self.window_requests
+            .push((window_id, WindowRequest::SetScaleFactor(config)));
+    }
+
     pub fn open_window(&mut self, window_id: WindowID, config: WindowConfig) {
         self.window_requests
             .push((window_id, WindowRequest::Create(config)));
@@ -156,5 +163,6 @@ pub(crate) enum WindowRequest {
     Focus,
     Close,
     SetTitle(String),
+    SetScaleFactor(ScaleFactorConfig),
     Create(WindowConfig),
 }

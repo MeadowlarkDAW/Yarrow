@@ -52,6 +52,8 @@ pub(crate) struct WindowState<A: Clone + 'static> {
     physical_size: PhysicalSizeI32,
     scale_factor: ScaleFactor,
     scale_factor_recip: f32,
+    system_scale_factor: ScaleFactor,
+    scale_factor_config: ScaleFactorConfig,
     pub queued_pointer_position: Option<PhysicalPoint>,
     #[cfg(feature = "winit")]
     pub winit_window: Arc<winit::window::Window>,
@@ -69,12 +71,15 @@ impl<A: Clone + 'static> WindowState<A> {
         #[cfg(feature = "winit")] winit_window: &Arc<winit::window::Window>,
         logical_size: Size,
         physical_size: PhysicalSizeI32,
-        scale_factor: ScaleFactor,
+        system_scale_factor: ScaleFactor,
+        scale_factor_config: ScaleFactorConfig,
         view_config: ViewConfig,
         surface_config: DefaultSurfaceConfig,
         action_sender: ActionSender<A>,
         id: WindowID,
     ) -> Result<Self, NewSurfaceError> {
+        let scale_factor = scale_factor_config.scale_factor(system_scale_factor);
+
         let surface = DefaultSurface::new(
             physical_size,
             scale_factor,
@@ -100,6 +105,8 @@ impl<A: Clone + 'static> WindowState<A> {
             physical_size,
             scale_factor,
             scale_factor_recip: scale_factor.recip(),
+            system_scale_factor,
+            scale_factor_config,
             queued_pointer_position: None,
             winit_window: Arc::clone(winit_window),
             prev_pointer_pos: None,
@@ -110,21 +117,60 @@ impl<A: Clone + 'static> WindowState<A> {
         })
     }
 
-    pub fn set_size(&mut self, new_size: PhysicalSizeI32, new_scale_factor: ScaleFactor) {
-        if self.physical_size == new_size && self.scale_factor == new_scale_factor {
+    pub fn set_size(&mut self, new_size: PhysicalSizeI32, new_system_scale_factor: ScaleFactor) {
+        if self.physical_size == new_size && self.system_scale_factor == new_system_scale_factor {
             return;
         }
 
-        self.physical_size = new_size;
-        self.logical_size = to_logical_size_i32(new_size, new_scale_factor);
-        self.scale_factor = new_scale_factor;
-        self.scale_factor_recip = new_scale_factor.recip();
+        let scale_factor = self
+            .scale_factor_config
+            .scale_factor(new_system_scale_factor);
 
-        self.view.resize(new_size, new_scale_factor);
+        self.physical_size = new_size;
+        self.logical_size = to_logical_size_i32(new_size, scale_factor);
+        self.scale_factor = scale_factor;
+        self.scale_factor_recip = scale_factor.recip();
+
+        self.view.resize(new_size, scale_factor);
         self.surface
             .as_mut()
             .unwrap()
-            .resize(new_size, new_scale_factor);
+            .resize(new_size, scale_factor);
+    }
+
+    pub fn set_scale_factor_config(
+        &mut self,
+        config: ScaleFactorConfig,
+    ) -> Option<PhysicalSizeI32> {
+        if self.scale_factor_config == config {
+            return None;
+        }
+        self.scale_factor_config = config;
+
+        let scale_factor = self
+            .scale_factor_config
+            .scale_factor(self.system_scale_factor);
+
+        if self.scale_factor == scale_factor {
+            return None;
+        }
+
+        let logical_size = crate::math::to_logical_size_i32(self.physical_size, self.scale_factor);
+        let requested_physical_size: PhysicalSizeI32 =
+            crate::math::to_physical_size(logical_size, scale_factor)
+                .round()
+                .cast();
+
+        self.scale_factor = scale_factor;
+        self.scale_factor_recip = scale_factor.recip();
+
+        self.view.resize(self.physical_size, scale_factor);
+        self.surface
+            .as_mut()
+            .unwrap()
+            .resize(self.physical_size, scale_factor);
+
+        Some(requested_physical_size)
     }
 
     pub fn on_animation_tick(&mut self, dt: f64, font_system: &mut FontSystem) {
@@ -350,6 +396,8 @@ impl<A: Clone + 'static> WindowState<A> {
             logical_size: self.logical_size,
             physical_size: self.physical_size,
             scale_factor: self.scale_factor,
+            system_scale_factor: self.system_scale_factor,
+            scale_factor_config: self.scale_factor_config,
         }
     }
 
@@ -380,6 +428,7 @@ pub struct WindowConfig {
     pub view_config: ViewConfig,
     pub surface_config: DefaultSurfaceConfig,
     pub focus_on_creation: bool,
+    pub scale_factor: ScaleFactorConfig,
 }
 
 impl Default for WindowConfig {
@@ -391,6 +440,7 @@ impl Default for WindowConfig {
             view_config: ViewConfig::default(),
             surface_config: DefaultSurfaceConfig::default(),
             focus_on_creation: true,
+            scale_factor: ScaleFactorConfig::default(),
         }
     }
 }
@@ -401,6 +451,22 @@ pub enum WindowCloseRequest {
     CloseImmediately,
 }
 
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
+pub enum ScaleFactorConfig {
+    #[default]
+    System,
+    Custom(ScaleFactor),
+}
+
+impl ScaleFactorConfig {
+    pub fn scale_factor(&self, system_scale_factor: ScaleFactor) -> ScaleFactor {
+        match self {
+            Self::System => system_scale_factor,
+            Self::Custom(s) => *s,
+        }
+    }
+}
+
 pub struct WindowContext<'a, A: Clone + 'static> {
     pub view: &'a mut View<A>,
     pub font_system: &'a mut FontSystem,
@@ -408,6 +474,8 @@ pub struct WindowContext<'a, A: Clone + 'static> {
     logical_size: Size,
     physical_size: PhysicalSizeI32,
     scale_factor: ScaleFactor,
+    scale_factor_config: ScaleFactorConfig,
+    system_scale_factor: ScaleFactor,
 }
 
 impl<'a, A: Clone + 'static> WindowContext<'a, A> {
@@ -421,5 +489,13 @@ impl<'a, A: Clone + 'static> WindowContext<'a, A> {
 
     pub fn scale_factor(&self) -> ScaleFactor {
         self.scale_factor
+    }
+
+    pub fn system_scale_factor(&self) -> ScaleFactor {
+        self.system_scale_factor
+    }
+
+    pub fn scale_factor_config(&self) -> ScaleFactorConfig {
+        self.scale_factor_config
     }
 }
