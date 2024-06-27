@@ -134,7 +134,7 @@ impl ParamMarkersConfig {
 pub struct VirtualSliderConfig {
     /// The scalar (points to normalized units) to use when dragging.
     ///
-    /// By default this is set to `0.00275`.
+    /// By default this is set to `0.003`.
     pub drag_scalar: f32,
 
     /// The scalar (points to normalized units) to use when scrolling.
@@ -198,7 +198,7 @@ pub struct VirtualSliderConfig {
 impl Default for VirtualSliderConfig {
     fn default() -> Self {
         Self {
-            drag_scalar: 0.00275,
+            drag_scalar: 0.003,
             scroll_wheel_scalar: 0.0004,
             scroll_wheel_points_per_line: 24.0,
             fine_adjustment_scalar: 0.02,
