@@ -809,33 +809,29 @@ impl TextInputInner {
             }
             // TODO: Make this keyboard shortcut configurable.
             Code::KeyA => {
-                res.capture_status = EventCaptureStatus::Captured;
-
                 if event.modifiers.contains(Modifiers::CONTROL) {
+                    res.capture_status = EventCaptureStatus::Captured;
                     self.queue_action(TextInputAction::SelectAll);
                 }
             }
             // TODO: Make this keyboard shortcut configurable.
             Code::KeyX => {
-                res.capture_status = EventCaptureStatus::Captured;
-
                 if event.modifiers.contains(Modifiers::CONTROL) {
+                    res.capture_status = EventCaptureStatus::Captured;
                     self.queue_action(TextInputAction::Cut);
                 }
             }
             // TODO: Make this keyboard shortcut configurable.
             Code::KeyC => {
-                res.capture_status = EventCaptureStatus::Captured;
-
                 if event.modifiers.contains(Modifiers::CONTROL) {
+                    res.capture_status = EventCaptureStatus::Captured;
                     self.queue_action(TextInputAction::Copy);
                 }
             }
             // TODO: Make this keyboard shortcut configurable.
             Code::KeyV => {
-                res.capture_status = EventCaptureStatus::Captured;
-
                 if event.modifiers.contains(Modifiers::CONTROL) {
+                    res.capture_status = EventCaptureStatus::Captured;
                     self.queue_action(TextInputAction::Paste);
                 }
             }
