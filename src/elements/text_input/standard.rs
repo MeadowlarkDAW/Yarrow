@@ -438,38 +438,11 @@ impl TextInput {
         RefCell::borrow(&self.shared_state).inner.max_characters()
     }
 
-    pub fn perform_cut_action(&mut self) {
+    pub fn perform_action(&mut self, action: TextInputAction) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if !shared_state.inner.disabled {
-            shared_state.inner.queue_action(TextInputAction::Cut);
-            self.el.notify_custom_state_change();
-        }
-    }
-
-    pub fn perform_copy_action(&mut self) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
-        if !shared_state.inner.disabled {
-            shared_state.inner.queue_action(TextInputAction::Copy);
-            self.el.notify_custom_state_change();
-        }
-    }
-
-    pub fn perform_paste_action(&mut self) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
-        if !shared_state.inner.disabled {
-            shared_state.inner.queue_action(TextInputAction::Paste);
-            self.el.notify_custom_state_change();
-        }
-    }
-
-    pub fn perform_select_all_action(&mut self) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
-        if !shared_state.inner.disabled {
-            shared_state.inner.queue_action(TextInputAction::SelectAll);
+            shared_state.inner.queue_action(action);
             self.el.notify_custom_state_change();
         }
     }

@@ -19,6 +19,7 @@ pub struct MyStyle {
     pub menu_btn_style: Rc<ButtonStyle>,
     pub menu_style: Rc<DropDownMenuStyle>,
     pub text_input_style: Rc<TextInputStyle>,
+    pub icon_text_input_style: Rc<IconTextInputStyle>,
     pub panel_bg_style: Rc<QuadStyle>,
     pub panel_border_style: Rc<QuadStyle>,
     pub resize_handle_style: Rc<ResizeHandleStyle>,
@@ -114,6 +115,13 @@ impl MyStyle {
             }),
             menu_btn_style: Rc::new(menu_btn_style),
             text_input_style: Rc::new(TextInputStyle::default()),
+            icon_text_input_style: Rc::new(IconTextInputStyle {
+                icon_properties: TextProperties {
+                    attrs: icon_attrs,
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
             panel_bg_style: Rc::new(QuadStyle {
                 bg: Background::Solid(RGBA8::new(40, 40, 40, 255).into()),
                 ..Default::default()

@@ -4,7 +4,7 @@ use std::rc::Rc;
 use rootvg::color::RGBA8;
 use rootvg::math::Size;
 use rootvg::text::glyphon::FontSystem;
-use rootvg::text::{RcTextBuffer, TextProperties};
+use rootvg::text::{RcTextBuffer, TextPrimitive, TextProperties};
 use rootvg::PrimitiveGroup;
 
 use crate::elements::text_input::TextInputUpdateResult;
@@ -45,7 +45,7 @@ impl Default for IconTextInputStyle {
             icon_color_idle: RGBA8::new(255, 255, 255, 150),
             icon_color_focused: RGBA8::new(255, 255, 255, 255),
             icon_color_disabled: RGBA8::new(255, 255, 255, 100),
-            icon_padding: Padding::new(6.0, 6.0, 6.0, 6.0),
+            icon_padding: Padding::new(6.0, 0.0, 6.0, 7.0),
             icon_align: StartEndAlign::Start,
         }
     }
@@ -201,36 +201,7 @@ pub struct IconTextInputElement<A: Clone + 'static> {
     icon_text_buffer: RcTextBuffer,
     icon_text_offset: Point,
     icon_text_rect: Rect,
-    text_input_padding: Padding,
-}
-
-struct LayoutResult {
-    icon_text_rect: Rect,
-    text_input_padding: Padding,
-}
-
-fn layout(
-    bounds_size: Size,
-    icon_text_buffer: &RcTextBuffer,
-    style: &IconTextInputStyle,
-) -> LayoutResult {
-    let icon_unclipped_size = icon_text_buffer.measure();
-
-    let icon_padding_size = Size::new(
-        icon_unclipped_size.width + style.icon_padding.left + style.icon_padding.right,
-        icon_unclipped_size.height + style.icon_padding.top + style.icon_padding.bottom,
-    );
-
-    /*
-    let icon_rect = match style.icon_align {
-        StartEndAlign::Start => 
-        StartEndAlign::End => {
-
-        }
-    };
-    */
-
-    todo!()
+    text_input_style: TextInputStyle,
 }
 
 impl<A: Clone + 'static> IconTextInputElement<A> {
@@ -267,6 +238,8 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
             cx.font_system,
         );
 
+        let layout_res = layout(bounding_rect.size, &icon_text_buffer, &style);
+
         let shared_state = Rc::new(RefCell::new(SharedState {
             inner: TextInputInner::new(
                 text,
@@ -277,11 +250,12 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
                 disabled,
                 tooltip_message.is_some(),
                 select_all_when_focused,
-                &style.text_input,
+                &layout_res.text_input_style,
                 cx.font_system,
             ),
             style,
             text_offset,
+            style_changed: false,
         }));
 
         let element_builder = ElementBuilder {
@@ -291,6 +265,10 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
                 tooltip_align,
                 action,
                 right_click_action,
+                icon_text_buffer,
+                icon_text_offset,
+                icon_text_rect: layout_res.icon_text_rect,
+                text_input_style: layout_res.text_input_style,
             }),
             z_index,
             bounding_rect,
@@ -327,15 +305,37 @@ impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
             inner,
             style,
             text_offset: _,
+            style_changed,
         } = &mut *shared_state;
 
         let res = match event {
-            ElementEvent::Animation { .. } => inner.on_animation(&style.text_input),
+            ElementEvent::Animation { .. } => inner.on_animation(&self.text_input_style),
             ElementEvent::CustomStateChanged => {
-                inner.on_custom_state_changed(cx.clipboard, cx.font_system)
+                let needs_repaint = *style_changed;
+                if *style_changed {
+                    *style_changed = false;
+
+                    let layout_res = layout(cx.rect().size, &self.icon_text_buffer, style);
+
+                    self.icon_text_rect = layout_res.icon_text_rect;
+                    self.text_input_style = layout_res.text_input_style;
+
+                    inner.set_style(&self.text_input_style, cx.font_system);
+                    inner.on_size_changed(cx.rect().size, &self.text_input_style, cx.font_system);
+                }
+
+                let mut res = inner.on_custom_state_changed(cx.clipboard, cx.font_system);
+                res.needs_repaint |= needs_repaint;
+                res
             }
             ElementEvent::SizeChanged => {
-                inner.on_size_changed(cx.rect().size, &style.text_input, cx.font_system);
+                let layout_res = layout(cx.rect().size, &self.icon_text_buffer, style);
+
+                self.icon_text_rect = layout_res.icon_text_rect;
+                self.text_input_style = layout_res.text_input_style;
+
+                inner.on_size_changed(cx.rect().size, &self.text_input_style, cx.font_system);
+
                 TextInputUpdateResult::default()
             }
             ElementEvent::Pointer(PointerEvent::Moved { position, .. }) => {
@@ -421,7 +421,7 @@ impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
         let shared_state = RefCell::borrow(&self.shared_state);
 
         let mut p = shared_state.inner.create_primitives(
-            &shared_state.style.text_input,
+            &self.text_input_style,
             Rect::from_size(cx.bounds_size),
             shared_state.text_offset,
         );
@@ -433,10 +433,30 @@ impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
             primitives.set_z_index(1);
             primitives.add_solid_quad(highlight_range);
         }
+
         if let Some(text) = p.text.take() {
             primitives.set_z_index(2);
             primitives.add_text(text);
         }
+
+        let icon_color = if shared_state.inner.disabled() {
+            shared_state.style.icon_color_disabled
+        } else if shared_state.inner.focused() {
+            shared_state.style.icon_color_focused
+        } else {
+            shared_state.style.icon_color_idle
+        };
+
+        if icon_color.a != 0 {
+            primitives.set_z_index(2);
+            primitives.add_text(TextPrimitive::new(
+                self.icon_text_buffer.clone(),
+                self.icon_text_rect.origin + self.icon_text_offset.to_vector(),
+                icon_color,
+                None,
+            ));
+        }
+
         if let Some(cursor) = p.cursor.take() {
             primitives.set_z_index(3);
             primitives.add_solid_quad(cursor);
@@ -448,6 +468,7 @@ struct SharedState {
     inner: TextInputInner,
     style: Rc<IconTextInputStyle>,
     text_offset: Point,
+    style_changed: bool,
 }
 
 /// A handle to a [`IconTextInputElement`]
@@ -490,17 +511,18 @@ impl IconTextInput {
         })
     }
 
-    pub fn set_style(&mut self, style: &Rc<IconTextInputStyle>, font_system: &mut FontSystem) {
+    pub fn set_style(&mut self, style: &Rc<IconTextInputStyle>) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
         let SharedState {
-            inner,
             style: old_style,
+            style_changed,
             ..
         } = &mut *shared_state;
 
         if !Rc::ptr_eq(old_style, style) {
             *old_style = Rc::clone(style);
-            inner.set_style(&style.text_input, font_system);
+            *style_changed = true;
+            //inner.set_style(&style.text_input, font_system);
 
             self.el.notify_custom_state_change();
         }
@@ -534,50 +556,65 @@ impl IconTextInput {
         RefCell::borrow(&self.shared_state).inner.max_characters()
     }
 
-    pub fn perform_cut_action(&mut self) {
+    pub fn perform_action(&mut self, action: TextInputAction) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if !shared_state.inner.disabled {
-            shared_state.inner.queue_action(TextInputAction::Cut);
+            shared_state.inner.queue_action(action);
             self.el.notify_custom_state_change();
         }
     }
+}
 
-    pub fn perform_copy_action(&mut self) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+struct LayoutResult {
+    icon_text_rect: Rect,
+    text_input_style: TextInputStyle,
+}
 
-        if !shared_state.inner.disabled {
-            shared_state.inner.queue_action(TextInputAction::Copy);
-            self.el.notify_custom_state_change();
+fn layout(
+    bounds_size: Size,
+    icon_text_buffer: &RcTextBuffer,
+    style: &IconTextInputStyle,
+) -> LayoutResult {
+    let icon_unclipped_size = icon_text_buffer.measure();
+
+    let icon_padded_size = Size::new(
+        icon_unclipped_size.width + style.icon_padding.left + style.icon_padding.right,
+        icon_unclipped_size.height + style.icon_padding.top + style.icon_padding.bottom,
+    );
+
+    let mut text_input_style = style.text_input.clone();
+
+    let mut icon_text_rect = match style.icon_align {
+        StartEndAlign::Start => {
+            text_input_style.padding.left += icon_padded_size.width;
+
+            crate::layout::layout_inner_rect_with_min_size(
+                style.icon_padding,
+                Rect::from_size(Size::new(icon_padded_size.width, bounds_size.height)),
+                Size::default(),
+            )
         }
-    }
+        StartEndAlign::End => {
+            text_input_style.padding.right += icon_padded_size.width;
 
-    pub fn perform_paste_action(&mut self) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
-        if !shared_state.inner.disabled {
-            shared_state.inner.queue_action(TextInputAction::Paste);
-            self.el.notify_custom_state_change();
+            crate::layout::layout_inner_rect_with_min_size(
+                style.icon_padding,
+                Rect::new(
+                    Point::new(bounds_size.width - icon_padded_size.width, 0.0),
+                    Size::new(icon_padded_size.width, bounds_size.height),
+                ),
+                Size::default(),
+            )
         }
-    }
+    };
 
-    pub fn perform_select_all_action(&mut self) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+    // We need to vertically align the text ourselves as rootvg/glyphon does not do this.
+    icon_text_rect.origin.y =
+        icon_text_rect.min_y() + ((icon_text_rect.height() - icon_unclipped_size.height) * 0.5);
 
-        if !shared_state.inner.disabled {
-            shared_state.inner.queue_action(TextInputAction::SelectAll);
-            self.el.notify_custom_state_change();
-        }
-    }
-
-    /// Show/hide the password. This has no effect if the element wasn't created
-    /// with password mode enabled.
-    pub fn show_password(&mut self, show: bool) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
-        if shared_state.inner.show_password != show {
-            shared_state.inner.show_password = show;
-            self.el.notify_custom_state_change();
-        }
+    LayoutResult {
+        icon_text_rect,
+        text_input_style,
     }
 }

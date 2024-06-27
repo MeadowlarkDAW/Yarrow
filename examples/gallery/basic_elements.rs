@@ -1,5 +1,6 @@
 use crate::style::MyStyle;
 use crate::{MyAction, MAIN_Z_INDEX, OVERLAY_Z_INDEX, SCROLL_AREA_Z_INDEX};
+use yarrow::elements::text_input::IconTextInput;
 use yarrow::prelude::*;
 
 pub const SCROLL_AREA_SCISSOR_RECT: ScissorRectID = 1;
@@ -40,6 +41,21 @@ impl TextMenuOption {
             Self::SelectAll => "Ctrl+A",
         }
     }
+
+    pub fn as_text_input_option(&self) -> TextInputAction {
+        match self {
+            Self::Cut => TextInputAction::Cut,
+            Self::Copy => TextInputAction::Copy,
+            Self::Paste => TextInputAction::Paste,
+            Self::SelectAll => TextInputAction::SelectAll,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextInputID {
+    Standard,
+    Search,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -51,7 +67,11 @@ pub enum Action {
     OpenRightClickMenu(Point),
     RightClickOptionSelected(usize),
     TextChanged(String),
-    OpenTextInputMenu(Point),
+    SearchTextChanged(String),
+    OpenTextInputMenu {
+        click_pos: Point,
+        text_input_id: TextInputID,
+    },
     TextInputMenuOptionSelected(TextMenuOption),
     ScrollOffsetChanged(Point),
 }
@@ -68,11 +88,13 @@ pub struct Elements {
     drop_down_menu: DropDownMenu,
     text_input: TextInput,
     text_input_menu: DropDownMenu,
+    search_text_input: IconTextInput,
     right_click_area: ClickArea,
     right_click_menu: DropDownMenu,
     scroll_area: ScrollArea,
     separator_1: Separator,
     separator_2: Separator,
+    active_text_input_menu: Option<TextInputID>,
 }
 
 impl Elements {
@@ -134,7 +156,13 @@ impl Elements {
             .placeholder_text("write something...")
             .tooltip_message("A text input :)", Align2::TOP_LEFT)
             .on_changed(|text| Action::TextChanged(text).into())
-            .on_right_click(|pos| Action::OpenTextInputMenu(pos).into())
+            .on_right_click(|pos| {
+                Action::OpenTextInputMenu {
+                    click_pos: pos,
+                    text_input_id: TextInputID::Standard,
+                }
+                .into()
+            })
             .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
             .password_mode(false) // There is an optional password mode if desired.
             .z_index(MAIN_Z_INDEX)
@@ -158,6 +186,22 @@ impl Elements {
                 Action::TextInputMenuOptionSelected(TextMenuOption::ALL[id]).into()
             })
             .z_index(100)
+            .build(cx);
+
+        let search_text_input = IconTextInput::builder(&style.icon_text_input_style)
+            .placeholder_text("search something...")
+            .icon_text('\u{f002}')
+            .on_changed(|text| Action::SearchTextChanged(text).into())
+            .on_right_click(|pos| {
+                Action::OpenTextInputMenu {
+                    click_pos: pos,
+                    text_input_id: TextInputID::Search,
+                }
+                .into()
+            })
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
+            .password_mode(false) // There is an optional password mode if desired.
+            .z_index(MAIN_Z_INDEX)
             .build(cx);
 
         let drop_down_menu_btn = DualButton::builder(&style.drop_down_btn_style)
@@ -231,11 +275,13 @@ impl Elements {
             drop_down_menu,
             text_input,
             text_input_menu,
+            search_text_input,
             right_click_area,
             right_click_menu,
             scroll_area,
             separator_1,
             separator_2,
+            active_text_input_menu: None,
         }
     }
 
@@ -274,15 +320,24 @@ impl Elements {
             }
             Action::RightClickOptionSelected(_option) => {}
             Action::TextChanged(_text) => {}
-            Action::OpenTextInputMenu(position) => {
-                self.text_input_menu.open(Some(position));
+            Action::SearchTextChanged(_text) => {}
+            Action::OpenTextInputMenu {
+                click_pos,
+                text_input_id,
+            } => {
+                self.active_text_input_menu = Some(text_input_id);
+                self.text_input_menu.open(Some(click_pos));
             }
-            Action::TextInputMenuOptionSelected(option) => match option {
-                TextMenuOption::Cut => self.text_input.perform_cut_action(),
-                TextMenuOption::Copy => self.text_input.perform_copy_action(),
-                TextMenuOption::Paste => self.text_input.perform_paste_action(),
-                TextMenuOption::SelectAll => self.text_input.perform_select_all_action(),
-            },
+            Action::TextInputMenuOptionSelected(option) => {
+                if let Some(id) = self.active_text_input_menu.take() {
+                    let action = option.as_text_input_option();
+
+                    match id {
+                        TextInputID::Standard => self.text_input.perform_action(action),
+                        TextInputID::Search => self.search_text_input.perform_action(action),
+                    }
+                }
+            }
             Action::ScrollOffsetChanged(scroll_offset) => {
                 cx.view
                     .update_scissor_rect(SCROLL_AREA_SCISSOR_RECT, None, Some(scroll_offset))
@@ -396,9 +451,17 @@ impl Elements {
             style.text_input_size,
         ));
 
+        self.search_text_input.el.set_rect(Rect::new(
+            Point::new(
+                start_pos.x,
+                self.text_input.el.rect().max_y() + style.element_padding,
+            ),
+            style.text_input_size,
+        ));
+
         self.scroll_area.set_content_size(Size::new(
             self.dual_label.el.rect().max_x() + style.content_padding,
-            self.text_input.el.rect().max_y() + style.content_padding,
+            self.search_text_input.el.rect().max_y() + style.content_padding,
         ));
     }
 
@@ -416,11 +479,13 @@ impl Elements {
             drop_down_menu,
             text_input,
             text_input_menu,
+            search_text_input,
             right_click_area,
             right_click_menu,
             scroll_area,
             separator_1,
             separator_2,
+            active_text_input_menu: _,
         } = self;
 
         label.el.set_hidden(hidden);
@@ -434,6 +499,7 @@ impl Elements {
         drop_down_menu.el.set_hidden(hidden);
         text_input.el.set_hidden(hidden);
         text_input_menu.el.set_hidden(hidden);
+        search_text_input.el.set_hidden(hidden);
         right_click_area.el.set_hidden(hidden);
         right_click_menu.el.set_hidden(hidden);
         scroll_area.el.set_hidden(hidden);

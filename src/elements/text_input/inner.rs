@@ -1306,6 +1306,14 @@ impl TextInputInner {
 
         primitives
     }
+
+    pub fn disabled(&self) -> bool {
+        self.disabled
+    }
+
+    pub fn focused(&self) -> bool {
+        self.focused
+    }
 }
 
 pub struct TextInputPrimitives {

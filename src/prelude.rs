@@ -23,7 +23,8 @@ pub use crate::elements::slider::{Slider, SliderFillMode, SliderStyle, SliderSty
 pub use crate::elements::switch::{Switch, SwitchStyle};
 pub use crate::elements::tab::{IndicatorLinePlacement, Tab, TabGroup, TabGroupOption, TabStyle};
 pub use crate::elements::text_input::{
-    FloatingTextInput, TextInput, TextInputAction, TextInputStyle,
+    FloatingTextInput, IconTextInput, IconTextInputStyle, TextInput, TextInputAction,
+    TextInputStyle,
 };
 pub use crate::elements::toggle_button::{ToggleButton, ToggleButtonStyle};
 pub use crate::elements::tooltip::Tooltip;
