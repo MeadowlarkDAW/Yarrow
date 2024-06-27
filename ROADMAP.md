@@ -18,7 +18,7 @@
     - [ ] XYPad element
     - [ ] ModulationArc element
     - [ ] ModulationLine element
-- [ ] Custom icon in TextInput element (to create a search bar)
+- [x] Custom icon in TextInput element (to create a search bar)
 - [ ] Drag-n-drop source and target elements
 - [ ] TextureQuad element
 - [ ] TextureButton element
