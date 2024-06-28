@@ -946,6 +946,8 @@ fn try_lock_pointer(
 ) -> PointerLockState {
     #[allow(unused_mut, unused_assignments)]
     let mut try_os_lock = false;
+    #[allow(unused_mut, unused_assignments)]
+    let mut try_manual_lock = false;
 
     #[cfg(target_family = "wasm")]
     {
@@ -964,6 +966,7 @@ fn try_lock_pointer(
         {
             match linux_backend_type {
                 Some(LinuxBackendType::Wayland) => try_os_lock = true,
+                Some(LinuxBackendType::X11) => try_manual_lock = true,
                 _ => {}
             };
         }
@@ -971,6 +974,12 @@ fn try_lock_pointer(
         #[cfg(target_os = "macos")]
         {
             try_os_lock = true;
+            try_manual_lock = true;
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            try_manual_lock = true;
         }
     }
 
@@ -988,36 +997,13 @@ fn try_lock_pointer(
 
     if state.is_locked() {
         window.set_cursor_visible(false);
-        return state;
+        state
+    } else if try_manual_lock {
+        window.set_cursor_visible(false);
+        PointerLockState::ManualLock
+    } else {
+        PointerLockState::NotLocked
     }
-
-    // If the backend supports it, lock by manually moving the pointer.
-
-    #[cfg(not(target_family = "wasm"))]
-    {
-        #[cfg(any(
-            target_os = "linux",
-            target_os = "freebsd",
-            target_os = "dragonfly",
-            target_os = "openbsd",
-            target_os = "netbsd",
-        ))]
-        {
-            if let Some(LinuxBackendType::X11) = linux_backend_type {
-                window.set_cursor_visible(false);
-                return PointerLockState::ManualLock;
-            }
-        }
-
-        #[cfg(any(target_os = "macos", target_os = "windows"))]
-        {
-            window.set_cursor_visible(false);
-            return PointerLockState::ManualLock;
-        }
-    }
-
-    #[allow(unreachable_code)]
-    PointerLockState::NotLocked
 }
 
 fn unlock_pointer(window: &WinitWindow, prev_state: PointerLockState) {
