@@ -21,7 +21,7 @@ use crate::action_queue::ActionSender;
 use crate::clipboard::Clipboard;
 use crate::layout::Align2;
 use crate::math::{Rect, ScaleFactor, ZIndex};
-use crate::CursorIcon;
+use crate::{CursorIcon, WindowID};
 
 use super::ElementRenderCache;
 
@@ -68,6 +68,9 @@ pub struct ElementContext<'a, A: Clone + 'static> {
     pub(crate) hover_timeout_requested: bool,
     pub(crate) scroll_wheel_timeout_requested: bool,
     pub(crate) scale_factor: ScaleFactor,
+    pub(crate) window_id: WindowID,
+    pub(crate) pointer_lock_request: Option<bool>,
+    pointer_locked: bool,
 }
 
 impl<'a, A: Clone + 'static> ElementContext<'a, A> {
@@ -81,6 +84,8 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
         has_focus: bool,
         scale_factor: ScaleFactor,
         cursor_icon: CursorIcon,
+        window_id: WindowID,
+        pointer_locked: bool,
         action_sender: &'a mut ActionSender<A>,
         font_system: &'a mut FontSystem,
         clipboard: &'a mut Clipboard,
@@ -98,6 +103,9 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
             repaint_requested: false,
             has_focus,
             scale_factor,
+            window_id,
+            pointer_lock_request: None,
+            pointer_locked,
             listen_to_pointer_clicked_off: false,
             hover_timeout_requested: false,
             scroll_wheel_timeout_requested: false,
@@ -257,6 +265,26 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
             align,
             auto_hide,
         });
+    }
+
+    /// The ID of the window this element belongs to.
+    pub fn window_id(&self) -> WindowID {
+        self.window_id
+    }
+
+    /// Request to lock/unlock the pointer in place and hide the cursor.
+    ///
+    /// The application and/or backend may choose to ignore this request.
+    ///
+    /// The pointer will automatically be unlocked when this element
+    /// loses focus.
+    pub fn request_pointer_lock(&mut self, lock: bool) {
+        self.pointer_lock_request = Some(lock);
+    }
+
+    /// Whether or not the pointer is currently locked in place.
+    pub fn is_pointer_locked(&self) -> bool {
+        self.pointer_locked
     }
 }
 

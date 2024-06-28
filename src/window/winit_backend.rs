@@ -5,7 +5,7 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler as WinitApplicationHandler;
-use winit::dpi::LogicalSize;
+use winit::dpi::{LogicalSize, PhysicalPosition};
 use winit::event::{
     ElementState, MouseButton as WinitMouseButton, MouseScrollDelta, StartCause,
     WindowEvent as WinitWindowEvent,
@@ -13,16 +13,20 @@ use winit::event::{
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::platform::startup_notify::EventLoopExtStartupNotify;
 use winit::platform::startup_notify::WindowAttributesExtStartupNotify;
-use winit::window::{Window as WinitWindow, WindowId as WinitWindowId};
+use winit::platform::wayland::ActiveEventLoopExtWayland;
+use winit::platform::x11::ActiveEventLoopExtX11;
+use winit::window::{CursorGrabMode, Window as WinitWindow, WindowId as WinitWindowId};
 
 use crate::action_queue::ActionSender;
 use crate::application::{AppContext, Application, TimerInterval, WindowRequest};
 use crate::event::{AppWindowEvent, EventCaptureStatus, PointerButton, WheelDeltaType};
 use crate::math::{PhysicalSizeI32, ScaleFactor};
 use crate::window::{WindowID, MAIN_WINDOW};
-use crate::AppConfig;
 
-use super::{ScaleFactorConfig, WindowCloseRequest, WindowConfig, WindowState};
+use super::{
+    LinuxBackendType, PointerLockState, ScaleFactorConfig, WindowCloseRequest, WindowConfig,
+    WindowState,
+};
 
 mod convert;
 
@@ -31,7 +35,8 @@ struct AppHandler<A: Application> {
     context: AppContext<A::Action>,
     action_sender: ActionSender<A::Action>,
 
-    config: AppConfig,
+    tick_interval: Duration,
+    pointer_debounce_interval: Duration,
     prev_tick_instant: Instant,
     prev_cursor_debounce_instant: Instant,
     requested_tick_resume: Instant,
@@ -55,8 +60,9 @@ impl<A: Application> AppHandler<A> {
         Ok(Self {
             user_app,
             action_sender,
-            context: AppContext::default(),
-            config,
+            context: AppContext::new(config),
+            tick_interval: Duration::default(),
+            pointer_debounce_interval: Duration::default(),
             prev_tick_instant: now,
             prev_cursor_debounce_instant: now,
             requested_tick_resume: now,
@@ -82,7 +88,7 @@ impl<A: Application> AppHandler<A> {
     }
 
     fn process_updates(&mut self, event_loop: &ActiveEventLoop) {
-        self.drain_cursor_moved_events();
+        self.drain_pointer_moved_events();
 
         loop {
             let any_actions_processed = self.poll_actions();
@@ -108,13 +114,53 @@ impl<A: Application> AppHandler<A> {
             }
         }
 
-        self.update_mouse_cursor();
+        self.update_pointer_lock_and_cursor();
     }
 
-    fn drain_cursor_moved_events(&mut self) {
+    fn drain_pointer_moved_events(&mut self) {
         for window_state in self.context.window_map.values_mut() {
+            if let Some(delta) = window_state.queued_pointer_delta.take() {
+                if window_state.pointer_lock_state().is_locked() {
+                    let delta = crate::math::to_logical_point_from_recip(
+                        PhysicalPoint::new(delta.0 as f32, delta.1 as f32),
+                        window_state.scale_factor_recip,
+                    );
+
+                    window_state.handle_locked_pointer_delta(delta, &mut self.context.font_system);
+                }
+            }
+
             if let Some(pos) = window_state.queued_pointer_position.take() {
-                window_state.handle_pointer_moved(pos, &mut self.context.font_system);
+                match window_state.pointer_lock_state() {
+                    PointerLockState::NotLocked => {
+                        window_state.handle_pointer_moved(pos, &mut self.context.font_system);
+                    }
+                    PointerLockState::LockedUsingOS => {
+                        // Only send events from the raw device input when locked.
+                    }
+                    PointerLockState::ManualLock => {
+                        if let Some(prev_pos) = window_state.prev_pointer_pos {
+                            let new_pos =
+                                crate::math::to_physical_point(prev_pos, window_state.scale_factor);
+
+                            if let Err(e) = window_state
+                                .winit_window
+                                .set_cursor_position(PhysicalPosition::new(new_pos.x, new_pos.y))
+                            {
+                                log::debug!("Could not set cursor position: {}", e);
+
+                                unlock_pointer(
+                                    &window_state.winit_window,
+                                    window_state.pointer_lock_state(),
+                                );
+                                window_state.set_pointer_locked(PointerLockState::NotLocked);
+
+                                window_state
+                                    .handle_pointer_moved(pos, &mut self.context.font_system);
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -273,11 +319,56 @@ impl<A: Application> AppHandler<A> {
         }
     }
 
-    fn update_mouse_cursor(&mut self) {
+    fn update_pointer_lock_and_cursor(&mut self) {
         for window_state in self.context.window_map.values_mut() {
-            if let Some(new_icon) = window_state.new_cursor_icon() {
-                let winit_icon = self::convert::convert_cursor_icon_to_winit(new_icon);
-                window_state.winit_window.set_cursor(winit_icon);
+            let mut do_unlock_pointer = false;
+
+            if let Some(lock) = window_state.new_pointer_lock_request() {
+                if lock
+                    && self.context.config.pointer_locking_enabled
+                    && !window_state.pointer_lock_state().is_locked()
+                    && window_state.winit_window.has_focus()
+                {
+                    let new_state = try_lock_pointer(
+                        &window_state.winit_window,
+                        #[cfg(any(
+                            target_os = "linux",
+                            target_os = "freebsd",
+                            target_os = "dragonfly",
+                            target_os = "openbsd",
+                            target_os = "netbsd",
+                        ))]
+                        self.context.linux_backend_type,
+                    );
+                    if new_state.is_locked() {
+                        window_state.set_pointer_locked(new_state);
+                    }
+                } else if (!lock && window_state.pointer_lock_state().is_locked())
+                    || (window_state.pointer_lock_state().is_locked()
+                        && !window_state.winit_window.has_focus())
+                {
+                    do_unlock_pointer = true;
+                }
+            } else if window_state.pointer_lock_state().is_locked()
+                && !window_state.winit_window.has_focus()
+            {
+                do_unlock_pointer = true;
+            }
+
+            if do_unlock_pointer {
+                unlock_pointer(
+                    &window_state.winit_window,
+                    window_state.pointer_lock_state(),
+                );
+
+                window_state.set_pointer_locked(PointerLockState::NotLocked);
+            }
+
+            if !window_state.pointer_lock_state.is_locked() {
+                if let Some(new_icon) = window_state.new_cursor_icon() {
+                    let winit_icon = self::convert::convert_cursor_icon_to_winit(new_icon);
+                    window_state.winit_window.set_cursor(winit_icon);
+                }
             }
         }
     }
@@ -308,6 +399,24 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
         if !self.got_first_resumed_event {
             self.got_first_resumed_event = true;
 
+            #[cfg(any(
+                target_os = "linux",
+                target_os = "freebsd",
+                target_os = "dragonfly",
+                target_os = "openbsd",
+                target_os = "netbsd",
+            ))]
+            {
+                self.context.linux_backend_type = if event_loop.is_x11() {
+                    Some(LinuxBackendType::X11)
+                } else if event_loop.is_wayland() {
+                    Some(LinuxBackendType::Wayland)
+                } else {
+                    log::warn!("Could not parse whether windowing backend is X11 or Wayland");
+                    None
+                };
+            }
+
             let (main_window, main_window_state) = match create_window(
                 MAIN_WINDOW,
                 self.user_app.main_window_config(),
@@ -322,16 +431,17 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                 }
             };
 
-            let find_millihertz =
-                if let TimerInterval::PercentageOfFrameRate(_) = self.config.tick_timer_interval {
-                    true
-                } else if let TimerInterval::PercentageOfFrameRate(_) =
-                    self.config.cursor_debounce_interval
-                {
-                    true
-                } else {
-                    false
-                };
+            let find_millihertz = if let TimerInterval::PercentageOfFrameRate(_) =
+                self.context.config.tick_timer_interval
+            {
+                true
+            } else if let TimerInterval::PercentageOfFrameRate(_) =
+                self.context.config.pointer_debounce_interval
+            {
+                true
+            } else {
+                false
+            };
             let millihertz = if find_millihertz {
                 // Attempt to get the refresh rate of the current monitor. If that's
                 // not possible, try other methods.
@@ -362,13 +472,13 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                 60_000
             };
 
-            self.context.tick_interval = match self.config.tick_timer_interval {
+            self.tick_interval = match self.context.config.tick_timer_interval {
                 TimerInterval::Fixed(interval) => interval,
                 TimerInterval::PercentageOfFrameRate(percentage) => {
                     Duration::from_secs_f64(percentage * 1_000.0 / millihertz as f64)
                 }
             };
-            self.context.cursor_debounce_interval = match self.config.cursor_debounce_interval {
+            self.pointer_debounce_interval = match self.context.config.pointer_debounce_interval {
                 TimerInterval::Fixed(interval) => interval,
                 TimerInterval::PercentageOfFrameRate(percentage) => {
                     Duration::from_secs_f64(percentage * 1_000.0 / millihertz as f64)
@@ -540,11 +650,11 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                     .queued_pointer_position = Some(pos);
 
                 let now = Instant::now();
-                if now - self.prev_cursor_debounce_instant < self.context.cursor_debounce_interval {
+                if now - self.prev_cursor_debounce_instant < self.pointer_debounce_interval {
                     process_updates = false;
 
                     // Make sure that the latest cursor move event is always sent.
-                    let mut resume_instant = now + self.context.cursor_debounce_interval;
+                    let mut resume_instant = now + self.pointer_debounce_interval;
                     if resume_instant == self.requested_tick_resume {
                         // Make sure we don't clash with the tick timer.
                         resume_instant += Duration::from_micros(1);
@@ -671,16 +781,49 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
         }
     }
 
+    fn device_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _device_id: winit::event::DeviceId,
+        event: winit::event::DeviceEvent,
+    ) {
+        if let winit::event::DeviceEvent::MouseMotion { delta } = event {
+            for window in self.context.window_map.values_mut() {
+                if window.pointer_lock_state().is_locked() {
+                    if let Some(prev_delta) = &mut window.queued_pointer_delta {
+                        prev_delta.0 += delta.0;
+                        prev_delta.1 += delta.1;
+                    } else {
+                        window.queued_pointer_delta = Some(delta);
+                    }
+
+                    let now = Instant::now();
+                    if now - self.prev_cursor_debounce_instant < self.pointer_debounce_interval {
+                        // Make sure that the latest cursor move event is always sent.
+                        let mut resume_instant = now + self.pointer_debounce_interval;
+                        if resume_instant == self.requested_tick_resume {
+                            // Make sure we don't clash with the tick timer.
+                            resume_instant += Duration::from_micros(1);
+                        }
+                        self.requested_cursor_debounce_resume = Some(resume_instant);
+
+                        event_loop.set_control_flow(ControlFlow::WaitUntil(resume_instant));
+                    }
+                }
+            }
+        }
+    }
+
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         if !self.tick_wait_cancelled {
             let now = Instant::now();
 
-            let mut next_instant = if self.prev_tick_instant + self.context.tick_interval > now {
-                self.prev_tick_instant + self.context.tick_interval
+            let mut next_instant = if self.prev_tick_instant + self.tick_interval > now {
+                self.prev_tick_instant + self.tick_interval
             } else {
                 self.on_tick(event_loop);
 
-                now + self.context.tick_interval
+                now + self.tick_interval
             };
 
             if let Some(pointer_resume_instant) = self.requested_cursor_debounce_resume {
@@ -699,6 +842,14 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
     fn suspended(&mut self, _event_loop: &ActiveEventLoop) {}
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {}
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum OpenWindowError {
+    #[error("{0}")]
+    OsError(#[from] winit::error::OsError),
+    #[error("{0}")]
+    SurfaceError(#[from] rootvg::surface::NewSurfaceError),
 }
 
 pub fn run_blocking<A: Application>(
@@ -782,10 +933,104 @@ fn create_window<A: Clone + 'static>(
     Ok((window, window_state))
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum OpenWindowError {
-    #[error("{0}")]
-    OsError(#[from] winit::error::OsError),
-    #[error("{0}")]
-    SurfaceError(#[from] rootvg::surface::NewSurfaceError),
+fn try_lock_pointer(
+    window: &WinitWindow,
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+        target_os = "openbsd",
+        target_os = "netbsd",
+    ))]
+    linux_backend_type: Option<LinuxBackendType>,
+) -> PointerLockState {
+    #[allow(unused_mut, unused_assignments)]
+    let mut try_os_lock = false;
+
+    #[cfg(target_family = "wasm")]
+    {
+        try_os_lock = true;
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    {
+        #[cfg(any(
+            target_os = "linux",
+            target_os = "freebsd",
+            target_os = "dragonfly",
+            target_os = "openbsd",
+            target_os = "netbsd",
+        ))]
+        {
+            match linux_backend_type {
+                Some(LinuxBackendType::Wayland) => try_os_lock = true,
+                _ => {}
+            };
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            try_os_lock = true;
+        }
+    }
+
+    let state = if try_os_lock {
+        match window.set_cursor_grab(CursorGrabMode::Locked) {
+            Ok(_) => PointerLockState::LockedUsingOS,
+            Err(e) => {
+                log::debug!("Could not lock pointer: {}", e);
+                PointerLockState::NotLocked
+            }
+        }
+    } else {
+        PointerLockState::NotLocked
+    };
+
+    if state.is_locked() {
+        window.set_cursor_visible(false);
+        return state;
+    }
+
+    // If the backend supports it, lock by manually moving the pointer.
+
+    #[cfg(not(target_family = "wasm"))]
+    {
+        #[cfg(any(
+            target_os = "linux",
+            target_os = "freebsd",
+            target_os = "dragonfly",
+            target_os = "openbsd",
+            target_os = "netbsd",
+        ))]
+        {
+            if let Some(LinuxBackendType::X11) = linux_backend_type {
+                window.set_cursor_visible(false);
+                return PointerLockState::ManualLock;
+            }
+        }
+
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
+        {
+            window.set_cursor_visible(false);
+            return PointerLockState::ManualLock;
+        }
+    }
+
+    #[allow(unreachable_code)]
+    PointerLockState::NotLocked
+}
+
+fn unlock_pointer(window: &WinitWindow, prev_state: PointerLockState) {
+    match prev_state {
+        PointerLockState::LockedUsingOS => {
+            if let Err(e) = window.set_cursor_grab(CursorGrabMode::None) {
+                log::error!("Error while unlocking pointer: {}", e);
+            }
+            window.set_cursor_visible(true);
+        }
+        PointerLockState::ManualLock { .. } => {
+            window.set_cursor_visible(true);
+        }
+        _ => {}
+    }
 }

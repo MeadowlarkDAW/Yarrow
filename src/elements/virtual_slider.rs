@@ -508,7 +508,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
         } = &mut *shared_state;
 
         let send_param_update =
-            |param_update: ParamUpdate,
+            |param_update: InnerParamUpdate,
              cx: &mut ElementContext<'_, A>,
              renderer: &mut R,
              style: &Rc<R::Style>,
@@ -516,7 +516,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
              state: VirtualSliderState,
              on_gesture: &mut Option<Box<dyn FnMut(ParamUpdate) -> A>>| {
                 if let Some(f) = on_gesture.as_mut() {
-                    cx.send_action((f)(param_update)).unwrap();
+                    cx.send_action((f)(param_update.inner)).unwrap();
                 }
 
                 if renderer.does_paint() {
@@ -526,6 +526,10 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                 if let Some(prev_state) = prev_state {
                     let res = renderer.on_state_changed(prev_state, state, style);
                     cx.set_animating(res.animating);
+                }
+
+                if let Some(lock) = param_update.pointer_lock_request {
+                    cx.request_pointer_lock(lock);
                 }
             };
 
@@ -691,9 +695,22 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                     cx.start_hover_timeout();
                 }
 
+                let delta = if let Some(delta) = delta {
+                    if cx.is_pointer_locked() {
+                        Some(delta)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
                 if let Some(param_update) = inner.handle_pointer_moved(position, delta, modifiers) {
                     send_param_update(
-                        param_update,
+                        InnerParamUpdate {
+                            inner: param_update,
+                            pointer_lock_request: None,
+                        },
                         cx,
                         &mut self.renderer,
                         style,
@@ -916,7 +933,10 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                     self.state = VirtualSliderState::Gesturing;
 
                     send_param_update(
-                        param_update,
+                        InnerParamUpdate {
+                            inner: param_update,
+                            pointer_lock_request: None,
+                        },
                         cx,
                         &mut self.renderer,
                         style,
@@ -931,7 +951,10 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
 
                 if let Some(param_update) = inner.handle_scroll_wheel(delta_type, modifiers) {
                     send_param_update(
-                        param_update,
+                        InnerParamUpdate {
+                            inner: param_update,
+                            pointer_lock_request: None,
+                        },
                         cx,
                         &mut self.renderer,
                         style,

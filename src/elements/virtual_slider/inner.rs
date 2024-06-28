@@ -54,6 +54,12 @@ impl ParamInfo {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+pub struct InnerParamUpdate {
+    pub inner: ParamUpdate,
+    pub pointer_lock_request: Option<bool>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ParamUpdate {
     pub param_info: ParamInfo,
     /// The current state of gesturing (dragging)
@@ -93,6 +99,7 @@ pub struct VirtualSliderInner {
     continuous_gesture_normal: f64,
     stepped_value: Option<SteppedValue>,
     current_gesture: Option<BeginGestureType>,
+    pointer_lock_requested: bool,
 }
 
 impl VirtualSliderInner {
@@ -135,10 +142,11 @@ impl VirtualSliderInner {
             stepped_value,
             continuous_gesture_normal: normal_value,
             current_gesture: None,
+            pointer_lock_requested: false,
         }
     }
 
-    pub fn begin_drag_gesture(&mut self, pointer_start_pos: Point) -> Option<ParamUpdate> {
+    pub fn begin_drag_gesture(&mut self, pointer_start_pos: Point) -> Option<InnerParamUpdate> {
         if self.current_gesture.is_some() {
             None
         } else {
@@ -146,10 +154,15 @@ impl VirtualSliderInner {
                 pointer_start_pos,
                 start_normal: self.normal_value,
             });
+            let pointer_lock_request = !self.config.disable_pointer_locking;
+            self.pointer_lock_requested = pointer_lock_request;
 
-            Some(ParamUpdate {
-                param_info: self.param_info(),
-                gesture_state: Some(GestureState::GestureStarted),
+            Some(InnerParamUpdate {
+                inner: ParamUpdate {
+                    param_info: self.param_info(),
+                    gesture_state: Some(GestureState::GestureStarted),
+                },
+                pointer_lock_request: Some(pointer_lock_request),
             })
         }
     }
@@ -320,29 +333,52 @@ impl VirtualSliderInner {
         }
     }
 
-    pub fn finish_gesture(&mut self) -> Option<ParamUpdate> {
-        self.current_gesture.take().map(|_| ParamUpdate {
-            param_info: self.param_info(),
-            gesture_state: Some(GestureState::GestureFinished),
+    pub fn finish_gesture(&mut self) -> Option<InnerParamUpdate> {
+        let pointer_lock_request = if self.pointer_lock_requested {
+            self.pointer_lock_requested = false;
+            Some(false)
+        } else {
+            None
+        };
+
+        self.current_gesture.take().map(|_| InnerParamUpdate {
+            inner: ParamUpdate {
+                param_info: self.param_info(),
+                gesture_state: Some(GestureState::GestureFinished),
+            },
+            pointer_lock_request,
         })
     }
 
-    pub fn reset_to_default(&mut self) -> Option<ParamUpdate> {
+    pub fn reset_to_default(&mut self) -> Option<InnerParamUpdate> {
         self.continuous_gesture_normal = self.default_normal;
 
         if let Some(_) = self.current_gesture.take() {
             self.normal_value = self.default_normal;
 
-            Some(ParamUpdate {
-                param_info: self.param_info(),
-                gesture_state: Some(GestureState::GestureFinished),
+            let pointer_lock_request = if self.pointer_lock_requested {
+                self.pointer_lock_requested = false;
+                Some(false)
+            } else {
+                None
+            };
+
+            Some(InnerParamUpdate {
+                inner: ParamUpdate {
+                    param_info: self.param_info(),
+                    gesture_state: Some(GestureState::GestureFinished),
+                },
+                pointer_lock_request,
             })
         } else if self.normal_value != self.default_normal {
             self.normal_value = self.default_normal;
 
-            Some(ParamUpdate {
-                param_info: self.param_info(),
-                gesture_state: None,
+            Some(InnerParamUpdate {
+                inner: ParamUpdate {
+                    param_info: self.param_info(),
+                    gesture_state: None,
+                },
+                pointer_lock_request: None,
             })
         } else {
             None
@@ -369,14 +405,14 @@ impl VirtualSliderInner {
         }
     }
 
-    pub fn set_value(&mut self, new_val: ParamValue) -> Option<ParamUpdate> {
+    pub fn set_value(&mut self, new_val: ParamValue) -> Option<InnerParamUpdate> {
         match new_val {
             ParamValue::Normal(n) => self.set_normal_value(n),
             ParamValue::Stepped(s) => self.set_stepped_value(s),
         }
     }
 
-    pub fn set_stepped_value(&mut self, mut new_val: u32) -> Option<ParamUpdate> {
+    pub fn set_stepped_value(&mut self, mut new_val: u32) -> Option<InnerParamUpdate> {
         let Some(stepped_value) = &mut self.stepped_value else {
             return None;
         };
@@ -399,7 +435,7 @@ impl VirtualSliderInner {
     ///
     /// If the slider is currently gesturing, then the gesture will
     /// be cancelled.
-    pub fn set_normal_value(&mut self, new_normal: f64) -> Option<ParamUpdate> {
+    pub fn set_normal_value(&mut self, new_normal: f64) -> Option<InnerParamUpdate> {
         let new_normal = if let Some(stepped_value) = &mut self.stepped_value {
             stepped_value.value = param_normal_to_quantized(new_normal, stepped_value.num_steps);
 
@@ -419,10 +455,20 @@ impl VirtualSliderInner {
             None
         };
 
+        let pointer_lock_request = if self.pointer_lock_requested {
+            self.pointer_lock_requested = false;
+            Some(false)
+        } else {
+            None
+        };
+
         if state_changed {
-            Some(ParamUpdate {
-                param_info: self.param_info(),
-                gesture_state,
+            Some(InnerParamUpdate {
+                inner: ParamUpdate {
+                    param_info: self.param_info(),
+                    gesture_state,
+                },
+                pointer_lock_request,
             })
         } else {
             None

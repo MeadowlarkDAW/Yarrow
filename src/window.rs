@@ -44,6 +44,19 @@ impl Default for PointerBtnState {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PointerLockState {
+    NotLocked,
+    LockedUsingOS,
+    ManualLock,
+}
+
+impl PointerLockState {
+    pub fn is_locked(&self) -> bool {
+        *self != PointerLockState::NotLocked
+    }
+}
+
 pub(crate) struct WindowState<A: Clone + 'static> {
     view: View<A>,
     renderer: rootvg::Canvas,
@@ -55,12 +68,14 @@ pub(crate) struct WindowState<A: Clone + 'static> {
     system_scale_factor: ScaleFactor,
     scale_factor_config: ScaleFactorConfig,
     pub queued_pointer_position: Option<PhysicalPoint>,
+    pub queued_pointer_delta: Option<(f64, f64)>,
     #[cfg(feature = "winit")]
     pub winit_window: Arc<winit::window::Window>,
     clipboard: Clipboard,
 
-    prev_pointer_pos: Option<Point>,
+    pub prev_pointer_pos: Option<Point>,
     pointer_btn_states: [PointerBtnState; 5],
+    pointer_lock_state: PointerLockState,
 
     modifiers: Modifiers,
     current_cursor_icon: CursorIcon,
@@ -108,11 +123,13 @@ impl<A: Clone + 'static> WindowState<A> {
             system_scale_factor,
             scale_factor_config,
             queued_pointer_position: None,
+            queued_pointer_delta: None,
             winit_window: Arc::clone(winit_window),
             prev_pointer_pos: None,
             pointer_btn_states: [PointerBtnState::default(); 5],
             modifiers: Modifiers::empty(),
             current_cursor_icon: CursorIcon::Default,
+            pointer_lock_state: PointerLockState::NotLocked,
             clipboard,
         })
     }
@@ -171,6 +188,15 @@ impl<A: Clone + 'static> WindowState<A> {
             .resize(self.physical_size, scale_factor);
 
         Some(requested_physical_size)
+    }
+
+    pub fn set_pointer_locked(&mut self, state: PointerLockState) {
+        self.pointer_lock_state = state;
+        self.view.on_pointer_locked(state.is_locked());
+    }
+
+    pub fn pointer_lock_state(&self) -> PointerLockState {
+        self.pointer_lock_state
     }
 
     pub fn on_animation_tick(&mut self, dt: f64, font_system: &mut FontSystem) {
@@ -260,7 +286,12 @@ impl<A: Clone + 'static> WindowState<A> {
 
     pub fn handle_pointer_moved(&mut self, new_pos: PhysicalPoint, font_system: &mut FontSystem) {
         let new_pos = crate::math::to_logical_point_from_recip(new_pos, self.scale_factor_recip);
-        let delta = if let Some(prev_pos) = self.prev_pointer_pos {
+
+        let delta = if self.pointer_lock_state == PointerLockState::LockedUsingOS {
+            // The delta will already be sent in `handle_locked_pointer_delta()`, so
+            // avoid sending a duplicate.
+            None
+        } else if let Some(prev_pos) = self.prev_pointer_pos {
             Some(new_pos - prev_pos.to_vector())
         } else {
             None
@@ -271,6 +302,21 @@ impl<A: Clone + 'static> WindowState<A> {
             &CanvasEvent::Pointer(PointerEvent::Moved {
                 position: new_pos,
                 delta,
+                is_locked: false,
+                pointer_type: PointerType::default(),
+                modifiers: self.modifiers,
+                just_entered: false,
+            }),
+            font_system,
+            &mut self.clipboard,
+        );
+    }
+
+    pub fn handle_locked_pointer_delta(&mut self, delta: Point, font_system: &mut FontSystem) {
+        self.view.handle_event(
+            &CanvasEvent::Pointer(PointerEvent::Moved {
+                position: self.prev_pointer_pos.unwrap_or_default(),
+                delta: Some(delta),
                 is_locked: false,
                 pointer_type: PointerType::default(),
                 modifiers: self.modifiers,
@@ -402,12 +448,16 @@ impl<A: Clone + 'static> WindowState<A> {
     }
 
     pub fn new_cursor_icon(&mut self) -> Option<CursorIcon> {
-        if self.current_cursor_icon != self.view.cursor_icon {
-            self.current_cursor_icon = self.view.cursor_icon;
+        if self.current_cursor_icon != self.view.cursor_icon() {
+            self.current_cursor_icon = self.view.cursor_icon();
             Some(self.current_cursor_icon)
         } else {
             None
         }
+    }
+
+    pub fn new_pointer_lock_request(&mut self) -> Option<bool> {
+        self.view.pointer_lock_request()
     }
 }
 
@@ -498,4 +548,10 @@ impl<'a, A: Clone + 'static> WindowContext<'a, A> {
     pub fn scale_factor_config(&self) -> ScaleFactorConfig {
         self.scale_factor_config
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinuxBackendType {
+    Wayland,
+    X11,
 }

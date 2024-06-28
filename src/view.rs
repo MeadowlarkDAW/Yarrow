@@ -85,23 +85,32 @@ impl Default for ViewConfig {
     }
 }
 
+struct ViewContext<A: Clone + 'static> {
+    current_focus_info: Option<FocusInfo>,
+    prev_element_with_exclusive_focus: Option<ElementID>,
+    mod_queue_sender: stmpsc_queue::Sender<ElementModification>,
+    action_sender: ActionSender<A>,
+    scale_factor: ScaleFactor,
+    logical_size: Size,
+    cursor_icon: CursorIcon,
+    pointer_lock_request: Option<bool>,
+    pointer_locked: bool,
+    window_id: WindowID,
+}
+
 pub struct View<A: Clone + 'static> {
     pub clear_color: PackedSrgb,
-    pub action_sender: ActionSender<A>,
-    pub cursor_icon: CursorIcon,
+
+    context: ViewContext<A>,
 
     element_arena: Arena<ElementEntry<A>>,
-
     scissor_rects: Vec<ScissorRect>,
 
-    mod_queue_sender: stmpsc_queue::Sender<ElementModification>,
     mod_queue_receiver: stmpsc_queue::Receiver<ElementModification>,
 
     hovered_elements: FxHashMap<ElementID, Option<Instant>>,
     elements_with_scroll_wheel_timeout: FxHashMap<ElementID, Option<Instant>>,
     animating_elements: Vec<ElementID>,
-    current_focus_info: Option<FocusInfo>,
-    prev_element_with_exclusive_focus: Option<ElementID>,
 
     elements_listening_to_pointer_event: Vec<CachedElementRectForPointerEvent>,
     elements_listening_to_pointer_event_need_sorted: bool,
@@ -110,11 +119,8 @@ pub struct View<A: Clone + 'static> {
     element_with_active_tooltip: Option<ActiveTooltipInfo>,
 
     physical_size: PhysicalSizeI32,
-    logical_size: Size,
-    scale_factor: ScaleFactor,
     hover_timeout_duration: Duration,
     scroll_wheel_timeout_duration: Duration,
-    window_id: WindowID,
     prev_pointer_pos: Option<Point>,
 
     show_tooltip_action: Option<Box<dyn FnMut(TooltipInfo) -> A>>,
@@ -164,20 +170,28 @@ impl<A: Clone + 'static> View<A> {
 
         Self {
             clear_color,
-            action_sender,
+
+            context: ViewContext {
+                current_focus_info: None,
+                prev_element_with_exclusive_focus: None,
+                mod_queue_sender,
+                action_sender,
+                scale_factor,
+                logical_size,
+                cursor_icon: CursorIcon::Default,
+                pointer_lock_request: None,
+                pointer_locked: false,
+                window_id,
+            },
 
             element_arena: Arena::with_capacity(capacity),
-
             scissor_rects,
 
-            mod_queue_sender,
             mod_queue_receiver,
 
             hovered_elements: FxHashMap::default(),
             elements_with_scroll_wheel_timeout: FxHashMap::default(),
             animating_elements: Vec::with_capacity(capacity),
-            current_focus_info: None,
-            prev_element_with_exclusive_focus: None,
 
             elements_listening_to_pointer_event: Vec::new(),
             elements_listening_to_pointer_event_need_sorted: false,
@@ -186,11 +200,8 @@ impl<A: Clone + 'static> View<A> {
             element_with_active_tooltip: None,
 
             physical_size,
-            logical_size,
-            scale_factor,
             hover_timeout_duration,
             scroll_wheel_timeout_duration,
-            window_id,
             prev_pointer_pos: None,
 
             view_needs_repaint: true,
@@ -199,14 +210,12 @@ impl<A: Clone + 'static> View<A> {
             show_tooltip_action: None,
             hide_tooltip_action: None,
 
-            cursor_icon: CursorIcon::Default,
-
             render_caches: FxHashMap::default(),
         }
     }
 
     pub fn size(&self) -> Size {
-        self.logical_size
+        self.context.logical_size
     }
 
     pub fn set_tooltip_actions<S, H>(&mut self, on_show_tooltip: S, on_hide_tooltip: H)
@@ -261,7 +270,11 @@ impl<A: Clone + 'static> View<A> {
             .get_mut(usize::from(scissor_rect_id))
             .ok_or(())?;
 
-        scissor_rect.update(new_rect, new_scroll_offset, &mut self.mod_queue_sender);
+        scissor_rect.update(
+            new_rect,
+            new_scroll_offset,
+            &mut self.context.mod_queue_sender,
+        );
 
         Ok(())
     }
@@ -364,12 +377,7 @@ impl<A: Clone + 'static> View<A> {
                 ElementEvent::Init,
                 element_entry,
                 element_id,
-                &self.current_focus_info,
-                &mut self.mod_queue_sender,
-                &mut self.action_sender,
-                self.scale_factor,
-                self.logical_size,
-                &mut self.cursor_icon,
+                &mut self.context,
                 font_system,
                 clipboard,
             );
@@ -385,7 +393,7 @@ impl<A: Clone + 'static> View<A> {
 
         self::element::new_element_handle(
             element_id,
-            self.mod_queue_sender.clone(),
+            self.context.mod_queue_sender.clone(),
             bounding_rect,
             z_index,
             manually_hidden,
@@ -407,21 +415,26 @@ impl<A: Clone + 'static> View<A> {
         }
     }
 
+    pub(crate) fn on_pointer_locked(&mut self, locked: bool) {
+        self.context.pointer_locked = locked;
+        self.context.pointer_lock_request = None;
+    }
+
     pub(crate) fn resize(&mut self, physical_size: PhysicalSizeI32, scale_factor: ScaleFactor) {
         self.physical_size = physical_size;
-        self.scale_factor = scale_factor;
-        self.logical_size = crate::math::to_logical_size_i32(physical_size, scale_factor);
+        self.context.scale_factor = scale_factor;
+        self.context.logical_size = crate::math::to_logical_size_i32(physical_size, scale_factor);
 
         self.scissor_rects[0].update(
             Some(RectI32::new(
                 PointI32::default(),
                 SizeI32::new(
-                    self.logical_size.width.round() as i32,
-                    self.logical_size.height.round() as i32,
+                    self.context.logical_size.width.round() as i32,
+                    self.context.logical_size.height.round() as i32,
                 ),
             )),
             None,
-            &mut self.mod_queue_sender,
+            &mut self.context.mod_queue_sender,
         );
 
         self.view_needs_repaint = true;
@@ -507,12 +520,7 @@ impl<A: Clone + 'static> View<A> {
                             ElementEvent::Shown,
                             element_entry,
                             *element_id,
-                            &self.current_focus_info,
-                            &mut self.mod_queue_sender,
-                            &mut self.action_sender,
-                            self.scale_factor,
-                            self.logical_size,
-                            &mut self.cursor_icon,
+                            &mut self.context,
                             font_system,
                             clipboard,
                         );
@@ -557,12 +565,7 @@ impl<A: Clone + 'static> View<A> {
                         ElementEvent::Hidden,
                         element_entry,
                         *element_id,
-                        &self.current_focus_info,
-                        &mut self.mod_queue_sender,
-                        &mut self.action_sender,
-                        self.scale_factor,
-                        self.logical_size,
-                        &mut self.cursor_icon,
+                        &mut self.context,
                         font_system,
                         clipboard,
                     );
@@ -572,7 +575,7 @@ impl<A: Clone + 'static> View<A> {
 
         if let Some(_) = self.element_with_active_tooltip.take() {
             if let Some(action) = self.hide_tooltip_action.as_mut() {
-                self.action_sender.send((action)()).unwrap();
+                self.context.action_sender.send((action)()).unwrap();
             }
         }
     }
@@ -584,12 +587,7 @@ impl<A: Clone + 'static> View<A> {
                     ElementEvent::Pointer(PointerEvent::PointerLeft),
                     element_entry,
                     *element_id,
-                    &self.current_focus_info,
-                    &mut self.mod_queue_sender,
-                    &mut self.action_sender,
-                    self.scale_factor,
-                    self.logical_size,
-                    &mut self.cursor_icon,
+                    &mut self.context,
                     font_system,
                     clipboard,
                 );
@@ -603,12 +601,7 @@ impl<A: Clone + 'static> View<A> {
                     ElementEvent::Pointer(PointerEvent::ScrollWheelTimeout),
                     element_entry,
                     *element_id,
-                    &self.current_focus_info,
-                    &mut self.mod_queue_sender,
-                    &mut self.action_sender,
-                    self.scale_factor,
-                    self.logical_size,
-                    &mut self.cursor_icon,
+                    &mut self.context,
                     font_system,
                     clipboard,
                 );
@@ -622,12 +615,7 @@ impl<A: Clone + 'static> View<A> {
                     ElementEvent::ClickedOff,
                     element_entry,
                     *element_id,
-                    &self.current_focus_info,
-                    &mut self.mod_queue_sender,
-                    &mut self.action_sender,
-                    self.scale_factor,
-                    self.logical_size,
-                    &mut self.cursor_icon,
+                    &mut self.context,
                     font_system,
                     clipboard,
                 );
@@ -637,7 +625,7 @@ impl<A: Clone + 'static> View<A> {
 
         if let Some(_) = self.element_with_active_tooltip.take() {
             if let Some(action) = self.hide_tooltip_action.as_mut() {
-                self.action_sender.send((action)()).unwrap();
+                self.context.action_sender.send((action)()).unwrap();
             }
         }
 
@@ -660,12 +648,7 @@ impl<A: Clone + 'static> View<A> {
                 ElementEvent::Animation { delta_seconds },
                 element_entry,
                 *element_id,
-                &self.current_focus_info,
-                &mut self.mod_queue_sender,
-                &mut self.action_sender,
-                self.scale_factor,
-                self.logical_size,
-                &mut self.cursor_icon,
+                &mut self.context,
                 font_system,
                 clipboard,
             );
@@ -684,12 +667,7 @@ impl<A: Clone + 'static> View<A> {
                                     }),
                                     element_entry,
                                     *element_id,
-                                    &self.current_focus_info,
-                                    &mut self.mod_queue_sender,
-                                    &mut self.action_sender,
-                                    self.scale_factor,
-                                    self.logical_size,
-                                    &mut self.cursor_icon,
+                                    &mut self.context,
                                     font_system,
                                     clipboard,
                                 );
@@ -710,12 +688,7 @@ impl<A: Clone + 'static> View<A> {
                             ElementEvent::Pointer(PointerEvent::ScrollWheelTimeout),
                             element_entry,
                             *element_id,
-                            &self.current_focus_info,
-                            &mut self.mod_queue_sender,
-                            &mut self.action_sender,
-                            self.scale_factor,
-                            self.logical_size,
-                            &mut self.cursor_icon,
+                            &mut self.context,
                             font_system,
                             clipboard,
                         );
@@ -744,7 +717,7 @@ impl<A: Clone + 'static> View<A> {
             if hide_tooltip {
                 self.element_with_active_tooltip = None;
                 if let Some(action) = self.hide_tooltip_action.as_mut() {
-                    self.action_sender.send((action)()).unwrap();
+                    self.context.action_sender.send((action)()).unwrap();
                 }
             }
         }
@@ -760,7 +733,7 @@ impl<A: Clone + 'static> View<A> {
 
         match event {
             PointerEvent::Moved { .. } => {
-                self.cursor_icon = CursorIcon::Default;
+                self.context.cursor_icon = CursorIcon::Default;
 
                 if let Some(info) = self.element_with_active_tooltip {
                     if info.auto_hide {
@@ -775,7 +748,7 @@ impl<A: Clone + 'static> View<A> {
                         if hide_tooltip {
                             self.element_with_active_tooltip = None;
                             if let Some(action) = self.hide_tooltip_action.as_mut() {
-                                self.action_sender.send((action)()).unwrap();
+                                self.context.action_sender.send((action)()).unwrap();
                             }
                         }
                     }
@@ -790,12 +763,7 @@ impl<A: Clone + 'static> View<A> {
                             ElementEvent::Pointer(PointerEvent::PointerLeft),
                             element_entry,
                             *element_id,
-                            &self.current_focus_info,
-                            &mut self.mod_queue_sender,
-                            &mut self.action_sender,
-                            self.scale_factor,
-                            self.logical_size,
-                            &mut self.cursor_icon,
+                            &mut self.context,
                             font_system,
                             clipboard,
                         );
@@ -805,7 +773,7 @@ impl<A: Clone + 'static> View<A> {
 
                 if let Some(_) = self.element_with_active_tooltip.take() {
                     if let Some(action) = self.hide_tooltip_action.as_mut() {
-                        self.action_sender.send((action)()).unwrap();
+                        self.context.action_sender.send((action)()).unwrap();
                     }
                 }
 
@@ -832,12 +800,7 @@ impl<A: Clone + 'static> View<A> {
                         ElementEvent::Pointer(PointerEvent::PointerLeft),
                         element_entry,
                         *element_id,
-                        &self.current_focus_info,
-                        &mut self.mod_queue_sender,
-                        &mut self.action_sender,
-                        self.scale_factor,
-                        self.logical_size,
-                        &mut self.cursor_icon,
+                        &mut self.context,
                         font_system,
                         clipboard,
                     );
@@ -847,12 +810,7 @@ impl<A: Clone + 'static> View<A> {
                             ElementEvent::Pointer(PointerEvent::HoverTimeout { position: pos }),
                             element_entry,
                             *element_id,
-                            &self.current_focus_info,
-                            &mut self.mod_queue_sender,
-                            &mut self.action_sender,
-                            self.scale_factor,
-                            self.logical_size,
-                            &mut self.cursor_icon,
+                            &mut self.context,
                             font_system,
                             clipboard,
                         );
@@ -886,12 +844,7 @@ impl<A: Clone + 'static> View<A> {
                             ElementEvent::ClickedOff,
                             element_entry,
                             *element_id,
-                            &self.current_focus_info,
-                            &mut self.mod_queue_sender,
-                            &mut self.action_sender,
-                            self.scale_factor,
-                            self.logical_size,
-                            &mut self.cursor_icon,
+                            &mut self.context,
                             font_system,
                             clipboard,
                         );
@@ -906,7 +859,8 @@ impl<A: Clone + 'static> View<A> {
         let mut send_pointer_event = |element_entry: &mut ElementEntry<A>,
                                       element_id: ElementID,
                                       event: PointerEvent,
-                                      did_just_enter: bool|
+                                      did_just_enter: bool,
+                                      view_cx: &mut ViewContext<A>|
          -> EventCaptureStatus {
             let mut event = event.clone();
 
@@ -928,19 +882,14 @@ impl<A: Clone + 'static> View<A> {
                 ElementEvent::Pointer(event),
                 element_entry,
                 element_id,
-                &self.current_focus_info,
-                &mut self.mod_queue_sender,
-                &mut self.action_sender,
-                self.scale_factor,
-                self.logical_size,
-                &mut self.cursor_icon,
+                view_cx,
                 font_system,
                 clipboard,
             )
         };
 
         // Focused elements get first priority.
-        if let Some(focused_data) = &self.current_focus_info {
+        if let Some(focused_data) = &self.context.current_focus_info {
             if focused_data.listens_to_pointer_inside_bounds
                 || focused_data.listens_to_pointer_outside_bounds
             {
@@ -974,6 +923,7 @@ impl<A: Clone + 'static> View<A> {
                             focused_data.element_id,
                             event.clone(),
                             did_just_enter,
+                            &mut self.context,
                         );
 
                         if let EventCaptureStatus::Captured = capture_status {
@@ -1021,6 +971,7 @@ impl<A: Clone + 'static> View<A> {
                     cached_rect.element_id,
                     event.clone(),
                     did_just_enter,
+                    &mut self.context,
                 );
 
                 if let EventCaptureStatus::Captured = capture_status {
@@ -1038,7 +989,7 @@ impl<A: Clone + 'static> View<A> {
         font_system: &mut FontSystem,
         clipboard: &mut Clipboard,
     ) -> EventCaptureStatus {
-        if let Some(focused_data) = &self.current_focus_info {
+        if let Some(focused_data) = &self.context.current_focus_info {
             if focused_data.listens_to_keys {
                 let element_entry = self
                     .element_arena
@@ -1049,12 +1000,7 @@ impl<A: Clone + 'static> View<A> {
                     ElementEvent::Keyboard(event.clone()),
                     element_entry,
                     focused_data.element_id,
-                    &self.current_focus_info,
-                    &mut self.mod_queue_sender,
-                    &mut self.action_sender,
-                    self.scale_factor,
-                    self.logical_size,
-                    &mut self.cursor_icon,
+                    &mut self.context,
                     font_system,
                     clipboard,
                 );
@@ -1074,7 +1020,7 @@ impl<A: Clone + 'static> View<A> {
         font_system: &mut FontSystem,
         clipboard: &mut Clipboard,
     ) -> EventCaptureStatus {
-        if let Some(focused_data) = &self.current_focus_info {
+        if let Some(focused_data) = &self.context.current_focus_info {
             if focused_data.listens_to_text_composition {
                 let element_entry = self
                     .element_arena
@@ -1085,12 +1031,7 @@ impl<A: Clone + 'static> View<A> {
                     ElementEvent::TextComposition(event.clone()),
                     element_entry,
                     focused_data.element_id,
-                    &self.current_focus_info,
-                    &mut self.mod_queue_sender,
-                    &mut self.action_sender,
-                    self.scale_factor,
-                    self.logical_size,
-                    &mut self.cursor_icon,
+                    &mut self.context,
                     font_system,
                     clipboard,
                 );
@@ -1270,10 +1211,10 @@ impl<A: Clone + 'static> View<A> {
                 message,
                 element_bounds: element_entry.stack_data.rect,
                 align,
-                window_id: self.window_id,
+                window_id: self.context.window_id,
             };
 
-            self.action_sender.send((action)(info)).unwrap();
+            self.context.action_sender.send((action)(info)).unwrap();
         }
     }
 
@@ -1292,12 +1233,7 @@ impl<A: Clone + 'static> View<A> {
             ElementEvent::CustomStateChanged,
             element_entry,
             element_id,
-            &self.current_focus_info,
-            &mut self.mod_queue_sender,
-            &mut self.action_sender,
-            self.scale_factor,
-            self.logical_size,
-            &mut self.cursor_icon,
+            &mut self.context,
             font_system,
             clipboard,
         );
@@ -1356,13 +1292,7 @@ impl<A: Clone + 'static> View<A> {
             release_focus_for_element(
                 element_id,
                 element_entry,
-                &mut self.current_focus_info,
-                &mut self.prev_element_with_exclusive_focus,
-                &mut self.mod_queue_sender,
-                &mut self.action_sender,
-                self.scale_factor,
-                self.logical_size,
-                &mut self.cursor_icon,
+                &mut self.context,
                 font_system,
                 clipboard,
             );
@@ -1378,12 +1308,7 @@ impl<A: Clone + 'static> View<A> {
                 ElementEvent::SizeChanged,
                 element_entry,
                 element_id,
-                &self.current_focus_info,
-                &mut self.mod_queue_sender,
-                &mut self.action_sender,
-                self.scale_factor,
-                self.logical_size,
-                &mut self.cursor_icon,
+                &mut self.context,
                 font_system,
                 clipboard,
             );
@@ -1399,12 +1324,7 @@ impl<A: Clone + 'static> View<A> {
                 ElementEvent::PositionChanged,
                 element_entry,
                 element_id,
-                &self.current_focus_info,
-                &mut self.mod_queue_sender,
-                &mut self.action_sender,
-                self.scale_factor,
-                self.logical_size,
-                &mut self.cursor_icon,
+                &mut self.context,
                 font_system,
                 clipboard,
             );
@@ -1426,12 +1346,7 @@ impl<A: Clone + 'static> View<A> {
                 event,
                 element_entry,
                 element_id,
-                &self.current_focus_info,
-                &mut self.mod_queue_sender,
-                &mut self.action_sender,
-                self.scale_factor,
-                self.logical_size,
-                &mut self.cursor_icon,
+                &mut self.context,
                 font_system,
                 clipboard,
             );
@@ -1483,13 +1398,7 @@ impl<A: Clone + 'static> View<A> {
             release_focus_for_element(
                 element_id,
                 element_entry,
-                &mut self.current_focus_info,
-                &mut self.prev_element_with_exclusive_focus,
-                &mut self.mod_queue_sender,
-                &mut self.action_sender,
-                self.scale_factor,
-                self.logical_size,
-                &mut self.cursor_icon,
+                &mut self.context,
                 font_system,
                 clipboard,
             );
@@ -1511,12 +1420,7 @@ impl<A: Clone + 'static> View<A> {
                 event,
                 element_entry,
                 element_id,
-                &self.current_focus_info,
-                &mut self.mod_queue_sender,
-                &mut self.action_sender,
-                self.scale_factor,
-                self.logical_size,
-                &mut self.cursor_icon,
+                &mut self.context,
                 font_system,
                 clipboard,
             );
@@ -1573,12 +1477,7 @@ impl<A: Clone + 'static> View<A> {
                 ElementEvent::ZIndexChanged,
                 element_entry,
                 element_id,
-                &self.current_focus_info,
-                &mut self.mod_queue_sender,
-                &mut self.action_sender,
-                self.scale_factor,
-                self.logical_size,
-                &mut self.cursor_icon,
+                &mut self.context,
                 font_system,
                 clipboard,
             );
@@ -1632,13 +1531,7 @@ impl<A: Clone + 'static> View<A> {
             release_focus_for_element(
                 element_id,
                 element_entry,
-                &mut self.current_focus_info,
-                &mut self.prev_element_with_exclusive_focus,
-                &mut self.mod_queue_sender,
-                &mut self.action_sender,
-                self.scale_factor,
-                self.logical_size,
-                &mut self.cursor_icon,
+                &mut self.context,
                 font_system,
                 clipboard,
             );
@@ -1659,12 +1552,7 @@ impl<A: Clone + 'static> View<A> {
                 event,
                 element_entry,
                 element_id,
-                &self.current_focus_info,
-                &mut self.mod_queue_sender,
-                &mut self.action_sender,
-                self.scale_factor,
-                self.logical_size,
-                &mut self.cursor_icon,
+                &mut self.context,
                 font_system,
                 clipboard,
             );
@@ -1721,7 +1609,7 @@ impl<A: Clone + 'static> View<A> {
             return;
         }
 
-        if let Some(focus_info) = &self.current_focus_info {
+        if let Some(focus_info) = &self.context.current_focus_info {
             if focus_info.element_id == element_id {
                 // The element is already focused.
                 return;
@@ -1734,12 +1622,7 @@ impl<A: Clone + 'static> View<A> {
                     ElementEvent::ClickedOff,
                     element_entry,
                     *id,
-                    &self.current_focus_info,
-                    &mut self.mod_queue_sender,
-                    &mut self.action_sender,
-                    self.scale_factor,
-                    self.logical_size,
-                    &mut self.cursor_icon,
+                    &mut self.context,
                     font_system,
                     clipboard,
                 );
@@ -1747,16 +1630,17 @@ impl<A: Clone + 'static> View<A> {
         }
         self.elements_listening_to_clicked_off.clear();
 
-        let prev_element_with_exclusive_focus = self.prev_element_with_exclusive_focus.take();
+        let prev_element_with_exclusive_focus =
+            self.context.prev_element_with_exclusive_focus.take();
 
         // Release focus from the previously focused element.
-        if let Some(info) = &self.current_focus_info {
+        if let Some(info) = &self.context.current_focus_info {
             self.element_release_focus(info.element_id, font_system, clipboard);
         }
 
         let element_entry = self.element_arena.get_mut(element_id.0).unwrap();
 
-        self.current_focus_info = Some(FocusInfo {
+        self.context.current_focus_info = Some(FocusInfo {
             element_id,
             listens_to_pointer_inside_bounds: element_entry
                 .stack_data
@@ -1776,7 +1660,7 @@ impl<A: Clone + 'static> View<A> {
                 .contains(ElementFlags::LISTENS_TO_KEYS_WHEN_FOCUSED),
         });
 
-        self.prev_element_with_exclusive_focus = if is_temporary {
+        self.context.prev_element_with_exclusive_focus = if is_temporary {
             prev_element_with_exclusive_focus
         } else {
             Some(element_id)
@@ -1791,12 +1675,7 @@ impl<A: Clone + 'static> View<A> {
                 ElementEvent::Focus(true),
                 element_entry,
                 element_id,
-                &self.current_focus_info,
-                &mut self.mod_queue_sender,
-                &mut self.action_sender,
-                self.scale_factor,
-                self.logical_size,
-                &mut self.cursor_icon,
+                &mut self.context,
                 font_system,
                 clipboard,
             );
@@ -1817,13 +1696,7 @@ impl<A: Clone + 'static> View<A> {
         release_focus_for_element(
             element_id,
             element_entry,
-            &mut self.current_focus_info,
-            &mut self.prev_element_with_exclusive_focus,
-            &mut self.mod_queue_sender,
-            &mut self.action_sender,
-            self.scale_factor,
-            self.logical_size,
-            &mut self.cursor_icon,
+            &mut self.context,
             font_system,
             clipboard,
         );
@@ -1835,7 +1708,7 @@ impl<A: Clone + 'static> View<A> {
         font_system: &mut FontSystem,
         clipboard: &mut Clipboard,
     ) {
-        if let Some(focus_info) = &self.current_focus_info {
+        if let Some(focus_info) = &self.context.current_focus_info {
             if focus_info.element_id == element_id {
                 self.element_release_focus(element_id, font_system, clipboard);
             }
@@ -1849,13 +1722,7 @@ impl<A: Clone + 'static> View<A> {
         release_focus_for_element(
             element_id,
             &mut element_entry,
-            &mut self.current_focus_info,
-            &mut self.prev_element_with_exclusive_focus,
-            &mut self.mod_queue_sender,
-            &mut self.action_sender,
-            self.scale_factor,
-            self.logical_size,
-            &mut self.cursor_icon,
+            &mut self.context,
             font_system,
             clipboard,
         );
@@ -1865,7 +1732,9 @@ impl<A: Clone + 'static> View<A> {
             .flags
             .contains(ElementFlags::LISTENS_TO_ON_DROPPED)
         {
-            element_entry.element.on_dropped(&mut self.action_sender);
+            element_entry
+                .element
+                .on_dropped(&mut self.context.action_sender);
         }
 
         if element_entry.stack_data.animating {
@@ -1947,7 +1816,7 @@ impl<A: Clone + 'static> View<A> {
                 self.element_with_active_tooltip = None;
 
                 if let Some(action) = self.hide_tooltip_action.as_mut() {
-                    self.action_sender.send((action)()).unwrap();
+                    self.context.action_sender.send((action)()).unwrap();
                 }
             }
         }
@@ -1986,7 +1855,7 @@ impl<A: Clone + 'static> View<A> {
         }
 
         {
-            let mut vg = vg.begin(self.physical_size, self.scale_factor);
+            let mut vg = vg.begin(self.physical_size, self.context.scale_factor);
 
             for cache in self.painted_elements.iter_mut() {
                 if !cache.visible {
@@ -2014,8 +1883,8 @@ impl<A: Clone + 'static> View<A> {
                             bounds_size: element_entry.stack_data.rect.size,
                             bounds_origin: element_entry.stack_data.rect.origin,
                             visible_bounds: element_entry.stack_data.visible_rect.unwrap(),
-                            scale: self.scale_factor,
-                            window_size: self.logical_size,
+                            scale: self.context.scale_factor,
+                            window_size: self.context.logical_size,
                             render_cache,
                         },
                         &mut cache.primitives,
@@ -2053,6 +1922,14 @@ impl<A: Clone + 'static> View<A> {
         self.view_needs_repaint = false;
 
         Ok(())
+    }
+
+    pub(crate) fn cursor_icon(&self) -> CursorIcon {
+        self.context.cursor_icon
+    }
+
+    pub(crate) fn pointer_lock_request(&mut self) -> Option<bool> {
+        self.context.pointer_lock_request.take()
     }
 }
 
@@ -2123,6 +2000,7 @@ pub struct TooltipInfo {
     pub window_id: WindowID,
 }
 
+#[derive(Clone, Copy)]
 struct FocusInfo {
     element_id: ElementID,
     listens_to_pointer_inside_bounds: bool,
@@ -2141,97 +2019,99 @@ fn send_event_to_element<A: Clone + 'static>(
     event: ElementEvent,
     element_entry: &mut ElementEntry<A>,
     element_id: ElementID,
-    focus_info: &Option<FocusInfo>,
-    mod_queue_sender: &mut stmpsc_queue::Sender<ElementModification>,
-    action_sender: &mut ActionSender<A>,
-    scale_factor: ScaleFactor,
-    window_size: Size,
-    cursor_icon: &mut CursorIcon,
+    view_cx: &mut ViewContext<A>,
     font_system: &mut FontSystem,
     clipboard: &mut Clipboard,
 ) -> EventCaptureStatus {
-    let has_focus = focus_info
+    let has_focus = view_cx
+        .current_focus_info
         .as_ref()
         .map(|d| d.element_id == element_id)
         .unwrap_or(false);
 
-    let mut cx = ElementContext::new(
+    let mut el_cx = ElementContext::new(
         element_entry.stack_data.rect,
         element_entry.stack_data.visible_rect,
-        window_size,
+        view_cx.logical_size,
         element_entry.stack_data.z_index,
         element_entry.stack_data.manually_hidden,
         element_entry.stack_data.animating,
         has_focus,
-        scale_factor,
-        *cursor_icon,
-        action_sender,
+        view_cx.scale_factor,
+        view_cx.cursor_icon,
+        view_cx.window_id,
+        view_cx.pointer_locked,
+        &mut view_cx.action_sender,
         font_system,
         clipboard,
     );
 
-    let capture_status = element_entry.element.on_event(event, &mut cx);
+    let capture_status = element_entry.element.on_event(event, &mut el_cx);
 
-    *cursor_icon = cx.cursor_icon;
+    view_cx.cursor_icon = el_cx.cursor_icon;
 
-    if cx.listen_to_pointer_clicked_off {
-        mod_queue_sender.send_to_front(ElementModification {
+    if let Some(req) = el_cx.pointer_lock_request {
+        view_cx.pointer_lock_request = Some(req);
+    }
+
+    if el_cx.listen_to_pointer_clicked_off {
+        view_cx.mod_queue_sender.send_to_front(ElementModification {
             element_id,
             type_: ElementModificationType::ListenToClickOff,
         });
     }
 
-    if let Some(req) = cx.change_focus_request {
+    if let Some(req) = el_cx.change_focus_request {
         let do_send = match req {
             ChangeFocusRequest::ReleaseFocus => has_focus,
             _ => !has_focus,
         };
 
         if do_send {
-            mod_queue_sender.send_to_front(ElementModification {
+            view_cx.mod_queue_sender.send_to_front(ElementModification {
                 element_id,
                 type_: ElementModificationType::ChangeFocus(req),
             });
         }
     }
 
-    if cx.is_animating() != element_entry.stack_data.animating {
-        mod_queue_sender.send_to_front(ElementModification {
+    if el_cx.is_animating() != element_entry.stack_data.animating {
+        view_cx.mod_queue_sender.send_to_front(ElementModification {
             element_id,
-            type_: ElementModificationType::SetAnimating(cx.is_animating()),
+            type_: ElementModificationType::SetAnimating(el_cx.is_animating()),
         });
     }
 
-    if let Some(new_rect) = cx.requested_rect {
-        mod_queue_sender.send_to_front(ElementModification {
+    if let Some(new_rect) = el_cx.requested_rect {
+        view_cx.mod_queue_sender.send_to_front(ElementModification {
             element_id,
             type_: ElementModificationType::RectChanged(new_rect),
         });
     }
 
-    if cx.repaint_requested {
-        mod_queue_sender.send_to_front(ElementModification {
+    if el_cx.repaint_requested {
+        view_cx.mod_queue_sender.send_to_front(ElementModification {
             element_id,
             type_: ElementModificationType::MarkDirty,
         });
     }
 
-    if cx.hover_timeout_requested {
-        mod_queue_sender.send_to_front(ElementModification {
+    if el_cx.hover_timeout_requested {
+        view_cx.mod_queue_sender.send_to_front(ElementModification {
             element_id,
             type_: ElementModificationType::StartHoverTimeout,
         });
     }
 
-    if cx.scroll_wheel_timeout_requested {
-        mod_queue_sender.send_to_front(ElementModification {
+    if el_cx.scroll_wheel_timeout_requested {
+        view_cx.mod_queue_sender.send_to_front(ElementModification {
             element_id,
             type_: ElementModificationType::StartScrollWheelTimeout,
         });
     }
 
-    if let Some(req) = cx.requested_show_tooltip {
-        mod_queue_sender.send_to_front(ElementModification {
+    if let Some(req) = el_cx.requested_show_tooltip {
+        view_cx.mod_queue_sender.send_to_front(ElementModification {
             element_id,
             type_: ElementModificationType::ShowTooltip {
                 message: req.message,
@@ -2247,17 +2127,11 @@ fn send_event_to_element<A: Clone + 'static>(
 fn release_focus_for_element<A: Clone + 'static>(
     element_id: ElementID,
     element_entry: &mut ElementEntry<A>,
-    current_focus_info: &mut Option<FocusInfo>,
-    prev_element_with_exclusive_focus: &mut Option<ElementID>,
-    mod_queue_sender: &mut stmpsc_queue::Sender<ElementModification>,
-    action_sender: &mut ActionSender<A>,
-    scale_factor: ScaleFactor,
-    window_size: Size,
-    cursor_icon: &mut CursorIcon,
+    cx: &mut ViewContext<A>,
     font_system: &mut FontSystem,
     clipboard: &mut Clipboard,
 ) {
-    if let Some(info) = &current_focus_info {
+    if let Some(info) = &cx.current_focus_info {
         if info.element_id != element_id {
             return;
         }
@@ -2265,7 +2139,12 @@ fn release_focus_for_element<A: Clone + 'static>(
         return;
     };
 
-    *current_focus_info = None;
+    cx.current_focus_info = None;
+
+    // Make sure the pointer does not stay locked.
+    if let Some(lock) = &mut cx.pointer_lock_request {
+        *lock = false;
+    }
 
     if element_entry
         .stack_data
@@ -2276,20 +2155,15 @@ fn release_focus_for_element<A: Clone + 'static>(
             ElementEvent::Focus(false),
             element_entry,
             element_id,
-            current_focus_info,
-            mod_queue_sender,
-            action_sender,
-            scale_factor,
-            window_size,
-            cursor_icon,
+            cx,
             font_system,
             clipboard,
         );
     }
 
-    if let Some(prev_element_id) = prev_element_with_exclusive_focus.take() {
+    if let Some(prev_element_id) = cx.prev_element_with_exclusive_focus.take() {
         if prev_element_id != element_id {
-            mod_queue_sender.send_to_front(ElementModification {
+            cx.mod_queue_sender.send_to_front(ElementModification {
                 element_id: prev_element_id,
                 type_: ElementModificationType::ChangeFocus(ChangeFocusRequest::StealFocus),
             });

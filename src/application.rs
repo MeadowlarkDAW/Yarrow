@@ -5,7 +5,8 @@ use std::{error::Error, time::Duration};
 use crate::{
     event::{AppWindowEvent, KeyboardEvent},
     window::{
-        ScaleFactorConfig, WindowCloseRequest, WindowConfig, WindowContext, WindowID, WindowState,
+        LinuxBackendType, ScaleFactorConfig, WindowCloseRequest, WindowConfig, WindowContext,
+        WindowID, WindowState,
     },
 };
 
@@ -70,23 +71,25 @@ impl Default for TimerInterval {
 #[derive(Debug, Clone, PartialEq)]
 pub struct AppConfig {
     pub tick_timer_interval: TimerInterval,
-    pub cursor_debounce_interval: TimerInterval,
+    pub pointer_debounce_interval: TimerInterval,
+    pub pointer_locking_enabled: bool,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
             tick_timer_interval: TimerInterval::PercentageOfFrameRate(1.0),
-            cursor_debounce_interval: TimerInterval::PercentageOfFrameRate(2.0),
+            pointer_debounce_interval: TimerInterval::PercentageOfFrameRate(2.0),
+            pointer_locking_enabled: true,
         }
     }
 }
 
 pub struct AppContext<A: Clone + 'static> {
+    pub(crate) config: AppConfig,
     pub(crate) window_requests: Vec<(WindowID, WindowRequest)>,
     pub(crate) window_map: FxHashMap<WindowID, WindowState<A>>,
-    pub(crate) tick_interval: Duration,
-    pub(crate) cursor_debounce_interval: Duration,
+    pub(crate) linux_backend_type: Option<LinuxBackendType>,
     pub font_system: FontSystem,
 }
 
@@ -135,23 +138,27 @@ impl<A: Clone + 'static> AppContext<A> {
             .push((window_id, WindowRequest::Create(config)));
     }
 
-    pub fn tick_interval(&self) -> Duration {
-        self.tick_interval
+    pub fn config(&self) -> &AppConfig {
+        &self.config
     }
 
-    pub fn cursor_debounce_interval(&self) -> Duration {
-        self.cursor_debounce_interval
+    pub fn set_pointer_locking_enabled(&mut self, enabled: bool) {
+        self.config.pointer_locking_enabled = enabled;
+    }
+
+    pub fn linux_backend_type(&self) -> Option<LinuxBackendType> {
+        self.linux_backend_type
     }
 }
 
-impl<A: Clone + 'static> Default for AppContext<A> {
-    fn default() -> Self {
+impl<A: Clone + 'static> AppContext<A> {
+    pub fn new(config: AppConfig) -> Self {
         Self {
+            config,
             window_requests: Vec::new(),
             window_map: FxHashMap::default(),
-            tick_interval: Duration::default(),
-            cursor_debounce_interval: Duration::default(),
             font_system: FontSystem::new(),
+            linux_backend_type: None,
         }
     }
 }
