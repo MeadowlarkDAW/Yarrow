@@ -4,6 +4,7 @@ pub type Padding = SideOffsets;
 pub type Margin = SideOffsets;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum LayoutDirection {
     #[default]
     Horizontal,
@@ -11,6 +12,7 @@ pub enum LayoutDirection {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Align {
     #[default]
     Start,
@@ -19,6 +21,7 @@ pub enum Align {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum StartEndAlign {
     #[default]
     Start,
@@ -26,6 +29,7 @@ pub enum StartEndAlign {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Align2 {
     pub horizontal: Align,
     pub vertical: Align,
@@ -135,6 +139,7 @@ impl Align2 {
 /// Describes how to lay out some content within a given bounding
 /// rectangle.
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BoundsLayout {
     /// The padding from the edges of the content rectangle to the
     /// edges of the padded background rectangle.
@@ -163,6 +168,7 @@ pub struct BoundsLayout {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SizeType {
     FixedPoints(f32),
     Scale(f32),
@@ -184,6 +190,7 @@ impl Default for SizeType {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Stretch {
     #[default]
     None,
@@ -193,6 +200,7 @@ pub enum Stretch {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BoundsPlacement {
     #[default]
     TopLeft,

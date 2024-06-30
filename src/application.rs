@@ -57,6 +57,7 @@ pub trait Application {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TimerInterval {
     Fixed(Duration),
     PercentageOfFrameRate(f64),
@@ -69,6 +70,7 @@ impl Default for TimerInterval {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AppConfig {
     pub tick_timer_interval: TimerInterval,
     pub pointer_debounce_interval: TimerInterval,

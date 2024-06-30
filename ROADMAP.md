@@ -61,7 +61,7 @@
 
 - [ ] Official book
 - [ ] C/C++ bindings. Yarrow does not rely on any Rust type system wizardry, so bindings should be feasible.
-    - [ ] A Rust/C/C++/Zig compatible CLAP/AU/VST3 plugin development framework using Yarrow for GUI. The idea would be to create an MIT-licensed alternative to JUCE. This is actually an idea I've been thinking of for a while, although for now I'd rather focus on my [Meadowlark](https://github.com/MeadowlarkDAW/Meadowlark) DAW project. That being said, if you are a company that would be willing to sponsor this JUCE-alternative idea, let me know on Discord or email me at billydm@anonaddy.me and I'll consider going through with it.
+    - [ ] A Rust/C/C++/Zig compatible CLAP/AU/VST3 plugin development framework using Yarrow for GUI. The idea would be to create an MIT-licensed alternative to JUCE. This is actually an idea I've been thinking of for a while, although for now I'd rather focus on my [Meadowlark](https://github.com/MeadowlarkDAW/Meadowlark) DAW project. That being said, if you are a company that would be willing to sponsor this JUCE-alternative idea, let me know on Discord or email me at u4fqdzbz@billydm.anonaddy.me and I'll consider going through with it.
 - [ ] Multi-line text editor element
 - [ ] TreeMenu element
 - [ ] A declarative data-driven wrapper around Yarrow (much like what the [Relm4](https://github.com/Relm4/Relm4) library does around the GTK4 library)

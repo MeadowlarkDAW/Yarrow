@@ -17,6 +17,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SeparatorSizeType {
     Scale(f32),
     FixedPoints(f32),

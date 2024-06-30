@@ -22,6 +22,7 @@ pub const DEFAULT_TEXT_ATTRIBUTES: Attrs<'static> = Attrs {
 };
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BorderStyle {
     /// The color of the border.
     pub color: RGBA8,
@@ -60,6 +61,7 @@ pub struct ShadowStyle {
 */
 
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QuadStyle {
     /// The background of the quad
     pub bg: Background,
@@ -109,6 +111,7 @@ impl QuadStyle {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Background {
     Solid(RGBA8),
     Gradient(Box<Gradient>),

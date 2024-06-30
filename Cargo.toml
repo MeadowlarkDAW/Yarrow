@@ -21,6 +21,7 @@ x11 = ["winit?/x11"]
 wayland = ["winit?/wayland"]
 winit-wayland-dlopen = ["winit?/wayland-dlopen"]
 winit-wayland-csd-adwaita = ["winit?/wayland-csd-adwaita"]
+serde = ["dep:serde", "rootvg/serde"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -37,7 +38,8 @@ winit = { version = "0.30.0", optional = true, default-features = false, feature
 wgpu = { version = "0.20.1", default-features = false, features = ["wgsl"] }
 window_clipboard = "0.4.1"
 thiserror = "1.0.61"
-rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "3cd1e2b31d08a59d41da24257a9e26d3e08b1459" }
+serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
+rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "8af8e2b893a2c6f1a85e4f5b770c69d98c9e9269" }
 #rootvg = { path = "../rootvg" }
 
 [dev-dependencies]

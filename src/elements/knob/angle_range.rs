@@ -13,6 +13,7 @@ use std::f32::consts::PI;
 /// maximum is `330` degrees, giving a span of `300` degrees, and a halfway
 /// point pointing strait up.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct KnobAngleRange {
     min: Angle,
     max: Angle,

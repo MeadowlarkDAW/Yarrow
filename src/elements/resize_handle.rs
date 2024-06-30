@@ -21,6 +21,7 @@ use crate::CursorIcon;
 const DRAG_HANDLE_WIDTH: f32 = 5.0;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ResizeDirection {
     Left,
     #[default]
@@ -55,6 +56,7 @@ impl Default for ResizeHandleStyle {
 
 /// The style of a [`ResizeHandle`] element
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ResizeHandleLayout {
     pub anchor: Point,
     pub length: f32,

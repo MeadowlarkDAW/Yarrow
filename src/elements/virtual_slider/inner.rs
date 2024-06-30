@@ -6,6 +6,7 @@ use crate::event::WheelDeltaType;
 use super::VirtualSliderConfig;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum GestureState {
     /// The user has just starting gesturing (dragging) this element.
     GestureStarted,
@@ -22,18 +23,21 @@ impl GestureState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SteppedValue {
     pub value: u32,
     pub num_steps: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ParamValue {
     Normal(f64),
     Stepped(u32),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ParamInfo {
     /// The parameter ID
     pub id: u32,
@@ -60,6 +64,7 @@ pub struct InnerParamUpdate {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ParamUpdate {
     pub param_info: ParamInfo,
     /// The current state of gesturing (dragging)

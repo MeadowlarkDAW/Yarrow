@@ -35,6 +35,7 @@ pub struct ParamOpenTextEntryInfo {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ParamerMarkerType {
     #[default]
     Primary,

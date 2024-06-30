@@ -24,6 +24,7 @@ use super::button::{ButtonState, ButtonStylePart};
 use super::toggle_button::{ToggleButtonInner, ToggleButtonStyle};
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum IndicatorLinePlacement {
     #[default]
     Top,

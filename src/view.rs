@@ -54,6 +54,7 @@ use self::scissor_rect::ScissorRect;
 
 /// The settings for a new `View`.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ViewConfig {
     /// The clear color.
     pub clear_color: PackedSrgb,

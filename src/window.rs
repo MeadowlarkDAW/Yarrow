@@ -502,6 +502,7 @@ pub enum WindowCloseRequest {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ScaleFactorConfig {
     #[default]
     System,
