@@ -15,12 +15,12 @@
 use std::sync::mpsc;
 
 use rootvg::math::{Point, Size};
-use rootvg::text::glyphon::FontSystem;
 
 use crate::action_queue::ActionSender;
 use crate::clipboard::Clipboard;
 use crate::layout::Align2;
 use crate::math::{Rect, ScaleFactor, ZIndex};
+use crate::prelude::ResourceCtx;
 use crate::{CursorIcon, WindowID};
 
 use super::ElementRenderCache;
@@ -47,8 +47,8 @@ pub struct ElementContext<'a, A: Clone + 'static> {
     pub cursor_icon: CursorIcon,
     /// A sender for the action queue.
     pub action_sender: &'a mut ActionSender<A>,
-    /// The font system.
-    pub font_system: &'a mut FontSystem,
+    /// The global resource context.
+    pub res: &'a mut ResourceCtx,
     /// The system clipboard.
     pub clipboard: &'a mut Clipboard,
 
@@ -87,13 +87,13 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
         window_id: WindowID,
         pointer_locked: bool,
         action_sender: &'a mut ActionSender<A>,
-        font_system: &'a mut FontSystem,
+        res: &'a mut ResourceCtx,
         clipboard: &'a mut Clipboard,
     ) -> Self {
         Self {
             cursor_icon,
             action_sender,
-            font_system,
+            res,
             rect,
             visible_rect,
             window_size,
@@ -291,7 +291,7 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
 /// A context for this element instance for use in rendering primitives.
 pub struct RenderContext<'a> {
     /// The font system.
-    pub font_system: &'a mut FontSystem,
+    pub res: &'a mut ResourceCtx,
     /// The size of this element's bounding rectangle.
     pub bounds_size: Size,
     /// The origin of the element's bounding rectangle. This is normally not needed

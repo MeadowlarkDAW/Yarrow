@@ -211,7 +211,7 @@ impl Elements {
                     info.bounds,
                     style.floating_text_input_align,
                     style.floating_text_input_padding,
-                    cx.font_system,
+                    &mut cx.res,
                 );
             }
             Action::FloatingTextInput(new_text) => {

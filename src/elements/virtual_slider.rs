@@ -469,7 +469,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
 
         let el = cx
             .view
-            .add_element(element_builder, cx.font_system, cx.clipboard);
+            .add_element(element_builder, &mut cx.res, cx.clipboard);
 
         VirtualSlider { el, shared_state }
     }

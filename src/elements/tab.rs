@@ -2,13 +2,13 @@ use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
 use rootvg::math::Point;
-use rootvg::text::glyphon::FontSystem;
 use rootvg::text::TextProperties;
 use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
 use crate::layout::{Align, Align2, LayoutDirection, Padding};
 use crate::math::{Rect, Size, ZIndex};
+use crate::prelude::ResourceCtx;
 use crate::style::{
     Background, BorderStyle, QuadStyle, DEFAULT_ACCENT_COLOR, DEFAULT_TEXT_ATTRIBUTES,
 };
@@ -21,7 +21,7 @@ use crate::window::WindowContext;
 use crate::CursorIcon;
 
 use super::button::{ButtonState, ButtonStylePart};
-use super::toggle_button::{ToggleButtonInner, ToggleButtonStyle};
+use super::toggle_button::{ToggleButtonInner, ToggleButtonStyle, ToggleText};
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -232,11 +232,11 @@ impl<A: Clone + 'static> TabElement<A> {
 
         let shared_state = Rc::new(RefCell::new(SharedState {
             inner: ToggleButtonInner::new(
-                text,
+                ToggleText::Single(text),
                 text_offset,
                 toggled,
                 &style.toggle_btn_style,
-                cx.font_system,
+                &mut cx.res,
             ),
             style,
         }));
@@ -257,7 +257,7 @@ impl<A: Clone + 'static> TabElement<A> {
 
         let el = cx
             .view
-            .add_element(element_builder, cx.font_system, cx.clipboard);
+            .add_element(element_builder, &mut cx.res, cx.clipboard);
 
         Tab { el, shared_state }
     }
@@ -324,7 +324,7 @@ impl<A: Clone + 'static> Element<A> for TabElement<A> {
                     && !inner.toggled()
                 {
                     let res1 = inner.set_state(ButtonState::Down, &style.toggle_btn_style);
-                    let res2 = inner.set_toggled(!inner.toggled());
+                    let res2 = inner.set_toggled(!inner.toggled(), &mut cx.res);
 
                     if res1.needs_repaint || res2.needs_repaint {
                         cx.request_repaint();
@@ -379,7 +379,7 @@ impl<A: Clone + 'static> Element<A> for TabElement<A> {
         let label_primitives = inner.render_primitives(
             Rect::from_size(cx.bounds_size),
             &style.toggle_btn_style,
-            cx.font_system,
+            cx.res,
         );
 
         if let Some(quad_primitive) = label_primitives.bg_quad {
@@ -475,10 +475,10 @@ impl Tab {
             .unclipped_text_size()
     }
 
-    pub fn set_text(&mut self, text: &str, font_system: &mut FontSystem) {
+    pub fn set_text(&mut self, text: impl Into<String>, res: &mut ResourceCtx) {
         if RefCell::borrow_mut(&self.shared_state)
             .inner
-            .set_text(text, font_system)
+            .set_text(ToggleText::Single(text.into()), res)
         {
             self.el.notify_custom_state_change();
         }
@@ -488,14 +488,12 @@ impl Tab {
         Ref::map(RefCell::borrow(&self.shared_state), |s| s.inner.text())
     }
 
-    pub fn set_style(&mut self, style: &Rc<TabStyle>, font_system: &mut FontSystem) {
+    pub fn set_style(&mut self, style: &Rc<TabStyle>, res: &mut ResourceCtx) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if !Rc::ptr_eq(&shared_state.style, style) {
             shared_state.style = Rc::clone(style);
-            shared_state
-                .inner
-                .set_style(&style.toggle_btn_style, font_system);
+            shared_state.inner.set_style(&style.toggle_btn_style, res);
             self.el.notify_custom_state_change();
         }
     }
@@ -504,11 +502,11 @@ impl Tab {
         Rc::clone(&RefCell::borrow(&self.shared_state).style)
     }
 
-    pub fn set_toggled(&mut self, toggled: bool) {
+    pub fn set_toggled(&mut self, toggled: bool, res: &mut ResourceCtx) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.toggled() != toggled {
-            shared_state.inner.set_toggled(toggled);
+            shared_state.inner.set_toggled(toggled, res);
             self.el.notify_custom_state_change();
         }
     }
@@ -710,7 +708,7 @@ impl TabGroup {
         }
     }
 
-    pub fn updated_selected(&mut self, selected_index: usize) {
+    pub fn updated_selected(&mut self, selected_index: usize, res: &mut ResourceCtx) {
         let selected_index = if selected_index >= self.tabs.len() {
             0
         } else {
@@ -722,12 +720,12 @@ impl TabGroup {
         }
 
         if let Some(prev_selected_tab) = self.tabs.get_mut(self.selected_index) {
-            prev_selected_tab.set_toggled(false);
+            prev_selected_tab.set_toggled(false, res);
         }
 
         self.selected_index = selected_index;
 
-        self.tabs[selected_index].set_toggled(true);
+        self.tabs[selected_index].set_toggled(true, res);
     }
 
     pub fn bounds(&self) -> Rect {

@@ -1,13 +1,13 @@
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
-use rootvg::text::glyphon::FontSystem;
 use rootvg::PrimitiveGroup;
 
 use crate::elements::text_input::TextInputUpdateResult;
 use crate::event::{ElementEvent, EventCaptureStatus, PointerEvent};
 use crate::layout::Align2;
 use crate::math::{Point, Rect, ZIndex};
+use crate::prelude::ResourceCtx;
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
 };
@@ -182,7 +182,7 @@ impl<A: Clone + 'static> TextInputElement<A> {
                 tooltip_message.is_some(),
                 select_all_when_focused,
                 &style,
-                cx.font_system,
+                &mut cx.res,
             ),
             style,
             text_offset,
@@ -204,7 +204,7 @@ impl<A: Clone + 'static> TextInputElement<A> {
 
         let el = cx
             .view
-            .add_element(element_builder, cx.font_system, cx.clipboard);
+            .add_element(element_builder, &mut cx.res, cx.clipboard);
 
         TextInput { el, shared_state }
     }
@@ -236,14 +236,14 @@ impl<A: Clone + 'static> Element<A> for TextInputElement<A> {
         let res = match event {
             ElementEvent::Animation { .. } => inner.on_animation(style),
             ElementEvent::CustomStateChanged => {
-                inner.on_custom_state_changed(cx.clipboard, cx.font_system)
+                inner.on_custom_state_changed(cx.clipboard, &mut cx.res)
             }
             ElementEvent::SizeChanged => {
-                inner.on_size_changed(cx.rect().size, style, cx.font_system);
+                inner.on_size_changed(cx.rect().size, style, &mut cx.res);
                 TextInputUpdateResult::default()
             }
             ElementEvent::Pointer(PointerEvent::Moved { position, .. }) => {
-                inner.on_pointer_moved(position, cx.rect(), cx.font_system)
+                inner.on_pointer_moved(position, cx.rect(), &mut cx.res)
             }
             ElementEvent::Pointer(PointerEvent::ButtonJustPressed {
                 position,
@@ -255,7 +255,7 @@ impl<A: Clone + 'static> Element<A> for TextInputElement<A> {
                 button,
                 click_count,
                 cx.rect(),
-                cx.font_system,
+                &mut cx.res,
             ),
             ElementEvent::Pointer(PointerEvent::ButtonJustReleased {
                 button, position, ..
@@ -265,13 +265,13 @@ impl<A: Clone + 'static> Element<A> for TextInputElement<A> {
                 TextInputUpdateResult::default()
             }
             ElementEvent::Keyboard(key_event) => {
-                inner.on_keyboard_event(&key_event, cx.clipboard, cx.font_system)
+                inner.on_keyboard_event(&key_event, cx.clipboard, &mut cx.res)
             }
             ElementEvent::TextComposition(comp_event) => {
-                inner.on_text_composition_event(&comp_event, cx.font_system)
+                inner.on_text_composition_event(&comp_event, &mut cx.res)
             }
             ElementEvent::Focus(has_focus) => {
-                inner.on_focus_changed(has_focus, cx.clipboard, cx.font_system)
+                inner.on_focus_changed(has_focus, cx.clipboard, &mut cx.res)
             }
             ElementEvent::ClickedOff => inner.on_clicked_off(),
             ElementEvent::Pointer(PointerEvent::HoverTimeout { .. }) => {
@@ -365,11 +365,11 @@ impl TextInput {
         TextInputBuilder::new(style)
     }
 
-    pub fn set_text(&mut self, text: &str, font_system: &mut FontSystem, select_all: bool) {
+    pub fn set_text(&mut self, text: &str, res: &mut ResourceCtx, select_all: bool) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
-        let res = shared_state.inner.set_text(text, font_system, select_all);
-        if res.needs_repaint {
+        let result = shared_state.inner.set_text(text, res, select_all);
+        if result.needs_repaint {
             self.el.notify_custom_state_change();
         }
     }
@@ -378,12 +378,12 @@ impl TextInput {
         Ref::map(RefCell::borrow(&self.shared_state), |s| s.inner.text())
     }
 
-    pub fn set_placeholder_text(&mut self, text: &str, font_system: &mut FontSystem) {
+    pub fn set_placeholder_text(&mut self, text: &str, res: &mut ResourceCtx) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
         let SharedState { inner, style, .. } = &mut *shared_state;
 
-        let res = inner.set_placeholder_text(text, font_system, style);
-        if res.needs_repaint {
+        let result = inner.set_placeholder_text(text, res, style);
+        if result.needs_repaint {
             self.el.notify_custom_state_change();
         }
     }
@@ -394,7 +394,7 @@ impl TextInput {
         })
     }
 
-    pub fn set_style(&mut self, style: &Rc<TextInputStyle>, font_system: &mut FontSystem) {
+    pub fn set_style(&mut self, style: &Rc<TextInputStyle>, res: &mut ResourceCtx) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
         let SharedState {
             inner,
@@ -404,7 +404,7 @@ impl TextInput {
 
         if !Rc::ptr_eq(old_style, style) {
             *old_style = Rc::clone(style);
-            inner.set_style(style, font_system);
+            inner.set_style(style, res);
 
             self.el.notify_custom_state_change();
         }

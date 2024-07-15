@@ -1,12 +1,12 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rootvg::text::glyphon::FontSystem;
 use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::{Align2, Padding};
 use crate::math::{Point, Rect, ZIndex};
+use crate::prelude::ResourceCtx;
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
 };
@@ -83,7 +83,7 @@ impl TooltipElement {
         } = builder;
 
         let shared_state = Rc::new(RefCell::new(SharedState {
-            inner: LabelInner::new(String::new(), &style, cx.font_system, text_offset),
+            inner: LabelInner::new(String::new(), &style, text_offset, &mut cx.res),
             style,
             show_with_info: None,
         }));
@@ -101,7 +101,7 @@ impl TooltipElement {
 
         let el = cx
             .view
-            .add_element(element_builder, cx.font_system, cx.clipboard);
+            .add_element(element_builder, &mut cx.res, cx.clipboard);
 
         Tooltip { el, shared_state }
     }
@@ -160,7 +160,7 @@ impl<A: Clone + 'static> Element<A> for TooltipElement {
         let SharedState { inner, style, .. } = &mut *shared_state;
 
         let label_primitives =
-            inner.render_primitives(Rect::from_size(cx.bounds_size), style, cx.font_system);
+            inner.render_primitives(Rect::from_size(cx.bounds_size), style, cx.res);
 
         if let Some(quad_primitive) = label_primitives.bg_quad {
             primitives.add(quad_primitive);
@@ -195,11 +195,11 @@ impl Tooltip {
         message: &str,
         element_bounds: Rect,
         align: Align2,
-        font_sytem: &mut FontSystem,
+        res: &mut ResourceCtx,
     ) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
-        shared_state.inner.set_text(message, font_sytem);
+        shared_state.inner.set_text(message, res);
 
         shared_state.show_with_info = Some((element_bounds, align));
 
@@ -213,12 +213,12 @@ impl Tooltip {
         self.el.set_hidden(true);
     }
 
-    pub fn set_style(&mut self, style: &Rc<LabelStyle>, font_sytem: &mut FontSystem) {
+    pub fn set_style(&mut self, style: &Rc<LabelStyle>, res: &mut ResourceCtx) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if !Rc::ptr_eq(&shared_state.style, style) {
             shared_state.style = Rc::clone(style);
-            shared_state.inner.set_style(style, font_sytem);
+            shared_state.inner.set_style(style, res);
             self.el.notify_custom_state_change();
         }
     }

@@ -1,6 +1,5 @@
-use crate::style::MyStyle;
+use crate::style::{MyIcon, MyStyle};
 use crate::{MyAction, MAIN_Z_INDEX, OVERLAY_Z_INDEX, SCROLL_AREA_Z_INDEX};
-use yarrow::elements::text_input::IconTextInput;
 use yarrow::prelude::*;
 
 pub const SCROLL_AREA_SCISSOR_RECT: ScissorRectID = 1;
@@ -61,6 +60,7 @@ pub enum TextInputID {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
     ClickMePressed,
+    IconBtnPressed,
     ToggleValue(bool),
     OptionSelected(DropDownOption),
     OpenDropDown,
@@ -78,13 +78,16 @@ pub enum Action {
 
 pub struct Elements {
     label: Label,
-    dual_label: DualLabel,
+    icon: Icon,
+    icon_label: IconLabel,
     click_me_btn: Button,
+    icon_btn: IconButton,
     switch: Switch,
     toggle_btn: ToggleButton,
-    dual_toggle_btn: DualToggleButton,
+    icon_toggle_btn: IconToggleButton,
+    icon_label_toggle_btn: IconLabelToggleButton,
     radio_group: RadioButtonGroup,
-    drop_down_menu_btn: DualButton,
+    drop_down_menu_btn: IconLabelButton,
     drop_down_menu: DropDownMenu,
     text_input: TextInput,
     text_input_menu: DropDownMenu,
@@ -105,9 +108,15 @@ impl Elements {
             .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
             .build(cx);
 
-        let dual_label = DualLabel::builder(&style.dual_label_style)
-            .left_text('\u{f05a}')
-            .right_text("Dual Label")
+        let icon = Icon::builder(&style.icon_style)
+            .icon_id(MyIcon::Info)
+            .z_index(MAIN_Z_INDEX)
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
+            .build(cx);
+
+        let icon_label = IconLabel::builder(&style.icon_label_style)
+            .icon(Some(MyIcon::Info))
+            .text(Some("Icon Label"))
             .z_index(MAIN_Z_INDEX)
             .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
             .build(cx);
@@ -120,20 +129,35 @@ impl Elements {
             .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
             .build(cx);
 
+        let icon_btn = IconButton::builder(&style.icon_btn_style)
+            .icon_id(MyIcon::Save)
+            .on_select(Action::IconBtnPressed.into())
+            .z_index(MAIN_Z_INDEX)
+            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
+            .build(cx);
+
         let toggle_btn = ToggleButton::builder(&style.toggle_btn_style)
-            .text("off")
+            .dual_text("off", "on")
             .on_toggled(|toggled| Action::ToggleValue(toggled).into())
             .z_index(MAIN_Z_INDEX)
             .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
             .build(cx);
 
-        let dual_toggle_btn = DualToggleButton::builder(&style.dual_toggle_btn_style)
-            .left_text('\u{23fb}')
-            .right_text("off")
+        let icon_toggle_btn = IconToggleButton::builder(&style.icon_toggle_btn_style)
+            .dual_icons(MyIcon::PowerOff, MyIcon::PowerOn)
             .on_toggled(|toggled| Action::ToggleValue(toggled).into())
             .z_index(MAIN_Z_INDEX)
             .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
             .build(cx);
+
+        let icon_label_toggle_btn =
+            IconLabelToggleButton::builder(&style.icon_label_toggle_btn_style)
+                .dual_icons(Some((MyIcon::PowerOff, MyIcon::PowerOn)))
+                .dual_text(Some(("off", "on")))
+                .on_toggled(|toggled| Action::ToggleValue(toggled).into())
+                .z_index(MAIN_Z_INDEX)
+                .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
+                .build(cx);
 
         let switch = Switch::builder(&style.switch_style)
             .on_toggled(|toggled| Action::ToggleValue(toggled).into())
@@ -173,10 +197,18 @@ impl Elements {
                     .iter()
                     .enumerate()
                     .map(|(i, s)| {
-                        let right_text = s.right_text();
+                        let icon = match i {
+                            0 => MyIcon::Cut,
+                            1 => MyIcon::Copy,
+                            2 => MyIcon::Paste,
+                            _ => MyIcon::Select,
+                        } as IconID;
+
                         MenuEntry::Option {
+                            left_icon_id: Some(icon),
+                            icon_scale: 1.0,
                             left_text: format!("{s}"),
-                            right_text: right_text.into(),
+                            right_text: Some(s.right_text().into()),
                             unique_id: i,
                         }
                     })
@@ -190,7 +222,7 @@ impl Elements {
 
         let search_text_input = IconTextInput::builder(&style.icon_text_input_style)
             .placeholder_text("search something...")
-            .icon_text('\u{f002}')
+            .icon_id(MyIcon::Search)
             .on_changed(|text| Action::SearchTextChanged(text).into())
             .on_right_click(|pos| {
                 Action::OpenTextInputMenu {
@@ -204,9 +236,9 @@ impl Elements {
             .z_index(MAIN_Z_INDEX)
             .build(cx);
 
-        let drop_down_menu_btn = DualButton::builder(&style.drop_down_btn_style)
-            .left_text(format!("{}", DropDownOption::ALL[0]))
-            .right_text('\u{2304}')
+        let drop_down_menu_btn = IconLabelButton::builder(&style.drop_down_btn_style)
+            .text(Some(format!("{}", DropDownOption::ALL[0])))
+            .icon_id(Some(MyIcon::Dropdown))
             .on_select(Action::OpenDropDown.into())
             .z_index(MAIN_Z_INDEX)
             .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
@@ -216,11 +248,7 @@ impl Elements {
                 DropDownOption::ALL
                     .iter()
                     .enumerate()
-                    .map(|(i, s)| MenuEntry::Option {
-                        left_text: format!("{s}"),
-                        right_text: String::new(),
-                        unique_id: i,
-                    })
+                    .map(|(i, s)| MenuEntry::option(format!("{s}"), i))
                     .collect(),
             )
             .on_entry_selected(|id| Action::OptionSelected(DropDownOption::ALL[id]).into())
@@ -237,11 +265,7 @@ impl Elements {
                 ["I am", "a right", "click", "menu"]
                     .iter()
                     .enumerate()
-                    .map(|(i, s)| MenuEntry::Option {
-                        left_text: String::from(*s),
-                        right_text: String::new(),
-                        unique_id: i,
-                    })
+                    .map(|(i, s)| MenuEntry::option(*s, i))
                     .collect(),
             )
             .on_entry_selected(|id| Action::RightClickOptionSelected(id).into())
@@ -265,11 +289,14 @@ impl Elements {
 
         Self {
             label,
-            dual_label,
+            icon,
+            icon_label,
             click_me_btn,
+            icon_btn,
             switch,
             toggle_btn,
-            dual_toggle_btn,
+            icon_toggle_btn,
+            icon_label_toggle_btn,
             radio_group,
             drop_down_menu_btn,
             drop_down_menu,
@@ -291,22 +318,19 @@ impl Elements {
 
         match action {
             Action::ClickMePressed => {}
+            Action::IconBtnPressed => {}
             Action::ToggleValue(toggled) => {
                 self.switch.set_toggled(toggled);
-                self.toggle_btn.set_toggled(toggled);
-                self.dual_toggle_btn.set_toggled(toggled);
-
-                let toggle_text = if toggled { "on" } else { "off" };
-                self.toggle_btn.set_text(toggle_text, &mut cx.font_system);
-                self.dual_toggle_btn
-                    .set_right_text(toggle_text, &mut cx.font_system);
+                self.toggle_btn.set_toggled(toggled, &mut cx.res);
+                self.icon_toggle_btn.set_toggled(toggled);
+                self.icon_label_toggle_btn.set_toggled(toggled, &mut cx.res);
 
                 needs_layout = true;
             }
             Action::OptionSelected(option) => {
                 self.radio_group.updated_selected(option as usize);
                 self.drop_down_menu_btn
-                    .set_left_text(&format!("{}", option), &mut cx.font_system);
+                    .set_text(&format!("{}", option), &mut &mut cx.res);
             }
             Action::OpenDropDown => {
                 // Because the drop-down menu button may be offset by the scroll area,
@@ -371,13 +395,23 @@ impl Elements {
         // assigned to.
         self.click_me_btn.layout(start_pos);
 
-        self.label.layout(Point::new(
+        self.icon_btn.layout(Point::new(
             self.click_me_btn.el.rect().max_x() + style.element_padding,
             start_pos.y,
         ));
 
-        self.dual_label.layout(Point::new(
+        self.label.layout(Point::new(
+            self.icon_btn.el.rect().max_x() + style.element_padding,
+            start_pos.y,
+        ));
+
+        self.icon.layout(Point::new(
             self.label.el.rect().max_x() + style.element_padding,
+            start_pos.y,
+        ));
+
+        self.icon_label.layout(Point::new(
+            self.icon.el.rect().max_x() + style.element_padding,
             start_pos.y,
         ));
 
@@ -397,8 +431,13 @@ impl Elements {
         toggle_btn_rect.origin.x = self.switch.el.rect().max_x() + style.element_padding;
         self.toggle_btn.el.set_rect(toggle_btn_rect);
 
-        self.dual_toggle_btn.layout(Point::new(
+        self.icon_toggle_btn.layout(Point::new(
             toggle_btn_rect.max_x() + style.element_padding,
+            self.toggle_btn.el.rect().min_y(),
+        ));
+
+        self.icon_label_toggle_btn.layout(Point::new(
+            self.icon_toggle_btn.el.rect().max_x() + style.element_padding,
             self.toggle_btn.el.rect().min_y(),
         ));
 
@@ -460,7 +499,7 @@ impl Elements {
         ));
 
         self.scroll_area.set_content_size(Size::new(
-            self.dual_label.el.rect().max_x() + style.content_padding,
+            self.icon_label.el.rect().max_x() + style.content_padding,
             self.search_text_input.el.rect().max_y() + style.content_padding,
         ));
     }
@@ -469,11 +508,14 @@ impl Elements {
         // Destructuring helps to make sure you didn't miss any elements.
         let Self {
             label,
-            dual_label,
+            icon,
+            icon_label,
             click_me_btn,
+            icon_btn,
             switch,
             toggle_btn,
-            dual_toggle_btn,
+            icon_toggle_btn,
+            icon_label_toggle_btn,
             radio_group,
             drop_down_menu_btn,
             drop_down_menu,
@@ -489,11 +531,14 @@ impl Elements {
         } = self;
 
         label.el.set_hidden(hidden);
-        dual_label.el.set_hidden(hidden);
+        icon.el.set_hidden(hidden);
+        icon_label.el.set_hidden(hidden);
         click_me_btn.el.set_hidden(hidden);
         switch.el.set_hidden(hidden);
         toggle_btn.el.set_hidden(hidden);
-        dual_toggle_btn.el.set_hidden(hidden);
+        icon_toggle_btn.el.set_hidden(hidden);
+        icon_btn.el.set_hidden(hidden);
+        icon_label_toggle_btn.el.set_hidden(hidden);
         radio_group.set_hidden(hidden);
         drop_down_menu_btn.el.set_hidden(hidden);
         drop_down_menu.el.set_hidden(hidden);

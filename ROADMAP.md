@@ -27,7 +27,7 @@
     - [ ] DBMeter element
 - [ ] Scrolling in long drop-down menus
 - [ ] Helper to create a scrollable list of toggle buttons (i.e. for creating a preset selector)
-- [ ] Logo
+- [x] Logo
 - [ ] [baseview](https://github.com/RustAudio/baseview) backend for audio plugins
 - [ ] Audio plugin example
 

@@ -87,19 +87,26 @@ impl Default for AppConfig {
     }
 }
 
+/// A context for globally-shared resources
+pub struct ResourceCtx {
+    pub font_system: FontSystem,
+    pub svg_icon_system: rootvg::text::svg::SvgIconSystem,
+}
+
 pub struct AppContext<A: Clone + 'static> {
     pub(crate) config: AppConfig,
     pub(crate) window_requests: Vec<(WindowID, WindowRequest)>,
     pub(crate) window_map: FxHashMap<WindowID, WindowState<A>>,
     pub(crate) linux_backend_type: Option<LinuxBackendType>,
-    pub font_system: FontSystem,
+    /// The global resource context
+    pub res: ResourceCtx,
 }
 
 impl<A: Clone + 'static> AppContext<A> {
     pub fn window_context<'a>(&'a mut self, window_id: WindowID) -> Option<WindowContext<'a, A>> {
         self.window_map
             .get_mut(&window_id)
-            .map(|w| w.context(&mut self.font_system))
+            .map(|w| w.context(&mut self.res))
     }
 
     pub fn resize_window(&mut self, window_id: WindowID, logical_size: Size) {
@@ -159,7 +166,10 @@ impl<A: Clone + 'static> AppContext<A> {
             config,
             window_requests: Vec::new(),
             window_map: FxHashMap::default(),
-            font_system: FontSystem::new(),
+            res: ResourceCtx {
+                font_system: FontSystem::new(),
+                svg_icon_system: Default::default(),
+            },
             linux_backend_type: None,
         }
     }

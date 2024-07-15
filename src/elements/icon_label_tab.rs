@@ -2,13 +2,13 @@ use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
 use rootvg::math::Point;
-use rootvg::text::glyphon::FontSystem;
-use rootvg::text::TextProperties;
+use rootvg::text::{CustomGlyphID, TextProperties};
 use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
-use crate::layout::{Align, Align2, LayoutDirection, Padding};
+use crate::layout::{Align2, LayoutDirection, Padding};
 use crate::math::{Rect, Size, ZIndex};
+use crate::prelude::ResourceCtx;
 use crate::style::{
     Background, BorderStyle, QuadStyle, DEFAULT_ACCENT_COLOR, DEFAULT_TEXT_ATTRIBUTES,
 };
@@ -21,35 +21,37 @@ use crate::window::WindowContext;
 use crate::CursorIcon;
 
 use super::button::ButtonState;
-use super::dual_button::DualButtonStylePart;
-use super::dual_label::{DualLabelClipMode, DualLabelLayout};
-use super::dual_toggle_button::{DualToggleButtonInner, DualToggleButtonStyle};
+use super::icon_label::{IconLabelClipMode, IconLabelLayout};
+use super::icon_label_button::IconLabelButtonStylePart;
+use super::icon_label_toggle_button::{IconLabelToggleButtonInner, IconLabelToggleButtonStyle};
+use super::icon_toggle_button::ToggleIcons;
 use super::tab::IndicatorLinePlacement;
+use super::toggle_button::ToggleText;
 
-/// The style of a [`DualTab`] element
+/// The style of a [`IconLabelTab`] element
 #[derive(Debug, Clone, PartialEq)]
-pub struct DualTabStyle {
-    pub toggle_btn_style: DualToggleButtonStyle,
+pub struct IconLabelTabStyle {
+    pub toggle_btn_style: IconLabelToggleButtonStyle,
 
     pub on_indicator_line_width: f32,
     pub on_indicator_line_style: QuadStyle,
     pub on_indicator_line_padding_to_edges: f32,
 }
 
-impl Default for DualTabStyle {
+impl Default for IconLabelTabStyle {
     fn default() -> Self {
-        let idle_on = DualButtonStylePart {
-            left_font_color: color::WHITE,
-            right_font_color: color::WHITE,
+        let idle_on = IconLabelButtonStylePart {
+            text_color: color::WHITE,
+            icon_color: color::WHITE,
             back_quad: QuadStyle {
                 bg: Background::Solid(RGBA8::new(70, 70, 70, 255)),
                 border: BorderStyle::default(),
             },
         };
 
-        let idle_off = DualButtonStylePart {
-            left_font_color: RGBA8::new(255, 255, 255, 125),
-            right_font_color: RGBA8::new(255, 255, 255, 125),
+        let idle_off = IconLabelButtonStylePart {
+            text_color: RGBA8::new(255, 255, 255, 125),
+            icon_color: RGBA8::new(255, 255, 255, 125),
             back_quad: QuadStyle {
                 bg: Background::Solid(color::TRANSPARENT),
                 ..idle_on.back_quad
@@ -58,35 +60,31 @@ impl Default for DualTabStyle {
         };
 
         Self {
-            toggle_btn_style: DualToggleButtonStyle {
-                left_properties: TextProperties {
+            toggle_btn_style: IconLabelToggleButtonStyle {
+                text_properties: TextProperties {
                     attrs: DEFAULT_TEXT_ATTRIBUTES,
                     ..Default::default()
                 },
-                right_properties: TextProperties {
-                    attrs: DEFAULT_TEXT_ATTRIBUTES,
-                    ..Default::default()
-                },
+                icon_size: 20.0,
 
-                vertical_align: Align::Center,
-                left_min_clipped_size: Size::new(5.0, 5.0),
-                right_min_clipped_size: Size::new(5.0, 5.0),
-                left_padding: Padding::new(6.0, 6.0, 6.0, 6.0),
-                right_padding: Padding::new(6.0, 6.0, 6.0, 6.0),
+                text_min_clipped_size: Size::new(5.0, 5.0),
 
-                clip_mode: DualLabelClipMode::default(),
-                layout: DualLabelLayout::default(),
+                text_padding: Padding::new(6.0, 6.0, 6.0, 6.0),
+                icon_padding: Padding::new(0.0, 0.0, 0.0, 6.0),
+
+                clip_mode: IconLabelClipMode::default(),
+                layout: IconLabelLayout::default(),
 
                 idle_on: idle_on.clone(),
-                hovered_on: DualButtonStylePart {
+                hovered_on: IconLabelButtonStylePart {
                     back_quad: QuadStyle {
                         ..idle_on.back_quad
                     },
                     ..idle_on
                 },
-                disabled_on: DualButtonStylePart {
-                    left_font_color: RGBA8::new(255, 255, 255, 150),
-                    right_font_color: RGBA8::new(255, 255, 255, 150),
+                disabled_on: IconLabelButtonStylePart {
+                    text_color: RGBA8::new(255, 255, 255, 150),
+                    icon_color: RGBA8::new(255, 255, 255, 150),
                     back_quad: QuadStyle {
                         bg: Background::Solid(RGBA8::new(50, 50, 50, 255)),
                         ..idle_on.back_quad
@@ -95,16 +93,16 @@ impl Default for DualTabStyle {
                 },
 
                 idle_off: idle_off.clone(),
-                hovered_off: DualButtonStylePart {
+                hovered_off: IconLabelButtonStylePart {
                     back_quad: QuadStyle {
                         bg: Background::Solid(RGBA8::new(50, 50, 50, 255)),
                         ..idle_off.back_quad
                     },
                     ..idle_off
                 },
-                disabled_off: DualButtonStylePart {
-                    left_font_color: RGBA8::new(255, 255, 255, 100),
-                    right_font_color: RGBA8::new(255, 255, 255, 100),
+                disabled_off: IconLabelButtonStylePart {
+                    text_color: RGBA8::new(255, 255, 255, 100),
+                    icon_color: RGBA8::new(255, 255, 255, 100),
                     ..idle_off
                 },
             },
@@ -118,16 +116,17 @@ impl Default for DualTabStyle {
     }
 }
 
-pub struct DualTabBuilder<A: Clone + 'static> {
+pub struct IconLabelTabBuilder<A: Clone + 'static> {
     pub action: Option<A>,
     pub tooltip_message: Option<String>,
     pub tooltip_align: Align2,
     pub toggled: bool,
-    pub left_text: String,
-    pub right_text: String,
-    pub left_text_offset: Point,
-    pub right_text_offset: Point,
-    pub style: Rc<DualTabStyle>,
+    pub text: Option<String>,
+    pub icons: Option<ToggleIcons>,
+    pub icon_scale: f32,
+    pub text_offset: Point,
+    pub icon_offset: Point,
+    pub style: Rc<IconLabelTabStyle>,
     pub on_indicator_line_placement: IndicatorLinePlacement,
     pub z_index: ZIndex,
     pub bounding_rect: Rect,
@@ -135,17 +134,18 @@ pub struct DualTabBuilder<A: Clone + 'static> {
     pub scissor_rect_id: ScissorRectID,
 }
 
-impl<A: Clone + 'static> DualTabBuilder<A> {
-    pub fn new(style: &Rc<DualTabStyle>) -> Self {
+impl<A: Clone + 'static> IconLabelTabBuilder<A> {
+    pub fn new(style: &Rc<IconLabelTabStyle>) -> Self {
         Self {
             action: None,
             tooltip_message: None,
             tooltip_align: Align2::TOP_CENTER,
             toggled: false,
-            left_text: String::new(),
-            right_text: String::new(),
-            left_text_offset: Point::default(),
-            right_text_offset: Point::default(),
+            text: None,
+            icons: None,
+            icon_scale: 1.0,
+            text_offset: Point::default(),
+            icon_offset: Point::default(),
             style: Rc::clone(style),
             on_indicator_line_placement: IndicatorLinePlacement::Top,
             z_index: 0,
@@ -155,8 +155,8 @@ impl<A: Clone + 'static> DualTabBuilder<A> {
         }
     }
 
-    pub fn build(self, cx: &mut WindowContext<'_, A>) -> DualTab {
-        DualTabElement::create(self, cx)
+    pub fn build(self, cx: &mut WindowContext<'_, A>) -> IconLabelTab {
+        IconLabelTabElement::create(self, cx)
     }
 
     pub fn on_toggled_on(mut self, action: A) -> Self {
@@ -176,27 +176,49 @@ impl<A: Clone + 'static> DualTabBuilder<A> {
         self
     }
 
-    pub fn left_text(mut self, text: impl Into<String>) -> Self {
-        self.left_text = text.into();
+    pub fn text(mut self, text: Option<impl Into<String>>) -> Self {
+        self.text = text.map(|t| t.into());
         self
     }
 
-    pub fn right_text(mut self, text: impl Into<String>) -> Self {
-        self.right_text = text.into();
+    pub fn icon(mut self, icon_id: Option<impl Into<CustomGlyphID>>) -> Self {
+        self.icons = icon_id.map(|i| ToggleIcons::Single(i.into()));
         self
     }
 
-    /// An offset that can be used mainly to correct the position of icon glyphs.
+    pub const fn icons(mut self, icons: Option<ToggleIcons>) -> Self {
+        self.icons = icons;
+        self
+    }
+
+    pub fn dual_icons(
+        mut self,
+        off_on_ids: Option<(impl Into<CustomGlyphID>, impl Into<CustomGlyphID>)>,
+    ) -> Self {
+        self.icons = off_on_ids.map(|(off_id, on_id)| ToggleIcons::Dual {
+            off: off_id.into(),
+            on: on_id.into(),
+        });
+        self
+    }
+
+    /// Scale the icon when rendering (used to help make icons look consistent).
+    pub const fn icon_scale(mut self, scale: f32) -> Self {
+        self.icon_scale = scale;
+        self
+    }
+
+    /// An offset that can be used mainly to correct the position of the text.
     /// This does not effect the position of the background quad.
-    pub const fn left_text_offset(mut self, offset: Point) -> Self {
-        self.left_text_offset = offset;
+    pub const fn text_offset(mut self, offset: Point) -> Self {
+        self.text_offset = offset;
         self
     }
 
-    /// An offset that can be used mainly to correct the position of icon glyphs.
+    /// An offset that can be used mainly to correct the position of the icon.
     /// This does not effect the position of the background quad.
-    pub const fn right_text_offset(mut self, offset: Point) -> Self {
-        self.right_text_offset = offset;
+    pub const fn icon_offset(mut self, offset: Point) -> Self {
+        self.icon_offset = offset;
         self
     }
 
@@ -227,7 +249,7 @@ impl<A: Clone + 'static> DualTabBuilder<A> {
 }
 
 /// A button element with a label.
-pub struct DualTabElement<A: Clone + 'static> {
+pub struct IconLabelTabElement<A: Clone + 'static> {
     shared_state: Rc<RefCell<SharedState>>,
     action: Option<A>,
     tooltip_message: Option<String>,
@@ -235,17 +257,18 @@ pub struct DualTabElement<A: Clone + 'static> {
     on_indicator_line_placement: IndicatorLinePlacement,
 }
 
-impl<A: Clone + 'static> DualTabElement<A> {
-    pub fn create(builder: DualTabBuilder<A>, cx: &mut WindowContext<'_, A>) -> DualTab {
-        let DualTabBuilder {
+impl<A: Clone + 'static> IconLabelTabElement<A> {
+    pub fn create(builder: IconLabelTabBuilder<A>, cx: &mut WindowContext<'_, A>) -> IconLabelTab {
+        let IconLabelTabBuilder {
             action,
             tooltip_message,
             tooltip_align,
             toggled,
-            left_text,
-            right_text,
-            left_text_offset,
-            right_text_offset,
+            text,
+            icons,
+            icon_scale,
+            text_offset,
+            icon_offset,
             style,
             on_indicator_line_placement,
             z_index,
@@ -255,14 +278,15 @@ impl<A: Clone + 'static> DualTabElement<A> {
         } = builder;
 
         let shared_state = Rc::new(RefCell::new(SharedState {
-            inner: DualToggleButtonInner::new(
-                left_text,
-                right_text,
-                left_text_offset,
-                right_text_offset,
+            inner: IconLabelToggleButtonInner::new(
+                text.map(|t| ToggleText::Single(t)),
+                icons,
+                text_offset,
+                icon_offset,
+                icon_scale,
                 toggled,
                 &style.toggle_btn_style,
-                cx.font_system,
+                &mut cx.res,
             ),
             style,
         }));
@@ -283,13 +307,13 @@ impl<A: Clone + 'static> DualTabElement<A> {
 
         let el = cx
             .view
-            .add_element(element_builder, cx.font_system, cx.clipboard);
+            .add_element(element_builder, &mut cx.res, cx.clipboard);
 
-        DualTab { el, shared_state }
+        IconLabelTab { el, shared_state }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for DualTabElement<A> {
+impl<A: Clone + 'static> Element<A> for IconLabelTabElement<A> {
     fn flags(&self) -> ElementFlags {
         ElementFlags::PAINTS | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
     }
@@ -350,7 +374,8 @@ impl<A: Clone + 'static> Element<A> for DualTabElement<A> {
                     && !inner.toggled()
                 {
                     let res1 = inner.set_state(ButtonState::Down, &style.toggle_btn_style);
-                    let res2 = inner.set_toggled(!inner.toggled());
+                    let res2 =
+                        inner.set_toggled(!inner.toggled(), &style.toggle_btn_style, &mut cx.res);
 
                     if res1.needs_repaint || res2.needs_repaint {
                         cx.request_repaint();
@@ -405,20 +430,20 @@ impl<A: Clone + 'static> Element<A> for DualTabElement<A> {
         let label_primitives = inner.render_primitives(
             Rect::from_size(cx.bounds_size),
             &style.toggle_btn_style,
-            cx.font_system,
+            cx.res,
         );
 
         if let Some(quad_primitive) = label_primitives.bg_quad {
             primitives.add(quad_primitive);
         }
 
-        if let Some(text_primitive) = label_primitives.left_text {
+        if let Some(p) = label_primitives.text {
             primitives.set_z_index(1);
-            primitives.add_text(text_primitive);
+            primitives.add_text(p);
         }
-        if let Some(text_primitive) = label_primitives.right_text {
+        if let Some(p) = label_primitives.icon {
             primitives.set_z_index(1);
-            primitives.add_text(text_primitive);
+            primitives.add_text(p);
         }
 
         if style.on_indicator_line_width > 0.0
@@ -469,20 +494,20 @@ impl<A: Clone + 'static> Element<A> for DualTabElement<A> {
     }
 }
 
-/// A handle to a [`DualTabElement`].
-pub struct DualTab {
+/// A handle to a [`IconLabelTabElement`].
+pub struct IconLabelTab {
     pub el: ElementHandle,
     shared_state: Rc<RefCell<SharedState>>,
 }
 
 struct SharedState {
-    inner: DualToggleButtonInner,
-    style: Rc<DualTabStyle>,
+    inner: IconLabelToggleButtonInner,
+    style: Rc<IconLabelTabStyle>,
 }
 
-impl DualTab {
-    pub fn builder<A: Clone + 'static>(style: &Rc<DualTabStyle>) -> DualTabBuilder<A> {
-        DualTabBuilder::new(style)
+impl IconLabelTab {
+    pub fn builder<A: Clone + 'static>(style: &Rc<IconLabelTabStyle>) -> IconLabelTabBuilder<A> {
+        IconLabelTabBuilder::new(style)
     }
 
     /// Returns the size of the padded background rectangle if it were to
@@ -496,61 +521,71 @@ impl DualTab {
         inner.desired_padded_size(&style.toggle_btn_style)
     }
 
-    /// Returns the size of the unclipped left and right text.
-    ///
-    /// This can be useful to lay out elements that depend on text size.
-    pub fn unclipped_text_size(&self) -> (Size, Size) {
-        RefCell::borrow_mut(&self.shared_state)
-            .inner
-            .unclipped_text_size()
+    pub fn set_text(&mut self, text: ToggleText, res: &mut ResourceCtx) {
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+        let SharedState { inner, style, .. } = &mut *shared_state;
+
+        if inner.set_text(text, &style.toggle_btn_style, res) {
+            self.el.notify_custom_state_change();
+        }
     }
 
-    pub fn set_left_text(&mut self, text: &str, font_system: &mut FontSystem) {
-        if RefCell::borrow_mut(&self.shared_state)
+    pub fn text<'a>(&'a self) -> Ref<'a, str> {
+        Ref::map(RefCell::borrow(&self.shared_state), |s| s.inner.text())
+    }
+
+    pub fn set_icon(&mut self, icon_id: Option<impl Into<CustomGlyphID>>) {
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+
+        if shared_state
             .inner
-            .set_left_text(text, font_system)
+            .set_icons(icon_id.map(|i| ToggleIcons::Single(i.into())))
         {
             self.el.notify_custom_state_change();
         }
     }
 
-    pub fn set_right_text(&mut self, text: &str, font_system: &mut FontSystem) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-        let SharedState { inner, style } = &mut *shared_state;
-
-        inner.set_right_text(text, &style.toggle_btn_style, font_system);
-        self.el.notify_custom_state_change();
-    }
-
-    pub fn left_text<'a>(&'a self) -> Ref<'a, str> {
-        Ref::map(RefCell::borrow(&self.shared_state), |s| s.inner.text().0)
-    }
-
-    pub fn right_text<'a>(&'a self) -> Ref<'a, str> {
-        Ref::map(RefCell::borrow(&self.shared_state), |s| s.inner.text().1)
-    }
-
-    pub fn set_style(&mut self, style: &Rc<DualTabStyle>, font_system: &mut FontSystem) {
+    pub fn set_dual_icons(
+        &mut self,
+        off_on_ids: Option<(impl Into<CustomGlyphID>, impl Into<CustomGlyphID>)>,
+    ) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
-        if !Rc::ptr_eq(&shared_state.style, style) {
-            shared_state.style = Rc::clone(style);
-            shared_state
-                .inner
-                .set_style(&style.toggle_btn_style, font_system);
+        if shared_state
+            .inner
+            .set_icons(off_on_ids.map(|(off_id, on_id)| ToggleIcons::Dual {
+                off: off_id.into(),
+                on: on_id.into(),
+            }))
+        {
             self.el.notify_custom_state_change();
         }
     }
 
-    pub fn style(&self) -> Rc<DualTabStyle> {
+    pub fn icons(&self) -> Option<ToggleIcons> {
+        RefCell::borrow(&self.shared_state).inner.icons()
+    }
+
+    pub fn set_style(&mut self, style: &Rc<IconLabelTabStyle>, res: &mut ResourceCtx) {
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+
+        if !Rc::ptr_eq(&shared_state.style, style) {
+            shared_state.style = Rc::clone(style);
+            shared_state.inner.set_style(&style.toggle_btn_style, res);
+            self.el.notify_custom_state_change();
+        }
+    }
+
+    pub fn style(&self) -> Rc<IconLabelTabStyle> {
         Rc::clone(&RefCell::borrow(&self.shared_state).style)
     }
 
-    pub fn set_toggled(&mut self, toggled: bool) {
+    pub fn set_toggled(&mut self, toggled: bool, res: &mut ResourceCtx) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+        let SharedState { inner, style, .. } = &mut *shared_state;
 
-        if shared_state.inner.toggled() != toggled {
-            shared_state.inner.set_toggled(toggled);
+        if inner.toggled() != toggled {
+            inner.set_toggled(toggled, &style.toggle_btn_style, res);
             self.el.notify_custom_state_change();
         }
     }
@@ -572,24 +607,24 @@ impl DualTab {
         }
     }
 
-    /// An offset that can be used mainly to correct the position of icon glyphs.
+    /// An offset that can be used mainly to correct the position of the text.
     /// This does not effect the position of the background quad.
-    pub fn set_left_text_offset(&mut self, offset: Point) {
+    pub fn set_text_offset(&mut self, offset: Point) {
         let changed = RefCell::borrow_mut(&self.shared_state)
             .inner
-            .set_left_text_offset(offset);
+            .set_text_offset(offset);
 
         if changed {
             self.el.notify_custom_state_change();
         }
     }
 
-    /// An offset that can be used mainly to correct the position of icon glyphs.
+    /// An offset that can be used mainly to correct the position of the icon.
     /// This does not effect the position of the background quad.
-    pub fn set_right_text_offset(&mut self, offset: Point) {
+    pub fn set_icon_offset(&mut self, offset: Point) {
         let changed = RefCell::borrow_mut(&self.shared_state)
             .inner
-            .set_right_text_offset(offset);
+            .set_icon_offset(offset);
 
         if changed {
             self.el.notify_custom_state_change();
@@ -608,68 +643,44 @@ impl DualTab {
 }
 
 #[derive(Default, Debug, Clone)]
-pub struct DualTabGroupOption {
-    pub left_text: String,
-    pub right_text: String,
+pub struct IconLabelTabGroupOption {
+    pub text: Option<String>,
+    pub icons: Option<ToggleIcons>,
     pub tooltip_message: String,
-    pub left_text_offset: Point,
-    pub right_text_offset: Point,
+    pub text_offset: Point,
+    pub icon_offset: Point,
+    pub icon_scale: f32,
 }
 
-impl DualTabGroupOption {
+impl IconLabelTabGroupOption {
     pub fn new(
-        left_text: impl Into<String>,
-        right_text: impl Into<String>,
+        text: Option<impl Into<String>>,
+        icons: Option<ToggleIcons>,
         tooltip_message: impl Into<String>,
-        left_text_offset: Point,
-        right_text_offset: Point,
     ) -> Self {
         Self {
-            left_text: left_text.into(),
-            right_text: right_text.into(),
+            text: text.map(|t| t.into()),
+            icons,
             tooltip_message: tooltip_message.into(),
-            left_text_offset,
-            right_text_offset,
+            text_offset: Point::default(),
+            icon_offset: Point::default(),
+            icon_scale: 1.0,
         }
     }
 }
 
-impl<'a> From<(&'a str, &'a str)> for DualTabGroupOption {
-    fn from(t: (&'a str, &'a str)) -> Self {
-        Self::new(t.0, t.1, "", Point::default(), Point::default())
-    }
-}
-
-impl From<(String, String)> for DualTabGroupOption {
-    fn from(t: (String, String)) -> Self {
-        Self::new(t.0, t.1, "", Point::default(), Point::default())
-    }
-}
-
-impl<'a> From<(&'a str, &'a str, &'a str)> for DualTabGroupOption {
-    fn from(t: (&'a str, &'a str, &'a str)) -> Self {
-        Self::new(t.0, t.1, t.2, Point::default(), Point::default())
-    }
-}
-
-impl From<(String, String, String)> for DualTabGroupOption {
-    fn from(t: (String, String, String)) -> Self {
-        Self::new(t.0, t.1, t.2, Point::default(), Point::default())
-    }
-}
-
-pub struct DualTabGroup {
-    tabs: Vec<DualTab>,
+pub struct IconLabelTabGroup {
+    tabs: Vec<IconLabelTab>,
     selected_index: usize,
     bounds: Rect,
 }
 
-impl DualTabGroup {
+impl IconLabelTabGroup {
     pub fn new<'a, A: Clone + 'static, F>(
-        options: impl IntoIterator<Item = impl Into<DualTabGroupOption>>,
+        options: impl IntoIterator<Item = impl Into<IconLabelTabGroupOption>>,
         selected_index: usize,
         mut on_selected: F,
-        style: &Rc<DualTabStyle>,
+        style: &Rc<IconLabelTabStyle>,
         z_index: u16,
         on_indicator_line_placement: IndicatorLinePlacement,
         tooltip_align: Align2,
@@ -678,22 +689,23 @@ impl DualTabGroup {
     where
         F: FnMut(usize) -> A + 'static,
     {
-        let tabs: Vec<DualTab> = options
+        let tabs: Vec<IconLabelTab> = options
             .into_iter()
             .enumerate()
             .map(|(i, option)| {
-                let option: DualTabGroupOption = option.into();
+                let option: IconLabelTabGroupOption = option.into();
 
-                DualTab::builder(style)
-                    .left_text(option.left_text)
-                    .right_text(option.right_text)
+                IconLabelTab::builder(style)
+                    .text(option.text)
+                    .icons(option.icons)
+                    .icon_scale(option.icon_scale)
                     .tooltip_message(option.tooltip_message, tooltip_align)
                     .on_toggled_on((on_selected)(i))
                     .toggled(i == selected_index)
                     .on_indicator_line_placement(on_indicator_line_placement)
                     .z_index(z_index)
-                    .left_text_offset(option.left_text_offset)
-                    .right_text_offset(option.right_text_offset)
+                    .text_offset(option.text_offset)
+                    .icon_offset(option.icon_offset)
                     .build(cx)
             })
             .collect();
@@ -770,7 +782,7 @@ impl DualTabGroup {
         }
     }
 
-    pub fn updated_selected(&mut self, selected_index: usize) {
+    pub fn updated_selected(&mut self, selected_index: usize, res: &mut ResourceCtx) {
         let selected_index = if selected_index >= self.tabs.len() {
             0
         } else {
@@ -782,12 +794,12 @@ impl DualTabGroup {
         }
 
         if let Some(prev_selected_tab) = self.tabs.get_mut(self.selected_index) {
-            prev_selected_tab.set_toggled(false);
+            prev_selected_tab.set_toggled(false, res);
         }
 
         self.selected_index = selected_index;
 
-        self.tabs[selected_index].set_toggled(true);
+        self.tabs[selected_index].set_toggled(true, res);
     }
 
     pub fn bounds(&self) -> Rect {

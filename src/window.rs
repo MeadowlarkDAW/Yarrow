@@ -1,7 +1,6 @@
 use keyboard_types::{CompositionEvent, Modifiers};
 use rootvg::math::{to_logical_size_i32, PhysicalPoint, Point};
 use rootvg::surface::{DefaultSurface, DefaultSurfaceConfig, NewSurfaceError};
-use rootvg::text::glyphon::FontSystem;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -12,6 +11,7 @@ use crate::event::{
     WheelDeltaType,
 };
 use crate::math::{PhysicalSizeI32, ScaleFactor, Size};
+use crate::prelude::ResourceCtx;
 use crate::CursorIcon;
 use crate::{view::ViewConfig, View};
 
@@ -92,6 +92,7 @@ impl<A: Clone + 'static> WindowState<A> {
         surface_config: DefaultSurfaceConfig,
         action_sender: ActionSender<A>,
         id: WindowID,
+        res: &mut ResourceCtx,
     ) -> Result<Self, NewSurfaceError> {
         let scale_factor = scale_factor_config.scale_factor(system_scale_factor);
 
@@ -106,6 +107,7 @@ impl<A: Clone + 'static> WindowState<A> {
             &surface.queue,
             surface.format(),
             surface.canvas_config(),
+            &mut res.font_system,
         );
 
         let view = View::new(physical_size, scale_factor, view_config, action_sender, id);
@@ -199,42 +201,36 @@ impl<A: Clone + 'static> WindowState<A> {
         self.pointer_lock_state
     }
 
-    pub fn on_animation_tick(&mut self, dt: f64, font_system: &mut FontSystem) {
+    pub fn on_animation_tick(&mut self, dt: f64, res: &mut ResourceCtx) {
         self.view.handle_event(
             &CanvasEvent::Animation {
                 delta_seconds: dt,
                 pointer_position: self.prev_pointer_pos,
             },
-            font_system,
+            res,
             &mut self.clipboard,
         );
     }
 
-    pub fn handle_window_unfocused(&mut self, font_system: &mut FontSystem) {
-        self.view.handle_event(
-            &CanvasEvent::WindowUnfocused,
-            font_system,
-            &mut self.clipboard,
-        );
-    }
-
-    pub fn handle_window_focused(&mut self, font_system: &mut FontSystem) {
-        self.view.handle_event(
-            &CanvasEvent::WindowFocused,
-            font_system,
-            &mut self.clipboard,
-        );
-    }
-
-    pub fn handle_window_hidden(&mut self, font_system: &mut FontSystem) {
-        self.handle_window_unfocused(font_system);
+    pub fn handle_window_unfocused(&mut self, res: &mut ResourceCtx) {
         self.view
-            .handle_event(&CanvasEvent::WindowHidden, font_system, &mut self.clipboard);
+            .handle_event(&CanvasEvent::WindowUnfocused, res, &mut self.clipboard);
     }
 
-    pub fn handle_window_shown(&mut self, font_system: &mut FontSystem) {
+    pub fn handle_window_focused(&mut self, res: &mut ResourceCtx) {
         self.view
-            .handle_event(&CanvasEvent::WindowShown, font_system, &mut self.clipboard);
+            .handle_event(&CanvasEvent::WindowFocused, res, &mut self.clipboard);
+    }
+
+    pub fn handle_window_hidden(&mut self, res: &mut ResourceCtx) {
+        self.handle_window_unfocused(res);
+        self.view
+            .handle_event(&CanvasEvent::WindowHidden, res, &mut self.clipboard);
+    }
+
+    pub fn handle_window_shown(&mut self, res: &mut ResourceCtx) {
+        self.view
+            .handle_event(&CanvasEvent::WindowShown, res, &mut self.clipboard);
     }
 
     pub fn set_modifiers(&mut self, modifiers: Modifiers) {
@@ -244,19 +240,16 @@ impl<A: Clone + 'static> WindowState<A> {
     pub fn handle_keyboard_event(
         &mut self,
         event: KeyboardEvent,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
     ) -> EventCaptureStatus {
-        self.view.handle_event(
-            &CanvasEvent::Keyboard(event),
-            font_system,
-            &mut self.clipboard,
-        )
+        self.view
+            .handle_event(&CanvasEvent::Keyboard(event), res, &mut self.clipboard)
     }
 
     pub fn handle_text_composition_event(
         &mut self,
         event: CompositionEvent,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
     ) -> EventCaptureStatus {
         // Don't send the event if the input might be a keyboard shortcut.
         if self.modifiers.intersects(
@@ -271,20 +264,20 @@ impl<A: Clone + 'static> WindowState<A> {
 
         self.view.handle_event(
             &CanvasEvent::TextComposition(event),
-            font_system,
+            res,
             &mut self.clipboard,
         )
     }
 
-    pub fn handle_pointer_left(&mut self, font_system: &mut FontSystem) {
+    pub fn handle_pointer_left(&mut self, res: &mut ResourceCtx) {
         self.view.handle_event(
             &CanvasEvent::Pointer(PointerEvent::PointerLeft),
-            font_system,
+            res,
             &mut self.clipboard,
         );
     }
 
-    pub fn handle_pointer_moved(&mut self, new_pos: PhysicalPoint, font_system: &mut FontSystem) {
+    pub fn handle_pointer_moved(&mut self, new_pos: PhysicalPoint, res: &mut ResourceCtx) {
         let new_pos = crate::math::to_logical_point_from_recip(new_pos, self.scale_factor_recip);
 
         let delta = if self.pointer_lock_state == PointerLockState::LockedUsingOS {
@@ -307,12 +300,12 @@ impl<A: Clone + 'static> WindowState<A> {
                 modifiers: self.modifiers,
                 just_entered: false,
             }),
-            font_system,
+            res,
             &mut self.clipboard,
         );
     }
 
-    pub fn handle_locked_pointer_delta(&mut self, delta: Point, font_system: &mut FontSystem) {
+    pub fn handle_locked_pointer_delta(&mut self, delta: Point, res: &mut ResourceCtx) {
         self.view.handle_event(
             &CanvasEvent::Pointer(PointerEvent::Moved {
                 position: self.prev_pointer_pos.unwrap_or_default(),
@@ -322,7 +315,7 @@ impl<A: Clone + 'static> WindowState<A> {
                 modifiers: self.modifiers,
                 just_entered: false,
             }),
-            font_system,
+            res,
             &mut self.clipboard,
         );
     }
@@ -331,7 +324,7 @@ impl<A: Clone + 'static> WindowState<A> {
         &mut self,
         button: PointerButton,
         is_down: bool,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
     ) {
         enum State {
             Unchanged,
@@ -377,7 +370,7 @@ impl<A: Clone + 'static> WindowState<A> {
                         click_count,
                         modifiers: self.modifiers,
                     }),
-                    font_system,
+                    res,
                     &mut self.clipboard,
                 );
             }
@@ -390,7 +383,7 @@ impl<A: Clone + 'static> WindowState<A> {
                         click_count,
                         modifiers: self.modifiers,
                     }),
-                    font_system,
+                    res,
                     &mut self.clipboard,
                 );
             }
@@ -398,7 +391,7 @@ impl<A: Clone + 'static> WindowState<A> {
         }
     }
 
-    pub fn handle_mouse_wheel(&mut self, delta_type: WheelDeltaType, font_system: &mut FontSystem) {
+    pub fn handle_mouse_wheel(&mut self, delta_type: WheelDeltaType, res: &mut ResourceCtx) {
         let position = self.prev_pointer_pos.unwrap_or(Point::zero());
 
         self.view.handle_event(
@@ -408,7 +401,7 @@ impl<A: Clone + 'static> WindowState<A> {
                 pointer_type: PointerType::default(),
                 modifiers: self.modifiers,
             }),
-            font_system,
+            res,
             &mut self.clipboard,
         );
     }
@@ -416,7 +409,7 @@ impl<A: Clone + 'static> WindowState<A> {
     pub fn render<P: FnOnce()>(
         &mut self,
         pre_present_notify: P,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
     ) -> Result<(), wgpu::SurfaceError> {
         let surface = self.surface.as_ref().unwrap();
 
@@ -426,7 +419,7 @@ impl<A: Clone + 'static> WindowState<A> {
             &surface.queue,
             &mut self.renderer,
             pre_present_notify,
-            font_system,
+            res,
         )
     }
 
@@ -434,10 +427,10 @@ impl<A: Clone + 'static> WindowState<A> {
         self.logical_size
     }
 
-    pub fn context<'a>(&'a mut self, font_system: &'a mut FontSystem) -> WindowContext<'a, A> {
+    pub fn context<'a>(&'a mut self, res: &'a mut ResourceCtx) -> WindowContext<'a, A> {
         WindowContext {
             view: &mut self.view,
-            font_system,
+            res,
             clipboard: &mut self.clipboard,
             logical_size: self.logical_size,
             physical_size: self.physical_size,
@@ -520,7 +513,7 @@ impl ScaleFactorConfig {
 
 pub struct WindowContext<'a, A: Clone + 'static> {
     pub view: &'a mut View<A>,
-    pub font_system: &'a mut FontSystem,
+    pub res: &'a mut ResourceCtx,
     pub clipboard: &'a mut Clipboard,
     logical_size: Size,
     physical_size: PhysicalSizeI32,

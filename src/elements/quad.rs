@@ -89,7 +89,7 @@ impl QuadElementInternal {
 
         let el = cx
             .view
-            .add_element(element_builder, cx.font_system, cx.clipboard);
+            .add_element(element_builder, &mut cx.res, cx.clipboard);
 
         QuadElement { el, shared_state }
     }

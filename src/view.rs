@@ -20,7 +20,6 @@ use keyboard_types::CompositionEvent;
 use rootvg::color::PackedSrgb;
 use rootvg::math::PhysicalSizeI32;
 use rootvg::math::SizeI32;
-use rootvg::text::glyphon::FontSystem;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use smallvec::SmallVec;
@@ -31,6 +30,7 @@ use crate::clipboard::Clipboard;
 use crate::event::{CanvasEvent, ElementEvent, EventCaptureStatus, KeyboardEvent, PointerEvent};
 use crate::layout::Align2;
 use crate::math::{Point, PointI32, Rect, RectI32, ScaleFactor, Size, ZIndex};
+use crate::prelude::ResourceCtx;
 use crate::stmpsc_queue;
 use crate::CursorIcon;
 use crate::WindowID;
@@ -283,7 +283,7 @@ impl<A: Clone + 'static> View<A> {
     pub fn add_element(
         &mut self,
         element_builder: ElementBuilder<A>,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
         clipboard: &mut Clipboard,
     ) -> ElementHandle {
         let ElementBuilder {
@@ -379,7 +379,7 @@ impl<A: Clone + 'static> View<A> {
                 element_entry,
                 element_id,
                 &mut self.context,
-                font_system,
+                res,
                 clipboard,
             );
         }
@@ -444,7 +444,7 @@ impl<A: Clone + 'static> View<A> {
     pub(crate) fn handle_event(
         &mut self,
         event: &CanvasEvent,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
         clipboard: &mut Clipboard,
     ) -> EventCaptureStatus {
         match event {
@@ -452,31 +452,26 @@ impl<A: Clone + 'static> View<A> {
                 delta_seconds,
                 pointer_position,
             } => {
-                self.handle_animation_event(
-                    *delta_seconds,
-                    *pointer_position,
-                    font_system,
-                    clipboard,
-                );
+                self.handle_animation_event(*delta_seconds, *pointer_position, res, clipboard);
 
                 // Capture status is not relavant for this event.
                 EventCaptureStatus::NotCaptured
             }
             CanvasEvent::Pointer(pointer_event) => {
-                self.handle_pointer_event(pointer_event, font_system, clipboard)
+                self.handle_pointer_event(pointer_event, res, clipboard)
             }
             CanvasEvent::Keyboard(keyboard_event) => {
-                self.handle_keyboard_event(keyboard_event, font_system, clipboard)
+                self.handle_keyboard_event(keyboard_event, res, clipboard)
             }
             CanvasEvent::TextComposition(text_composition_event) => {
-                self.handle_text_composition_event(text_composition_event, font_system, clipboard)
+                self.handle_text_composition_event(text_composition_event, res, clipboard)
             }
             CanvasEvent::WindowHidden => {
-                self.handle_window_hidden(font_system, clipboard);
+                self.handle_window_hidden(res, clipboard);
                 EventCaptureStatus::NotCaptured
             }
             CanvasEvent::WindowShown => {
-                self.handle_window_shown(font_system, clipboard);
+                self.handle_window_shown(res, clipboard);
                 EventCaptureStatus::NotCaptured
             }
             CanvasEvent::WindowFocused => {
@@ -484,13 +479,13 @@ impl<A: Clone + 'static> View<A> {
                 EventCaptureStatus::NotCaptured
             }
             CanvasEvent::WindowUnfocused => {
-                self.handle_window_unfocused(font_system, clipboard);
+                self.handle_window_unfocused(res, clipboard);
                 EventCaptureStatus::NotCaptured
             }
         }
     }
 
-    fn handle_window_shown(&mut self, font_system: &mut FontSystem, clipboard: &mut Clipboard) {
+    fn handle_window_shown(&mut self, res: &mut ResourceCtx, clipboard: &mut Clipboard) {
         if self.window_visible {
             return;
         }
@@ -522,7 +517,7 @@ impl<A: Clone + 'static> View<A> {
                             element_entry,
                             *element_id,
                             &mut self.context,
-                            font_system,
+                            res,
                             clipboard,
                         );
                     }
@@ -531,7 +526,7 @@ impl<A: Clone + 'static> View<A> {
         }
     }
 
-    fn handle_window_hidden(&mut self, font_system: &mut FontSystem, clipboard: &mut Clipboard) {
+    fn handle_window_hidden(&mut self, res: &mut ResourceCtx, clipboard: &mut Clipboard) {
         if !self.window_visible {
             return;
         }
@@ -567,7 +562,7 @@ impl<A: Clone + 'static> View<A> {
                         element_entry,
                         *element_id,
                         &mut self.context,
-                        font_system,
+                        res,
                         clipboard,
                     );
                 }
@@ -581,7 +576,7 @@ impl<A: Clone + 'static> View<A> {
         }
     }
 
-    fn handle_window_unfocused(&mut self, font_system: &mut FontSystem, clipboard: &mut Clipboard) {
+    fn handle_window_unfocused(&mut self, res: &mut ResourceCtx, clipboard: &mut Clipboard) {
         for (element_id, _) in self.hovered_elements.iter() {
             if let Some(element_entry) = self.element_arena.get_mut(element_id.0) {
                 send_event_to_element(
@@ -589,7 +584,7 @@ impl<A: Clone + 'static> View<A> {
                     element_entry,
                     *element_id,
                     &mut self.context,
-                    font_system,
+                    res,
                     clipboard,
                 );
             }
@@ -603,7 +598,7 @@ impl<A: Clone + 'static> View<A> {
                     element_entry,
                     *element_id,
                     &mut self.context,
-                    font_system,
+                    res,
                     clipboard,
                 );
             }
@@ -617,7 +612,7 @@ impl<A: Clone + 'static> View<A> {
                     element_entry,
                     *element_id,
                     &mut self.context,
-                    font_system,
+                    res,
                     clipboard,
                 );
             }
@@ -639,7 +634,7 @@ impl<A: Clone + 'static> View<A> {
         &mut self,
         delta_seconds: f64,
         pointer_position: Option<Point>,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
         clipboard: &mut Clipboard,
     ) {
         for element_id in self.animating_elements.iter() {
@@ -650,7 +645,7 @@ impl<A: Clone + 'static> View<A> {
                 element_entry,
                 *element_id,
                 &mut self.context,
-                font_system,
+                res,
                 clipboard,
             );
         }
@@ -669,7 +664,7 @@ impl<A: Clone + 'static> View<A> {
                                     element_entry,
                                     *element_id,
                                     &mut self.context,
-                                    font_system,
+                                    res,
                                     clipboard,
                                 );
                             } else {
@@ -690,7 +685,7 @@ impl<A: Clone + 'static> View<A> {
                             element_entry,
                             *element_id,
                             &mut self.context,
-                            font_system,
+                            res,
                             clipboard,
                         );
                     } else {
@@ -727,7 +722,7 @@ impl<A: Clone + 'static> View<A> {
     fn handle_pointer_event(
         &mut self,
         event: &PointerEvent,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
         clipboard: &mut Clipboard,
     ) -> EventCaptureStatus {
         let pos = event.position();
@@ -765,7 +760,7 @@ impl<A: Clone + 'static> View<A> {
                             element_entry,
                             *element_id,
                             &mut self.context,
-                            font_system,
+                            res,
                             clipboard,
                         );
                     }
@@ -802,7 +797,7 @@ impl<A: Clone + 'static> View<A> {
                         element_entry,
                         *element_id,
                         &mut self.context,
-                        font_system,
+                        res,
                         clipboard,
                     );
                 } else if let Some(instant) = hover_start_instant.take() {
@@ -812,7 +807,7 @@ impl<A: Clone + 'static> View<A> {
                             element_entry,
                             *element_id,
                             &mut self.context,
-                            font_system,
+                            res,
                             clipboard,
                         );
                     } else {
@@ -846,7 +841,7 @@ impl<A: Clone + 'static> View<A> {
                             element_entry,
                             *element_id,
                             &mut self.context,
-                            font_system,
+                            res,
                             clipboard,
                         );
                     }
@@ -884,7 +879,7 @@ impl<A: Clone + 'static> View<A> {
                 element_entry,
                 element_id,
                 view_cx,
-                font_system,
+                res,
                 clipboard,
             )
         };
@@ -987,7 +982,7 @@ impl<A: Clone + 'static> View<A> {
     fn handle_keyboard_event(
         &mut self,
         event: &KeyboardEvent,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
         clipboard: &mut Clipboard,
     ) -> EventCaptureStatus {
         if let Some(focused_data) = &self.context.current_focus_info {
@@ -1002,7 +997,7 @@ impl<A: Clone + 'static> View<A> {
                     element_entry,
                     focused_data.element_id,
                     &mut self.context,
-                    font_system,
+                    res,
                     clipboard,
                 );
 
@@ -1018,7 +1013,7 @@ impl<A: Clone + 'static> View<A> {
     fn handle_text_composition_event(
         &mut self,
         event: &CompositionEvent,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
         clipboard: &mut Clipboard,
     ) -> EventCaptureStatus {
         if let Some(focused_data) = &self.context.current_focus_info {
@@ -1033,7 +1028,7 @@ impl<A: Clone + 'static> View<A> {
                     element_entry,
                     focused_data.element_id,
                     &mut self.context,
-                    font_system,
+                    res,
                     clipboard,
                 );
 
@@ -1047,11 +1042,7 @@ impl<A: Clone + 'static> View<A> {
     }
 
     /// Returns `true` if any updates were processed.
-    pub fn process_updates(
-        &mut self,
-        font_system: &mut FontSystem,
-        clipboard: &mut Clipboard,
-    ) -> bool {
+    pub fn process_updates(&mut self, res: &mut ResourceCtx, clipboard: &mut Clipboard) -> bool {
         let mut processed_update = false;
         while let Some(modification) = self.mod_queue_receiver.try_recv() {
             processed_update = true;
@@ -1059,7 +1050,7 @@ impl<A: Clone + 'static> View<A> {
                 ElementModificationType::CustomStateChanged => {
                     self.handle_element_custom_state_changed(
                         modification.element_id,
-                        font_system,
+                        res,
                         clipboard,
                     );
                 }
@@ -1067,17 +1058,12 @@ impl<A: Clone + 'static> View<A> {
                     self.mark_element_dirty(modification.element_id);
                 }
                 ElementModificationType::RectChanged(new_rect) => {
-                    self.update_element_rect(
-                        modification.element_id,
-                        new_rect,
-                        font_system,
-                        clipboard,
-                    );
+                    self.update_element_rect(modification.element_id, new_rect, res, clipboard);
                 }
                 ElementModificationType::ScissorRectChanged => {
                     self.handle_scissor_rect_changed_for_element(
                         modification.element_id,
-                        font_system,
+                        res,
                         clipboard,
                     );
                 }
@@ -1085,7 +1071,7 @@ impl<A: Clone + 'static> View<A> {
                     self.update_element_z_index(
                         modification.element_id,
                         new_z_index,
-                        font_system,
+                        res,
                         clipboard,
                     );
                 }
@@ -1093,7 +1079,7 @@ impl<A: Clone + 'static> View<A> {
                     self.update_element_manually_hidden(
                         modification.element_id,
                         manually_hidden,
-                        font_system,
+                        res,
                         clipboard,
                     );
                 }
@@ -1102,27 +1088,17 @@ impl<A: Clone + 'static> View<A> {
                 }
                 ElementModificationType::ChangeFocus(req) => match req {
                     ChangeFocusRequest::StealFocus => {
-                        self.element_steal_focus(
-                            modification.element_id,
-                            false,
-                            font_system,
-                            clipboard,
-                        );
+                        self.element_steal_focus(modification.element_id, false, res, clipboard);
                     }
                     ChangeFocusRequest::StealTemporaryFocus => {
-                        self.element_steal_focus(
-                            modification.element_id,
-                            true,
-                            font_system,
-                            clipboard,
-                        );
+                        self.element_steal_focus(modification.element_id, true, res, clipboard);
                     }
                     ChangeFocusRequest::ReleaseFocus => {
-                        self.element_release_focus(modification.element_id, font_system, clipboard);
+                        self.element_release_focus(modification.element_id, res, clipboard);
                     }
                 },
                 ElementModificationType::HandleDropped => {
-                    self.drop_element(modification.element_id, font_system, clipboard);
+                    self.drop_element(modification.element_id, res, clipboard);
                 }
                 ElementModificationType::ListenToClickOff => {
                     self.handle_element_listen_to_click_off(modification.element_id);
@@ -1222,7 +1198,7 @@ impl<A: Clone + 'static> View<A> {
     fn handle_element_custom_state_changed(
         &mut self,
         element_id: ElementID,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
         clipboard: &mut Clipboard,
     ) {
         let Some(element_entry) = self.element_arena.get_mut(element_id.0) else {
@@ -1235,7 +1211,7 @@ impl<A: Clone + 'static> View<A> {
             element_entry,
             element_id,
             &mut self.context,
-            font_system,
+            res,
             clipboard,
         );
     }
@@ -1264,7 +1240,7 @@ impl<A: Clone + 'static> View<A> {
         &mut self,
         element_id: ElementID,
         new_rect: Rect,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
         clipboard: &mut Clipboard,
     ) {
         let Some(element_entry) = self.element_arena.get_mut(element_id.0) else {
@@ -1290,13 +1266,7 @@ impl<A: Clone + 'static> View<A> {
         let visibility_changed = element_entry.stack_data.visible() != old_visibility;
 
         if visibility_changed && !element_entry.stack_data.visible() {
-            release_focus_for_element(
-                element_id,
-                element_entry,
-                &mut self.context,
-                font_system,
-                clipboard,
-            );
+            release_focus_for_element(element_id, element_entry, &mut self.context, res, clipboard);
         }
 
         if size_changed
@@ -1310,7 +1280,7 @@ impl<A: Clone + 'static> View<A> {
                 element_entry,
                 element_id,
                 &mut self.context,
-                font_system,
+                res,
                 clipboard,
             );
         }
@@ -1326,7 +1296,7 @@ impl<A: Clone + 'static> View<A> {
                 element_entry,
                 element_id,
                 &mut self.context,
-                font_system,
+                res,
                 clipboard,
             );
         }
@@ -1348,7 +1318,7 @@ impl<A: Clone + 'static> View<A> {
                 element_entry,
                 element_id,
                 &mut self.context,
-                font_system,
+                res,
                 clipboard,
             );
         }
@@ -1370,7 +1340,7 @@ impl<A: Clone + 'static> View<A> {
     fn handle_scissor_rect_changed_for_element(
         &mut self,
         element_id: ElementID,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
         clipboard: &mut Clipboard,
     ) {
         let Some(element_entry) = self.element_arena.get_mut(element_id.0) else {
@@ -1396,13 +1366,7 @@ impl<A: Clone + 'static> View<A> {
         );
 
         if visibility_changed && !element_entry.stack_data.visible() {
-            release_focus_for_element(
-                element_id,
-                element_entry,
-                &mut self.context,
-                font_system,
-                clipboard,
-            );
+            release_focus_for_element(element_id, element_entry, &mut self.context, res, clipboard);
         }
 
         if visibility_changed
@@ -1422,7 +1386,7 @@ impl<A: Clone + 'static> View<A> {
                 element_entry,
                 element_id,
                 &mut self.context,
-                font_system,
+                res,
                 clipboard,
             );
         }
@@ -1436,7 +1400,7 @@ impl<A: Clone + 'static> View<A> {
         &mut self,
         element_id: ElementID,
         new_z_index: ZIndex,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
         clipboard: &mut Clipboard,
     ) {
         let Some(element_entry) = self.element_arena.get_mut(element_id.0) else {
@@ -1479,7 +1443,7 @@ impl<A: Clone + 'static> View<A> {
                 element_entry,
                 element_id,
                 &mut self.context,
-                font_system,
+                res,
                 clipboard,
             );
         }
@@ -1495,7 +1459,7 @@ impl<A: Clone + 'static> View<A> {
         &mut self,
         element_id: ElementID,
         manually_hidden: bool,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
         clipboard: &mut Clipboard,
     ) {
         let Some(element_entry) = self.element_arena.get_mut(element_id.0) else {
@@ -1529,13 +1493,7 @@ impl<A: Clone + 'static> View<A> {
         );
 
         if visibility_changed && !element_entry.stack_data.visible() {
-            release_focus_for_element(
-                element_id,
-                element_entry,
-                &mut self.context,
-                font_system,
-                clipboard,
-            );
+            release_focus_for_element(element_id, element_entry, &mut self.context, res, clipboard);
         }
 
         if element_entry
@@ -1554,7 +1512,7 @@ impl<A: Clone + 'static> View<A> {
                 element_entry,
                 element_id,
                 &mut self.context,
-                font_system,
+                res,
                 clipboard,
             );
         }
@@ -1602,7 +1560,7 @@ impl<A: Clone + 'static> View<A> {
         &mut self,
         element_id: ElementID,
         is_temporary: bool,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
         clipboard: &mut Clipboard,
     ) {
         if self.element_arena.get(element_id.0).is_none() {
@@ -1624,7 +1582,7 @@ impl<A: Clone + 'static> View<A> {
                     element_entry,
                     *id,
                     &mut self.context,
-                    font_system,
+                    res,
                     clipboard,
                 );
             }
@@ -1636,7 +1594,7 @@ impl<A: Clone + 'static> View<A> {
 
         // Release focus from the previously focused element.
         if let Some(info) = &self.context.current_focus_info {
-            self.element_release_focus(info.element_id, font_system, clipboard);
+            self.element_release_focus(info.element_id, res, clipboard);
         }
 
         let element_entry = self.element_arena.get_mut(element_id.0).unwrap();
@@ -1677,7 +1635,7 @@ impl<A: Clone + 'static> View<A> {
                 element_entry,
                 element_id,
                 &mut self.context,
-                font_system,
+                res,
                 clipboard,
             );
         }
@@ -1686,7 +1644,7 @@ impl<A: Clone + 'static> View<A> {
     fn element_release_focus(
         &mut self,
         element_id: ElementID,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
         clipboard: &mut Clipboard,
     ) {
         let Some(element_entry) = self.element_arena.get_mut(element_id.0) else {
@@ -1694,24 +1652,18 @@ impl<A: Clone + 'static> View<A> {
             return;
         };
 
-        release_focus_for_element(
-            element_id,
-            element_entry,
-            &mut self.context,
-            font_system,
-            clipboard,
-        );
+        release_focus_for_element(element_id, element_entry, &mut self.context, res, clipboard);
     }
 
     fn drop_element(
         &mut self,
         element_id: ElementID,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
         clipboard: &mut Clipboard,
     ) {
         if let Some(focus_info) = &self.context.current_focus_info {
             if focus_info.element_id == element_id {
-                self.element_release_focus(element_id, font_system, clipboard);
+                self.element_release_focus(element_id, res, clipboard);
             }
         }
 
@@ -1724,7 +1676,7 @@ impl<A: Clone + 'static> View<A> {
             element_id,
             &mut element_entry,
             &mut self.context,
-            font_system,
+            res,
             clipboard,
         );
 
@@ -1837,7 +1789,7 @@ impl<A: Clone + 'static> View<A> {
         queue: &wgpu::Queue,
         vg: &mut rootvg::Canvas,
         pre_present_notify: P,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
     ) -> Result<(), wgpu::SurfaceError> {
         if !self.view_needs_repaint {
             return Ok(());
@@ -1880,7 +1832,7 @@ impl<A: Clone + 'static> View<A> {
 
                     element_entry.element.render_primitives(
                         RenderContext {
-                            font_system,
+                            res,
                             bounds_size: element_entry.stack_data.rect.size,
                             bounds_origin: element_entry.stack_data.rect.origin,
                             visible_bounds: element_entry.stack_data.visible_rect.unwrap(),
@@ -1906,7 +1858,8 @@ impl<A: Clone + 'static> View<A> {
             &mut encoder,
             &view,
             self.physical_size,
-            font_system,
+            &mut res.font_system,
+            &mut res.svg_icon_system,
         )
         .unwrap(); // TODO: handle this error properly.
 
@@ -2021,7 +1974,7 @@ fn send_event_to_element<A: Clone + 'static>(
     element_entry: &mut ElementEntry<A>,
     element_id: ElementID,
     view_cx: &mut ViewContext<A>,
-    font_system: &mut FontSystem,
+    res: &mut ResourceCtx,
     clipboard: &mut Clipboard,
 ) -> EventCaptureStatus {
     let has_focus = view_cx
@@ -2043,7 +1996,7 @@ fn send_event_to_element<A: Clone + 'static>(
         view_cx.window_id,
         view_cx.pointer_locked,
         &mut view_cx.action_sender,
-        font_system,
+        res,
         clipboard,
     );
 
@@ -2129,7 +2082,7 @@ fn release_focus_for_element<A: Clone + 'static>(
     element_id: ElementID,
     element_entry: &mut ElementEntry<A>,
     cx: &mut ViewContext<A>,
-    font_system: &mut FontSystem,
+    res: &mut ResourceCtx,
     clipboard: &mut Clipboard,
 ) {
     if let Some(info) = &cx.current_focus_info {
@@ -2157,7 +2110,7 @@ fn release_focus_for_element<A: Clone + 'static>(
             element_entry,
             element_id,
             cx,
-            font_system,
+            res,
             clipboard,
         );
     }

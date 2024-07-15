@@ -1,13 +1,13 @@
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
-use rootvg::text::glyphon::FontSystem;
 use rootvg::text::{RcTextBuffer, TextPrimitive};
 use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::{Align, Align2, Padding};
 use crate::math::{Point, Rect, Size, ZIndex};
+use crate::prelude::ResourceCtx;
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
 };
@@ -37,7 +37,7 @@ impl ParagraphInner {
         text: impl Into<String>,
         style: &LabelStyle,
         bounds_width: f32,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
         text_offset: Point,
     ) -> Self {
         let text: String = text.into();
@@ -51,7 +51,7 @@ impl ParagraphInner {
             style.properties,
             Size::new(width, 1000.0),
             false,
-            font_system,
+            &mut res.font_system,
         );
 
         Self {
@@ -93,12 +93,12 @@ impl ParagraphInner {
     }
 
     /// Returns `true` if the text has changed.
-    pub fn set_text(&mut self, text: &str, font_system: &mut FontSystem) -> bool {
+    pub fn set_text(&mut self, text: &str, res: &mut ResourceCtx) -> bool {
         if &self.text != text {
             self.text = String::from(text);
             self.text_size_needs_calculated = true;
 
-            self.text_buffer.set_text(text, font_system);
+            self.text_buffer.set_text(text, &mut res.font_system);
 
             true
         } else {
@@ -114,7 +114,7 @@ impl ParagraphInner {
         &mut self,
         bounds_width: f32,
         style: &LabelStyle,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
     ) {
         if self.bounds_width != bounds_width {
             self.bounds_width = bounds_width;
@@ -122,7 +122,7 @@ impl ParagraphInner {
             let text_width = self.text_width(style);
 
             self.text_buffer
-                .set_bounds(Size::new(text_width, 1000.0), font_system);
+                .set_bounds(Size::new(text_width, 1000.0), &mut res.font_system);
             self.text_size_needs_calculated = true;
         }
     }
@@ -136,9 +136,9 @@ impl ParagraphInner {
             .max(style.padding.left + style.padding.right + style.min_clipped_size.width)
     }
 
-    pub fn set_style(&mut self, style: &LabelStyle, font_system: &mut FontSystem) {
+    pub fn set_style(&mut self, style: &LabelStyle, res: &mut ResourceCtx) {
         self.text_buffer
-            .set_text_and_props(&self.text, style.properties, font_system);
+            .set_text_and_props(&self.text, style.properties, &mut res.font_system);
         self.text_size_needs_calculated = true;
     }
 
@@ -146,7 +146,7 @@ impl ParagraphInner {
         &mut self,
         bounds: Rect,
         style: &LabelStyle,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
     ) -> LabelPrimitives {
         let mut needs_layout = self.text_size_needs_calculated;
 
@@ -176,7 +176,7 @@ impl ParagraphInner {
                     // Add some extra padding below so that text doesn't get clipped.
                     self.text_bounds_rect.height() + 2.0,
                 ),
-                font_system,
+                &mut res.font_system,
             );
         }
 
@@ -307,7 +307,7 @@ impl ParagraphElement {
         let bounds_width = bounds_width.unwrap_or(bounding_rect.width());
 
         let shared_state = Rc::new(RefCell::new(SharedState {
-            inner: ParagraphInner::new(text, &style, bounds_width, cx.font_system, text_offset),
+            inner: ParagraphInner::new(text, &style, bounds_width, &mut cx.res, text_offset),
             style,
         }));
 
@@ -323,7 +323,7 @@ impl ParagraphElement {
 
         let el = cx
             .view
-            .add_element(element_builder, cx.font_system, cx.clipboard);
+            .add_element(element_builder, &mut cx.res, cx.clipboard);
 
         Paragraph { el, shared_state }
     }
@@ -351,7 +351,7 @@ impl<A: Clone + 'static> Element<A> for ParagraphElement {
         let SharedState { inner, style } = &mut *shared_state;
 
         let paragraph_primitives =
-            inner.render_primitives(Rect::from_size(cx.bounds_size), style, cx.font_system);
+            inner.render_primitives(Rect::from_size(cx.bounds_size), style, cx.res);
 
         if let Some(quad_primitive) = paragraph_primitives.bg_quad {
             primitives.add(quad_primitive);
@@ -400,10 +400,10 @@ impl Paragraph {
             .unclipped_text_size()
     }
 
-    pub fn set_text(&mut self, text: &str, font_sytem: &mut FontSystem) {
+    pub fn set_text(&mut self, text: &str, res: &mut ResourceCtx) {
         let changed = RefCell::borrow_mut(&self.shared_state)
             .inner
-            .set_text(text, font_sytem);
+            .set_text(text, res);
 
         if changed {
             self.el.notify_custom_state_change();
@@ -414,12 +414,12 @@ impl Paragraph {
         Ref::map(RefCell::borrow(&self.shared_state), |s| s.inner.text())
     }
 
-    pub fn set_bounds_width(&mut self, width: f32, font_system: &mut FontSystem) {
+    pub fn set_bounds_width(&mut self, width: f32, res: &mut ResourceCtx) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
         let SharedState { inner, style } = &mut *shared_state;
 
         if inner.bounds_width() != width {
-            inner.set_bounds_width(width, style, font_system);
+            inner.set_bounds_width(width, style, res);
             self.el.notify_custom_state_change();
         }
     }
@@ -428,12 +428,12 @@ impl Paragraph {
         RefCell::borrow(&self.shared_state).inner.bounds_width()
     }
 
-    pub fn set_style(&mut self, style: &Rc<LabelStyle>, font_sytem: &mut FontSystem) {
+    pub fn set_style(&mut self, style: &Rc<LabelStyle>, res: &mut ResourceCtx) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if !Rc::ptr_eq(&shared_state.style, style) {
             shared_state.style = Rc::clone(style);
-            shared_state.inner.set_style(style, font_sytem);
+            shared_state.inner.set_style(style, res);
             self.el.notify_custom_state_change();
         }
     }

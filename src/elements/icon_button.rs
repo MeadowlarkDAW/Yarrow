@@ -1,15 +1,14 @@
-use std::cell::{Ref, RefCell};
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use rootvg::math::Point;
-use rootvg::text::glyphon::FontSystem;
-use rootvg::text::TextProperties;
+use rootvg::text::CustomGlyphID;
 use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
-use crate::layout::{Align, Align2, Padding};
+use crate::layout::{Align2, Padding};
 use crate::math::{Rect, Size, ZIndex};
-use crate::style::{Background, BorderStyle, QuadStyle, DEFAULT_TEXT_ATTRIBUTES};
+use crate::style::{Background, BorderStyle, QuadStyle};
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
@@ -18,76 +17,79 @@ use crate::view::{ScissorRectID, MAIN_SCISSOR_RECT};
 use crate::window::WindowContext;
 use crate::CursorIcon;
 
-use super::button::ButtonState;
-use super::dual_label::{
-    DualLabelClipMode, DualLabelInner, DualLabelLayout, DualLabelPrimitives, DualLabelStyle,
-};
+use super::button::{ButtonState, ButtonStylePart, StateChangeResult};
+use super::icon::{IconInner, IconStyle};
+use super::label::LabelPrimitives;
 
+/// The style of a [`IconButton`] element
 #[derive(Debug, Clone, PartialEq)]
-pub struct DualButtonStylePart {
-    /// The color of the left text
+pub struct IconButtonStyle {
+    /// The size of the icon in points.
     ///
-    /// By default this is set to `color::WHITE`.
-    pub left_font_color: RGBA8,
-    /// The color of the right text
-    ///
-    /// By default this is set to `color::WHITE`.
-    pub right_font_color: RGBA8,
+    /// By default this is set to `20.0`.
+    pub size: f32,
 
-    /// The style of the padded background rectangle behind the text.
+    /// The padding between the icon and the bounding rectangle.
     ///
-    /// Set to `QuadStyle::TRANSPARENT` for no background rectangle.
-    ///
-    /// By default this is set to `QuadStyle::TRANSPARENT`.
-    pub back_quad: QuadStyle,
+    /// By default this is set to `Padding::new(6.0, 6.0, 6.0, 6.0)`.
+    pub padding: Padding,
+
+    pub idle: ButtonStylePart,
+    pub hovered: ButtonStylePart,
+    pub down: ButtonStylePart,
+    pub disabled: ButtonStylePart,
 }
 
-/// The style of a [`DualButton`] element
-#[derive(Debug, Clone, PartialEq)]
-pub struct DualButtonStyle {
-    /// The properties of the left text.
-    pub left_properties: TextProperties,
-    /// The properties of the right text.
-    pub right_properties: TextProperties,
+impl IconButtonStyle {
+    pub fn icon_style(&self, state: ButtonState) -> IconStyle {
+        let part = match state {
+            ButtonState::Idle => &self.idle,
+            ButtonState::Hovered => &self.hovered,
+            ButtonState::Down => &self.down,
+            ButtonState::Disabled => &self.disabled,
+        };
 
-    /// The vertical alignment of the text.
-    ///
-    /// By default this is set to `Align::Center`.
-    pub vertical_align: Align,
+        IconStyle {
+            size: self.size,
+            color: part.font_color,
+            back_quad: part.back_quad.clone(),
+            padding: self.padding,
+        }
+    }
 
-    pub layout: DualLabelLayout,
+    pub fn default_menu_style() -> Self {
+        let hovered = ButtonStylePart {
+            font_color: color::WHITE,
+            back_quad: QuadStyle {
+                bg: Background::Solid(RGBA8::new(75, 75, 75, 255)),
+                border: BorderStyle {
+                    radius: 4.0.into(),
+                    ..Default::default()
+                },
+            },
+        };
 
-    /// The minimum size of the clipped text area for the left text.
-    ///
-    /// By default this is set to `Size::new(5.0, 5.0)`.
-    pub left_min_clipped_size: Size,
-    /// The minimum size of the clipped text area for the right text.
-    ///
-    /// By default this is set to `Size::new(5.0, 5.0)`.
-    pub right_min_clipped_size: Size,
-
-    pub clip_mode: DualLabelClipMode,
-
-    /// The padding between the left text and the bounding rectangle.
-    ///
-    /// By default this has all values set to `0.0`.
-    pub left_padding: Padding,
-    /// The padding between the right text and the bounding rectangle.
-    ///
-    /// By default this has all values set to `0.0`.
-    pub right_padding: Padding,
-
-    pub idle: DualButtonStylePart,
-    pub hovered: DualButtonStylePart,
-    pub down: DualButtonStylePart,
-    pub disabled: DualButtonStylePart,
+        Self {
+            idle: ButtonStylePart {
+                font_color: color::WHITE,
+                back_quad: QuadStyle::TRANSPARENT,
+            },
+            hovered: hovered.clone(),
+            down: hovered.clone(),
+            disabled: ButtonStylePart {
+                font_color: RGBA8::new(150, 150, 150, 255),
+                back_quad: QuadStyle::TRANSPARENT,
+            },
+            padding: Padding::new(2.0, 3.0, 2.0, 3.0),
+            ..Default::default()
+        }
+    }
 }
 
-impl Default for DualButtonStyle {
+impl Default for IconButtonStyle {
     fn default() -> Self {
-        let idle = DualButtonStylePart {
-            left_font_color: color::WHITE,
-            right_font_color: color::WHITE,
+        let idle = ButtonStylePart {
+            font_color: color::WHITE,
             back_quad: QuadStyle {
                 bg: Background::Solid(RGBA8::new(40, 40, 40, 255)),
                 border: BorderStyle {
@@ -100,25 +102,11 @@ impl Default for DualButtonStyle {
         };
 
         Self {
-            left_properties: TextProperties {
-                attrs: DEFAULT_TEXT_ATTRIBUTES,
-                ..Default::default()
-            },
-            right_properties: TextProperties {
-                attrs: DEFAULT_TEXT_ATTRIBUTES,
-                ..Default::default()
-            },
-            vertical_align: Align::Center,
-            left_min_clipped_size: Size::new(5.0, 5.0),
-            right_min_clipped_size: Size::new(5.0, 5.0),
-            left_padding: Padding::new(6.0, 6.0, 6.0, 6.0),
-            right_padding: Padding::new(6.0, 6.0, 6.0, 6.0),
-
-            clip_mode: DualLabelClipMode::default(),
-            layout: DualLabelLayout::default(),
+            size: 20.0,
+            padding: Padding::new(4.0, 6.0, 4.0, 6.0),
 
             idle: idle.clone(),
-            hovered: DualButtonStylePart {
+            hovered: ButtonStylePart {
                 back_quad: QuadStyle {
                     bg: Background::Solid(RGBA8::new(55, 55, 55, 255)),
                     border: BorderStyle {
@@ -128,16 +116,15 @@ impl Default for DualButtonStyle {
                 },
                 ..idle
             },
-            down: DualButtonStylePart {
+            down: ButtonStylePart {
                 back_quad: QuadStyle {
                     bg: Background::Solid(RGBA8::new(40, 40, 40, 255)),
                     ..idle.back_quad
                 },
                 ..idle
             },
-            disabled: DualButtonStylePart {
-                left_font_color: RGBA8::new(150, 150, 150, 255),
-                right_font_color: RGBA8::new(150, 150, 150, 255),
+            disabled: ButtonStylePart {
+                font_color: RGBA8::new(150, 150, 150, 255),
                 back_quad: QuadStyle {
                     bg: Background::Solid(RGBA8::new(40, 40, 40, 255)),
                     border: BorderStyle {
@@ -151,69 +138,23 @@ impl Default for DualButtonStyle {
     }
 }
 
-impl DualButtonStyle {
-    pub fn dual_label_style(&self, state: ButtonState) -> DualLabelStyle {
-        let part = match state {
-            ButtonState::Idle => &self.idle,
-            ButtonState::Hovered => &self.hovered,
-            ButtonState::Down => &self.down,
-            ButtonState::Disabled => &self.disabled,
-        };
-
-        DualLabelStyle {
-            left_properties: self.left_properties,
-            right_properties: self.right_properties,
-            left_font_color: part.left_font_color,
-            right_font_color: part.right_font_color,
-            vertical_align: self.vertical_align,
-            left_min_clipped_size: self.left_min_clipped_size,
-            right_min_clipped_size: self.left_min_clipped_size,
-            back_quad: part.back_quad.clone(),
-            left_padding: self.left_padding,
-            right_padding: self.right_padding,
-            layout: self.layout,
-            clip_mode: self.clip_mode,
-        }
-    }
-}
-
 /// A reusable button struct that can be used by other elements.
-pub struct DualButtonInner {
-    state: ButtonState,
-    dual_label: DualLabelInner,
+pub struct IconButtonInner {
+    pub icon: IconInner,
+    pub state: ButtonState,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct StateChangeResult {
-    pub state_changed: bool,
-    pub needs_repaint: bool,
-}
-
-impl DualButtonInner {
-    pub fn new(
-        left_text: String,
-        right_text: String,
-        left_text_offset: Point,
-        right_text_offset: Point,
-        style: &DualButtonStyle,
-        font_system: &mut FontSystem,
-    ) -> Self {
-        let dual_label = DualLabelInner::new(
-            left_text,
-            right_text,
-            left_text_offset,
-            right_text_offset,
-            &style.dual_label_style(ButtonState::Idle),
-            font_system,
-        );
+impl IconButtonInner {
+    pub fn new(icon_id: CustomGlyphID, scale: f32, offset: Point) -> Self {
+        let icon = IconInner::new(icon_id, scale, offset);
 
         Self {
-            dual_label,
+            icon,
             state: ButtonState::Idle,
         }
     }
 
-    pub fn set_state(&mut self, state: ButtonState, style: &DualButtonStyle) -> StateChangeResult {
+    pub fn set_state(&mut self, state: ButtonState, style: &IconButtonStyle) -> StateChangeResult {
         if self.state != state {
             let old_part = match self.state {
                 ButtonState::Idle => &style.idle,
@@ -247,109 +188,52 @@ impl DualButtonInner {
         self.state
     }
 
-    pub fn set_style(&mut self, style: &DualButtonStyle, font_system: &mut FontSystem) {
-        self.dual_label
-            .set_style(&self.dual_label_style(style), font_system);
-    }
-
     /// Returns the size of the padded background rectangle if it were to
     /// cover the entire size of the unclipped text.
-    pub fn desired_padded_size(&mut self, style: &DualButtonStyle) -> Size {
-        self.dual_label
-            .desired_padded_size(&self.dual_label_style(style))
+    pub fn desired_padded_size(&mut self, style: &IconButtonStyle) -> Size {
+        self.icon.desired_padded_size(&self.icon_style(style))
     }
 
-    /// Returns the size of the unclipped left and right text.
-    ///
-    /// This can be useful to lay out elements that depend on text size.
-    pub fn unclipped_text_size(&mut self) -> (Size, Size) {
-        self.dual_label.unclipped_text_size()
+    /// Returns the rectangular area of the icon from the given bounds size
+    /// (icons are assumed to be square).
+    pub fn icon_rect(&self, style: &IconStyle, bounds_size: Size) -> Rect {
+        self.icon.icon_rect(style, bounds_size)
     }
 
-    /// Returns `true` if the text has changed.
-    pub fn set_left_text(&mut self, text: &str, font_system: &mut FontSystem) -> bool {
-        self.dual_label.set_left_text(text, font_system)
+    pub fn icon_style(&self, style: &IconButtonStyle) -> IconStyle {
+        style.icon_style(self.state)
     }
 
-    /// Returns `true` if the text has changed.
-    pub fn set_right_text(
-        &mut self,
-        text: &str,
-        style: &DualButtonStyle,
-        font_system: &mut FontSystem,
-    ) -> bool {
-        let style = self.dual_label_style(style);
-        self.dual_label.set_right_text(text, &style, font_system)
-    }
-
-    pub fn text(&self) -> (&str, &str) {
-        self.dual_label.text()
-    }
-
-    pub fn dual_label_style(&self, style: &DualButtonStyle) -> DualLabelStyle {
-        style.dual_label_style(self.state)
-    }
-
-    pub fn render_primitives(
-        &mut self,
-        bounds: Rect,
-        style: &DualButtonStyle,
-        font_system: &mut FontSystem,
-    ) -> DualLabelPrimitives {
-        self.dual_label
-            .render_primitives(bounds, &self.dual_label_style(style), font_system)
-    }
-
-    /// An offset that can be used mainly to correct the position of icon glyphs.
-    /// This does not effect the position of the background quad.
-    ///
-    /// Returns `true` if the text offset has changed.
-    pub fn set_left_text_offset(&mut self, offset: Point) -> bool {
-        self.dual_label.set_left_text_offset(offset)
-    }
-
-    /// An offset that can be used mainly to correct the position of icon glyphs.
-    /// This does not effect the position of the background quad.
-    ///
-    /// Returns `true` if the text offset has changed.
-    pub fn set_right_text_offset(&mut self, offset: Point) -> bool {
-        self.dual_label.set_right_text_offset(offset)
-    }
-
-    pub fn left_text_offset(&self) -> Point {
-        self.dual_label.left_text_offset
-    }
-
-    pub fn right_text_offset(&self) -> Point {
-        self.dual_label.right_text_offset
+    pub fn render_primitives(&mut self, bounds: Rect, style: &IconButtonStyle) -> LabelPrimitives {
+        self.icon.render_primitives(bounds, &self.icon_style(style))
     }
 }
 
-pub struct DualButtonBuilder<A: Clone + 'static> {
+pub struct IconButtonBuilder<A: Clone + 'static> {
     pub action: Option<A>,
     pub tooltip_message: Option<String>,
     pub tooltip_align: Align2,
-    pub left_text: String,
-    pub right_text: String,
-    pub left_text_offset: Point,
-    pub right_text_offset: Point,
-    pub style: Rc<DualButtonStyle>,
+
+    pub icon_id: CustomGlyphID,
+    pub scale: f32,
+    pub offset: Point,
+
+    pub style: Rc<IconButtonStyle>,
     pub z_index: ZIndex,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
     pub scissor_rect_id: ScissorRectID,
 }
 
-impl<A: Clone + 'static> DualButtonBuilder<A> {
-    pub fn new(style: &Rc<DualButtonStyle>) -> Self {
+impl<A: Clone + 'static> IconButtonBuilder<A> {
+    pub fn new(style: &Rc<IconButtonStyle>) -> Self {
         Self {
             action: None,
             tooltip_message: None,
             tooltip_align: Align2::TOP_CENTER,
-            left_text: String::new(),
-            right_text: String::new(),
-            left_text_offset: Point::default(),
-            right_text_offset: Point::default(),
+            icon_id: CustomGlyphID::MAX,
+            scale: 1.0,
+            offset: Point::default(),
             style: Rc::clone(style),
             z_index: 0,
             bounding_rect: Rect::default(),
@@ -358,8 +242,8 @@ impl<A: Clone + 'static> DualButtonBuilder<A> {
         }
     }
 
-    pub fn build(self, cx: &mut WindowContext<'_, A>) -> DualButton {
-        DualButtonElement::create(self, cx)
+    pub fn build(self, cx: &mut WindowContext<'_, A>) -> IconButton {
+        IconButtonElement::create(self, cx)
     }
 
     pub fn on_select(mut self, action: A) -> Self {
@@ -378,27 +262,21 @@ impl<A: Clone + 'static> DualButtonBuilder<A> {
         self
     }
 
-    pub fn left_text(mut self, text: impl Into<String>) -> Self {
-        self.left_text = text.into();
+    pub fn icon_id(mut self, id: impl Into<CustomGlyphID>) -> Self {
+        self.icon_id = id.into();
         self
     }
 
-    pub fn right_text(mut self, text: impl Into<String>) -> Self {
-        self.right_text = text.into();
-        self
-    }
-
-    /// An offset that can be used mainly to correct the position of icon glyphs.
-    /// This does not effect the position of the background quad.
-    pub const fn left_text_offset(mut self, offset: Point) -> Self {
-        self.left_text_offset = offset;
+    /// Scale the icon when rendering (used to help make icons look consistent).
+    pub const fn scale(mut self, scale: f32) -> Self {
+        self.scale = scale;
         self
     }
 
     /// An offset that can be used mainly to correct the position of icon glyphs.
     /// This does not effect the position of the background quad.
-    pub const fn right_text_offset(mut self, offset: Point) -> Self {
-        self.right_text_offset = offset;
+    pub const fn offset(mut self, offset: Point) -> Self {
+        self.offset = offset;
         self
     }
 
@@ -424,23 +302,22 @@ impl<A: Clone + 'static> DualButtonBuilder<A> {
 }
 
 /// A button element with a label.
-pub struct DualButtonElement<A: Clone + 'static> {
+pub struct IconButtonElement<A: Clone + 'static> {
     shared_state: Rc<RefCell<SharedState>>,
     action: Option<A>,
     tooltip_message: Option<String>,
     tooltip_align: Align2,
 }
 
-impl<A: Clone + 'static> DualButtonElement<A> {
-    pub fn create(builder: DualButtonBuilder<A>, cx: &mut WindowContext<'_, A>) -> DualButton {
-        let DualButtonBuilder {
+impl<A: Clone + 'static> IconButtonElement<A> {
+    pub fn create(builder: IconButtonBuilder<A>, cx: &mut WindowContext<'_, A>) -> IconButton {
+        let IconButtonBuilder {
             action,
             tooltip_message,
             tooltip_align,
-            left_text,
-            right_text,
-            left_text_offset,
-            right_text_offset,
+            icon_id,
+            scale,
+            offset,
             style,
             z_index,
             bounding_rect,
@@ -449,14 +326,7 @@ impl<A: Clone + 'static> DualButtonElement<A> {
         } = builder;
 
         let shared_state = Rc::new(RefCell::new(SharedState {
-            inner: DualButtonInner::new(
-                left_text,
-                right_text,
-                left_text_offset,
-                right_text_offset,
-                &style,
-                cx.font_system,
-            ),
+            inner: IconButtonInner::new(icon_id, scale, offset),
             style,
         }));
 
@@ -475,13 +345,13 @@ impl<A: Clone + 'static> DualButtonElement<A> {
 
         let el = cx
             .view
-            .add_element(element_builder, cx.font_system, cx.clipboard);
+            .add_element(element_builder, &mut cx.res, cx.clipboard);
 
-        DualButton { el, shared_state }
+        IconButton { el, shared_state }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for DualButtonElement<A> {
+impl<A: Clone + 'static> Element<A> for IconButtonElement<A> {
     fn flags(&self) -> ElementFlags {
         ElementFlags::PAINTS | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
     }
@@ -592,39 +462,33 @@ impl<A: Clone + 'static> Element<A> for DualButtonElement<A> {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
         let SharedState { inner, style } = &mut *shared_state;
 
-        let label_primitives =
-            inner.render_primitives(Rect::from_size(cx.bounds_size), style, cx.font_system);
+        let label_primitives = inner.render_primitives(Rect::from_size(cx.bounds_size), style);
 
         if let Some(quad_primitive) = label_primitives.bg_quad {
             primitives.add(quad_primitive);
         }
 
-        if let Some(p) = label_primitives.left_text {
+        if let Some(text_primitive) = label_primitives.text {
             primitives.set_z_index(1);
-            primitives.add_text(p);
-        }
-
-        if let Some(p) = label_primitives.right_text {
-            primitives.set_z_index(1);
-            primitives.add_text(p);
+            primitives.add_text(text_primitive);
         }
     }
 }
 
-/// A handle to a [`DualButtonElement`], a button with a label.
-pub struct DualButton {
+struct SharedState {
+    inner: IconButtonInner,
+    style: Rc<IconButtonStyle>,
+}
+
+/// A handle to a [`IconButtonElement`], a button with a label.
+pub struct IconButton {
     pub el: ElementHandle,
     shared_state: Rc<RefCell<SharedState>>,
 }
 
-struct SharedState {
-    inner: DualButtonInner,
-    style: Rc<DualButtonStyle>,
-}
-
-impl DualButton {
-    pub fn builder<A: Clone + 'static>(style: &Rc<DualButtonStyle>) -> DualButtonBuilder<A> {
-        DualButtonBuilder::new(style)
+impl IconButton {
+    pub fn builder<A: Clone + 'static>(style: &Rc<IconButtonStyle>) -> IconButtonBuilder<A> {
+        IconButtonBuilder::new(style)
     }
 
     /// Returns the size of the padded background rectangle if it were to
@@ -638,51 +502,31 @@ impl DualButton {
         inner.desired_padded_size(style)
     }
 
-    /// Returns the size of the unclipped left and right text.
-    ///
-    /// This can be useful to lay out elements that depend on text size.
-    pub fn unclipped_text_size(&self) -> (Size, Size) {
-        RefCell::borrow_mut(&self.shared_state)
-            .inner
-            .unclipped_text_size()
-    }
+    pub fn set_icon_id(&mut self, icon_id: impl Into<CustomGlyphID>) {
+        let icon_id: CustomGlyphID = icon_id.into();
 
-    pub fn set_left_text(&mut self, text: &str, font_system: &mut FontSystem) {
-        if RefCell::borrow_mut(&self.shared_state)
-            .inner
-            .set_left_text(text, font_system)
-        {
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+
+        if shared_state.inner.icon.icon_id != icon_id {
+            shared_state.inner.icon.icon_id = icon_id;
             self.el.notify_custom_state_change();
         }
     }
 
-    pub fn set_right_text(&mut self, text: &str, font_system: &mut FontSystem) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-        let SharedState { inner, style } = &mut *shared_state;
-
-        inner.set_right_text(text, style, font_system);
-        self.el.notify_custom_state_change();
+    pub fn icon_id(&self) -> CustomGlyphID {
+        RefCell::borrow(&self.shared_state).inner.icon.icon_id
     }
 
-    pub fn left_text<'a>(&'a self) -> Ref<'a, str> {
-        Ref::map(RefCell::borrow(&self.shared_state), |s| s.inner.text().0)
-    }
-
-    pub fn right_text<'a>(&'a self) -> Ref<'a, str> {
-        Ref::map(RefCell::borrow(&self.shared_state), |s| s.inner.text().1)
-    }
-
-    pub fn set_style(&mut self, style: &Rc<DualButtonStyle>, font_system: &mut FontSystem) {
+    pub fn set_style(&mut self, style: &Rc<IconButtonStyle>) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if !Rc::ptr_eq(&shared_state.style, style) {
             shared_state.style = Rc::clone(style);
-            shared_state.inner.set_style(style, font_system);
             self.el.notify_custom_state_change();
         }
     }
 
-    pub fn style(&self) -> Rc<DualButtonStyle> {
+    pub fn style(&self) -> Rc<IconButtonStyle> {
         Rc::clone(&RefCell::borrow(&self.shared_state).style)
     }
 
@@ -701,24 +545,21 @@ impl DualButton {
 
     /// An offset that can be used mainly to correct the position of icon glyphs.
     /// This does not effect the position of the background quad.
-    pub fn set_left_text_offset(&mut self, offset: Point) {
-        let changed = RefCell::borrow_mut(&self.shared_state)
-            .inner
-            .set_left_text_offset(offset);
+    pub fn set_offset(&mut self, offset: Point) {
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
-        if changed {
+        if shared_state.inner.icon.offset != offset {
+            shared_state.inner.icon.offset = offset;
             self.el.notify_custom_state_change();
         }
     }
 
-    /// An offset that can be used mainly to correct the position of icon glyphs.
-    /// This does not effect the position of the background quad.
-    pub fn set_right_text_offset(&mut self, offset: Point) {
-        let changed = RefCell::borrow_mut(&self.shared_state)
-            .inner
-            .set_right_text_offset(offset);
+    /// Scale the icon when rendering (used to help make icons look consistent).
+    pub fn set_scale(&mut self, scale: f32) {
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
-        if changed {
+        if shared_state.inner.icon.scale != scale {
+            shared_state.inner.icon.scale = scale;
             self.el.notify_custom_state_change();
         }
     }

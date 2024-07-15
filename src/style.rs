@@ -19,6 +19,7 @@ pub const DEFAULT_TEXT_ATTRIBUTES: Attrs<'static> = Attrs {
     weight: Weight::LIGHT,
     metadata: 0,
     cache_key_flags: CacheKeyFlags::empty(),
+    metrics_opt: None,
 };
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]

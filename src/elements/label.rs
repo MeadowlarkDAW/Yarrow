@@ -2,13 +2,13 @@ use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
 use rootvg::quad::QuadPrimitive;
-use rootvg::text::glyphon::FontSystem;
 use rootvg::text::{RcTextBuffer, TextPrimitive, TextProperties};
 use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::{Align, Align2, Padding};
 use crate::math::{Point, Rect, Size, ZIndex};
+use crate::prelude::ResourceCtx;
 use crate::style::{Background, BorderStyle, QuadStyle, DEFAULT_TEXT_ATTRIBUTES};
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
@@ -121,8 +121,8 @@ impl LabelInner {
     pub fn new(
         text: impl Into<String>,
         style: &LabelStyle,
-        font_system: &mut FontSystem,
         text_offset: Point,
+        res: &mut ResourceCtx,
     ) -> Self {
         let text: String = text.into();
 
@@ -132,7 +132,7 @@ impl LabelInner {
             style.properties,
             Size::new(1000.0, 200.0),
             false,
-            font_system,
+            &mut res.font_system,
         );
 
         Self {
@@ -173,12 +173,12 @@ impl LabelInner {
     }
 
     /// Returns `true` if the text has changed.
-    pub fn set_text(&mut self, text: &str, font_system: &mut FontSystem) -> bool {
+    pub fn set_text(&mut self, text: &str, res: &mut ResourceCtx) -> bool {
         if &self.text != text {
             self.text = String::from(text);
             self.text_size_needs_calculated = true;
 
-            self.text_buffer.set_text(text, font_system);
+            self.text_buffer.set_text(text, &mut res.font_system);
 
             true
         } else {
@@ -190,9 +190,9 @@ impl LabelInner {
         &self.text
     }
 
-    pub fn set_style(&mut self, style: &LabelStyle, font_system: &mut FontSystem) {
+    pub fn set_style(&mut self, style: &LabelStyle, res: &mut ResourceCtx) {
         self.text_buffer
-            .set_text_and_props(&self.text, style.properties, font_system);
+            .set_text_and_props(&self.text, style.properties, &mut res.font_system);
         self.text_size_needs_calculated = true;
     }
 
@@ -200,7 +200,7 @@ impl LabelInner {
         &mut self,
         bounds: Rect,
         style: &LabelStyle,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
     ) -> LabelPrimitives {
         let mut needs_layout = self.text_size_needs_calculated;
 
@@ -230,7 +230,7 @@ impl LabelInner {
                     // Add some extra padding below so that text doesn't get clipped.
                     self.text_bounds_rect.height() + 2.0,
                 ),
-                font_system,
+                &mut res.font_system,
             );
         }
 
@@ -351,7 +351,7 @@ impl LabelElement {
         } = builder;
 
         let shared_state = Rc::new(RefCell::new(SharedState {
-            inner: LabelInner::new(text, &style, cx.font_system, text_offset),
+            inner: LabelInner::new(text, &style, text_offset, &mut cx.res),
             style,
         }));
 
@@ -367,7 +367,7 @@ impl LabelElement {
 
         let el = cx
             .view
-            .add_element(element_builder, cx.font_system, cx.clipboard);
+            .add_element(element_builder, &mut cx.res, cx.clipboard);
 
         Label { el, shared_state }
     }
@@ -395,7 +395,7 @@ impl<A: Clone + 'static> Element<A> for LabelElement {
         let SharedState { inner, style } = &mut *shared_state;
 
         let label_primitives =
-            inner.render_primitives(Rect::from_size(cx.bounds_size), style, cx.font_system);
+            inner.render_primitives(Rect::from_size(cx.bounds_size), style, cx.res);
 
         if let Some(quad_primitive) = label_primitives.bg_quad {
             primitives.add(quad_primitive);
@@ -444,10 +444,10 @@ impl Label {
             .unclipped_text_size()
     }
 
-    pub fn set_text(&mut self, text: &str, font_sytem: &mut FontSystem) {
+    pub fn set_text(&mut self, text: &str, res: &mut ResourceCtx) {
         let changed = RefCell::borrow_mut(&self.shared_state)
             .inner
-            .set_text(text, font_sytem);
+            .set_text(text, res);
 
         if changed {
             self.el.notify_custom_state_change();
@@ -458,12 +458,12 @@ impl Label {
         Ref::map(RefCell::borrow(&self.shared_state), |s| s.inner.text())
     }
 
-    pub fn set_style(&mut self, style: &Rc<LabelStyle>, font_sytem: &mut FontSystem) {
+    pub fn set_style(&mut self, style: &Rc<LabelStyle>, res: &mut ResourceCtx) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if !Rc::ptr_eq(&shared_state.style, style) {
             shared_state.style = Rc::clone(style);
-            shared_state.inner.set_style(style, font_sytem);
+            shared_state.inner.set_style(style, res);
             self.el.notify_custom_state_change();
         }
     }

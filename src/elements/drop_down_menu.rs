@@ -3,12 +3,13 @@ use std::rc::Rc;
 
 use rootvg::math::Point;
 use rootvg::quad::{SolidQuadBuilder, SolidQuadPrimitive};
-use rootvg::text::{TextPrimitive, TextProperties};
+use rootvg::text::{CustomGlyphID, TextPrimitive, TextProperties};
 use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
 use crate::layout::Padding;
 use crate::math::{Rect, Size, ZIndex};
+use crate::prelude::ResourceCtx;
 use crate::style::{Background, BorderStyle, QuadStyle, DEFAULT_TEXT_ATTRIBUTES};
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
@@ -18,7 +19,8 @@ use crate::view::{ScissorRectID, MAIN_SCISSOR_RECT};
 use crate::window::WindowContext;
 use crate::CursorIcon;
 
-use super::dual_label::{DualLabelInner, DualLabelLayout, DualLabelStyle};
+use super::icon_label::{IconLabelInner, IconLabelLayout, IconLabelStyle};
+use super::label::{LabelInner, LabelStyle};
 
 // TODO: list of todos:
 // * handle cases when the menu is too large to fit in the window, with
@@ -32,17 +34,61 @@ use super::dual_label::{DualLabelInner, DualLabelLayout, DualLabelStyle};
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MenuEntry {
     Option {
+        left_icon_id: Option<CustomGlyphID>,
+        icon_scale: f32,
         left_text: String,
-        right_text: String,
+        right_text: Option<String>,
         unique_id: usize,
     },
     Divider,
     // TODO: Nested menus
 }
 
+impl MenuEntry {
+    pub fn option(text: impl Into<String>, unique_id: usize) -> Self {
+        Self::Option {
+            left_icon_id: None,
+            icon_scale: 1.0,
+            left_text: text.into(),
+            right_text: None,
+            unique_id,
+        }
+    }
+
+    pub fn option_with_right_text(
+        left_text: impl Into<String>,
+        right_text: Option<impl Into<String>>,
+        unique_id: usize,
+    ) -> Self {
+        Self::Option {
+            left_icon_id: None,
+            icon_scale: 1.0,
+            left_text: left_text.into(),
+            right_text: right_text.map(|t| t.into()),
+            unique_id,
+        }
+    }
+
+    pub fn option_with_icon(
+        text: impl Into<String>,
+        icon_id: Option<impl Into<CustomGlyphID>>,
+        icon_scale: f32,
+        unique_id: usize,
+    ) -> Self {
+        Self::Option {
+            left_icon_id: icon_id.map(|i| i.into()),
+            icon_scale,
+            left_text: text.into(),
+            right_text: None,
+            unique_id,
+        }
+    }
+}
+
 enum MenuEntryInner {
     Option {
-        dual_label: DualLabelInner,
+        left_label: IconLabelInner,
+        right_label: Option<LabelInner>,
         start_y: f32,
         end_y: f32,
         unique_id: usize,
@@ -59,8 +105,15 @@ pub struct DropDownMenuStyle {
     pub left_text_properties: TextProperties,
     pub right_text_properties: TextProperties,
 
+    /// The size of the icon in points.
+    ///
+    /// By default this is set to `20.0`.
+    pub icon_size: f32,
+
+    pub left_icon_color_idle: RGBA8,
     pub left_text_color_idle: RGBA8,
     pub right_text_color_idle: RGBA8,
+    pub left_icon_color_hover: RGBA8,
     pub left_text_color_hover: RGBA8,
     pub right_text_color_hover: RGBA8,
 
@@ -68,6 +121,7 @@ pub struct DropDownMenuStyle {
     pub text_bg_quad_hover: QuadStyle,
 
     pub outer_padding: f32,
+    pub left_icon_padding: Padding,
     pub left_text_padding: Padding,
     pub right_text_padding: Padding,
 
@@ -88,8 +142,12 @@ impl Default for DropDownMenuStyle {
                 ..Default::default()
             },
 
+            icon_size: 20.0,
+
+            left_icon_color_idle: color::WHITE,
             left_text_color_idle: color::WHITE,
             right_text_color_idle: color::WHITE,
+            left_icon_color_hover: color::WHITE,
             left_text_color_hover: color::WHITE,
             right_text_color_hover: color::WHITE,
 
@@ -113,6 +171,7 @@ impl Default for DropDownMenuStyle {
             },
 
             outer_padding: 4.0,
+            left_icon_padding: Padding::new(0.0, 0.0, 0.0, 4.0),
             left_text_padding: Padding::new(5.0, 10.0, 5.0, 10.0),
             right_text_padding: Padding::new(5.0, 10.0, 5.0, 30.0),
 
@@ -124,26 +183,37 @@ impl Default for DropDownMenuStyle {
 }
 
 impl DropDownMenuStyle {
-    fn dual_label_style(&self, hovered: bool) -> DualLabelStyle {
-        DualLabelStyle {
-            left_properties: self.left_text_properties,
-            right_properties: self.right_text_properties,
-            left_font_color: if hovered {
-                self.left_text_color_hover
-            } else {
-                self.left_text_color_idle
+    fn label_styles(&self, hovered: bool) -> (IconLabelStyle, LabelStyle) {
+        (
+            IconLabelStyle {
+                text_properties: self.left_text_properties,
+                icon_size: self.icon_size,
+                text_color: if hovered {
+                    self.left_text_color_hover
+                } else {
+                    self.left_text_color_idle
+                },
+                icon_color: if hovered {
+                    self.left_icon_color_hover
+                } else {
+                    self.left_icon_color_idle
+                },
+                layout: IconLabelLayout::LeftAlignIconThenText,
+                icon_padding: self.left_icon_padding,
+                text_padding: self.left_text_padding,
+                ..Default::default()
             },
-            right_font_color: if hovered {
-                self.right_text_color_hover
-            } else {
-                self.right_text_color_idle
+            LabelStyle {
+                properties: self.right_text_properties,
+                font_color: if hovered {
+                    self.right_text_color_hover
+                } else {
+                    self.right_text_color_idle
+                },
+                padding: self.right_text_padding,
+                ..Default::default()
             },
-            vertical_align: crate::layout::Align::Center,
-            left_padding: self.left_text_padding,
-            right_padding: self.right_text_padding,
-            layout: DualLabelLayout::LeftAndRightAlign,
-            ..DualLabelStyle::default()
-        }
+        )
     }
 
     fn text_row_height(&self) -> f32 {
@@ -163,21 +233,28 @@ impl DropDownMenuStyle {
         }
 
         let text_row_height = self.text_row_height();
-        let dual_label_style = self.dual_label_style(false);
+        let (left_style, right_style) = self.label_styles(false);
 
         let mut max_width: f32 = 0.0;
         let mut total_height: f32 = self.outer_padding;
         for entry in entries.iter_mut() {
             match entry {
                 MenuEntryInner::Option {
-                    dual_label,
+                    left_label,
+                    right_label,
                     start_y,
                     end_y,
                     ..
                 } => {
-                    let size = dual_label.desired_padded_size(&dual_label_style);
+                    let left_size = left_label.desired_padded_size(&left_style);
+                    let right_size = right_label
+                        .as_mut()
+                        .map(|l| l.desired_padded_size(&right_style))
+                        .unwrap_or(Size::zero());
 
-                    max_width = max_width.max(size.width);
+                    let total_width = left_size.width + right_size.width;
+
+                    max_width = max_width.max(total_width);
 
                     *start_y = total_height;
                     total_height += text_row_height;
@@ -277,31 +354,7 @@ impl<A: Clone + 'static> DropDownMenuElement<A> {
             style_changed: false,
         }));
 
-        let dual_label_style = style.dual_label_style(false);
-
-        let mut entries: Vec<MenuEntryInner> = entries
-            .into_iter()
-            .map(|entry| match entry {
-                MenuEntry::Option {
-                    left_text,
-                    right_text,
-                    unique_id,
-                } => MenuEntryInner::Option {
-                    dual_label: DualLabelInner::new(
-                        left_text,
-                        right_text,
-                        Point::default(),
-                        Point::default(),
-                        &dual_label_style,
-                        cx.font_system,
-                    ),
-                    start_y: 0.0,
-                    end_y: 0.0,
-                    unique_id,
-                },
-                MenuEntry::Divider => MenuEntryInner::Divider { y: 0.0 },
-            })
-            .collect();
+        let mut entries = build_entries(entries, &style, &mut cx.res);
 
         let size = style.measure(&mut entries);
 
@@ -322,7 +375,7 @@ impl<A: Clone + 'static> DropDownMenuElement<A> {
 
         let el = cx
             .view
-            .add_element(element_builder, cx.font_system, cx.clipboard);
+            .add_element(element_builder, &mut cx.res, cx.clipboard);
 
         DropDownMenu { el, shared_state }
     }
@@ -361,43 +414,26 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
                 let mut measure = false;
 
                 if let Some(new_entries) = shared_state.new_entries.take() {
-                    let dual_label_style = shared_state.style.dual_label_style(false);
-
-                    self.entries = new_entries
-                        .into_iter()
-                        .map(|entry| match entry {
-                            MenuEntry::Option {
-                                left_text,
-                                right_text,
-                                unique_id,
-                            } => MenuEntryInner::Option {
-                                dual_label: DualLabelInner::new(
-                                    left_text,
-                                    right_text,
-                                    Point::default(),
-                                    Point::default(),
-                                    &dual_label_style,
-                                    cx.font_system,
-                                ),
-                                start_y: 0.0,
-                                end_y: 0.0,
-                                unique_id,
-                            },
-                            MenuEntry::Divider => MenuEntryInner::Divider { y: 0.0 },
-                        })
-                        .collect();
+                    self.entries = build_entries(new_entries, &shared_state.style, &mut cx.res);
 
                     measure = true;
                     do_restyle = false;
                 }
 
                 if do_restyle {
-                    let dual_label_style = shared_state.style.dual_label_style(false);
+                    let (left_style, right_style) = shared_state.style.label_styles(false);
 
                     for entry in self.entries.iter_mut() {
                         match entry {
-                            MenuEntryInner::Option { dual_label, .. } => {
-                                dual_label.set_style(&dual_label_style, cx.font_system);
+                            MenuEntryInner::Option {
+                                left_label,
+                                right_label,
+                                ..
+                            } => {
+                                left_label.set_style(&left_style, &mut cx.res);
+                                if let Some(right_label) = right_label {
+                                    right_label.set_style(&right_style, &mut cx.res);
+                                }
                             }
                             _ => {}
                         }
@@ -552,15 +588,15 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
     fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
         let style = &RefCell::borrow(&self.shared_state).style;
 
-        let dual_label_style_idle = style.dual_label_style(false);
-        let dual_label_style_hover = style.dual_label_style(true);
+        let (left_style_idle, right_style_idle) = style.label_styles(false);
+        let (left_style_hover, right_style_hover) = style.label_styles(true);
 
         let label_size = Size::new(
             self.size.width - (style.outer_padding * 2.0),
             style.text_row_height(),
         );
 
-        let mut text_primitives: Vec<TextPrimitive> = Vec::with_capacity(self.entries.len() * 2);
+        let mut text_primitives: Vec<TextPrimitive> = Vec::with_capacity(self.entries.len() * 3);
         let mut divider_primitives: Vec<SolidQuadPrimitive> =
             Vec::with_capacity(self.entries.len());
 
@@ -573,7 +609,8 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
         for (i, entry) in self.entries.iter_mut().enumerate() {
             match entry {
                 MenuEntryInner::Option {
-                    dual_label,
+                    left_label,
+                    right_label,
                     start_y,
                     ..
                 } => {
@@ -591,21 +628,43 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
                         )));
                     }
 
-                    let mut p = dual_label.render_primitives(
+                    let left_primitives = left_label.render_primitives(
                         Rect::new(Point::new(style.outer_padding, *start_y), label_size),
                         if hovered {
-                            &dual_label_style_hover
+                            &left_style_hover
                         } else {
-                            &dual_label_style_idle
+                            &left_style_idle
                         },
-                        cx.font_system,
+                        cx.res,
                     );
 
-                    if let Some(left_text) = p.left_text.take() {
-                        text_primitives.push(left_text);
+                    if let Some(p) = left_primitives.icon {
+                        text_primitives.push(p);
                     }
-                    if let Some(right_text) = p.right_text.take() {
-                        text_primitives.push(right_text);
+                    if let Some(p) = left_primitives.text {
+                        text_primitives.push(p);
+                    }
+
+                    if let Some(right_label) = right_label {
+                        let right_style = if hovered {
+                            &right_style_hover
+                        } else {
+                            &right_style_idle
+                        };
+
+                        let right_x = cx.bounds_size.width
+                            - style.outer_padding
+                            - right_label.desired_padded_size(right_style).width;
+
+                        let right_primitives = right_label.render_primitives(
+                            Rect::new(Point::new(right_x, *start_y), label_size),
+                            right_style,
+                            cx.res,
+                        );
+
+                        if let Some(p) = right_primitives.text {
+                            text_primitives.push(p);
+                        }
                     }
                 }
                 MenuEntryInner::Divider { y } => divider_primitives.push(
@@ -674,6 +733,43 @@ impl DropDownMenu {
         RefCell::borrow_mut(&self.shared_state).open_requested = true;
         self.el.notify_custom_state_change();
     }
+}
+
+fn build_entries(
+    entries: Vec<MenuEntry>,
+    style: &DropDownMenuStyle,
+    res: &mut ResourceCtx,
+) -> Vec<MenuEntryInner> {
+    let (left_style, right_style) = style.label_styles(false);
+
+    entries
+        .into_iter()
+        .map(|entry| match entry {
+            MenuEntry::Option {
+                left_icon_id,
+                icon_scale,
+                left_text,
+                right_text,
+                unique_id,
+            } => MenuEntryInner::Option {
+                left_label: IconLabelInner::new(
+                    Some(left_text),
+                    left_icon_id,
+                    Point::default(),
+                    Point::default(),
+                    icon_scale,
+                    &left_style,
+                    res,
+                ),
+                right_label: right_text
+                    .map(|text| LabelInner::new(text, &right_style, Point::default(), res)),
+                start_y: 0.0,
+                end_y: 0.0,
+                unique_id,
+            },
+            MenuEntry::Divider => MenuEntryInner::Divider { y: 0.0 },
+        })
+        .collect()
 }
 
 fn layout(current_bounds: Rect, window_size: Size) -> LayoutInfo {

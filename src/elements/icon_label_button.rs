@@ -2,7 +2,7 @@ use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
 use rootvg::math::Point;
-use rootvg::text::TextProperties;
+use rootvg::text::{CustomGlyphID, TextProperties};
 use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
@@ -18,115 +18,80 @@ use crate::view::{ScissorRectID, MAIN_SCISSOR_RECT};
 use crate::window::WindowContext;
 use crate::CursorIcon;
 
-use super::label::{LabelInner, LabelPrimitives, LabelStyle};
+use super::button::{ButtonState, StateChangeResult};
+use super::icon_label::{
+    IconLabelClipMode, IconLabelInner, IconLabelLayout, IconLabelPrimitives, IconLabelStyle,
+};
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ButtonStylePart {
-    /// The color of the font
+pub struct IconLabelButtonStylePart {
+    /// The color of the text
     ///
     /// By default this is set to `color::WHITE`.
-    pub font_color: RGBA8,
+    pub text_color: RGBA8,
+    /// The color of the icon
+    ///
+    /// By default this is set to `color::WHITE`.
+    pub icon_color: RGBA8,
 
     /// The style of the padded background rectangle behind the text.
     ///
     /// Set to `QuadStyle::TRANSPARENT` for no background rectangle.
+    ///
+    /// By default this is set to `QuadStyle::TRANSPARENT`.
     pub back_quad: QuadStyle,
 }
 
-impl Default for ButtonStylePart {
-    fn default() -> Self {
-        Self {
-            font_color: color::WHITE,
-            back_quad: QuadStyle {
-                bg: Background::Solid(RGBA8::new(40, 40, 40, 255)),
-                border: BorderStyle {
-                    radius: 4.0.into(),
-                    ..Default::default()
-                },
-            },
-        }
-    }
-}
-
-/// The style of a [`Button`] element
+/// The style of a [`IconLabelButton`] element
 #[derive(Debug, Clone, PartialEq)]
-pub struct ButtonStyle {
-    /// The text properties.
-    pub properties: TextProperties,
+pub struct IconLabelButtonStyle {
+    /// The properties of the text
+    pub text_properties: TextProperties,
 
-    /// The vertical alignment of the text.
+    /// The size of the icon in points.
     ///
-    /// By default this is set to `Align::Center`.
-    pub vertical_align: Align,
+    /// By default this is set to `20.0`.
+    pub icon_size: f32,
+
+    pub layout: IconLabelLayout,
 
     /// The minimum size of the clipped text area.
     ///
     /// By default this is set to `Size::new(5.0, 5.0)`.
-    pub min_clipped_size: Size,
+    pub text_min_clipped_size: Size,
+
+    pub clip_mode: IconLabelClipMode,
 
     /// The padding between the text and the bounding rectangle.
     ///
-    /// By default this is set to `Padding::new(6.0, 6.0, 6.0, 6.0)`.
-    pub padding: Padding,
+    /// By default this has all values set to `6.0`.
+    pub text_padding: Padding,
+    /// The padding between the icon and the bounding rectangle.
+    ///
+    /// By default this has all values set to `6.0`.
+    pub icon_padding: Padding,
 
-    pub idle: ButtonStylePart,
-    pub hovered: ButtonStylePart,
-    pub down: ButtonStylePart,
-    pub disabled: ButtonStylePart,
+    pub idle: IconLabelButtonStylePart,
+    pub hovered: IconLabelButtonStylePart,
+    pub down: IconLabelButtonStylePart,
+    pub disabled: IconLabelButtonStylePart,
 }
 
-impl ButtonStyle {
-    pub fn label_style(&self, state: ButtonState) -> LabelStyle {
-        let part = match state {
-            ButtonState::Idle => &self.idle,
-            ButtonState::Hovered => &self.hovered,
-            ButtonState::Down => &self.down,
-            ButtonState::Disabled => &self.disabled,
-        };
-
-        LabelStyle {
-            properties: self.properties,
-            font_color: part.font_color,
-            vertical_align: self.vertical_align,
-            min_clipped_size: self.min_clipped_size,
-            back_quad: part.back_quad.clone(),
-            padding: self.padding,
-        }
-    }
-
-    pub fn default_menu_style() -> Self {
-        let hovered = ButtonStylePart {
-            font_color: color::WHITE,
-            back_quad: QuadStyle {
-                bg: Background::Solid(RGBA8::new(75, 75, 75, 255)),
-                border: BorderStyle {
-                    radius: 4.0.into(),
-                    ..Default::default()
-                },
-            },
-        };
-
+impl IconLabelButtonStyle {
+    pub fn default_dropdown_style() -> Self {
         Self {
-            idle: ButtonStylePart {
-                font_color: color::WHITE,
-                back_quad: QuadStyle::TRANSPARENT,
-            },
-            hovered: hovered.clone(),
-            down: hovered.clone(),
-            disabled: ButtonStylePart {
-                font_color: RGBA8::new(150, 150, 150, 255),
-                back_quad: QuadStyle::TRANSPARENT,
-            },
-            padding: Padding::new(3.0, 6.0, 3.0, 6.0),
+            layout: IconLabelLayout::LeftAlignTextRightAlignIcon,
+            icon_padding: Padding::new(0.0, 6.0, 0.0, 2.0),
             ..Default::default()
         }
     }
 }
 
-impl Default for ButtonStyle {
+impl Default for IconLabelButtonStyle {
     fn default() -> Self {
-        let idle = ButtonStylePart {
-            font_color: color::WHITE,
+        let idle = IconLabelButtonStylePart {
+            text_color: color::WHITE,
+            icon_color: color::WHITE,
             back_quad: QuadStyle {
                 bg: Background::Solid(RGBA8::new(40, 40, 40, 255)),
                 border: BorderStyle {
@@ -139,17 +104,20 @@ impl Default for ButtonStyle {
         };
 
         Self {
-            properties: TextProperties {
+            text_properties: TextProperties {
                 attrs: DEFAULT_TEXT_ATTRIBUTES,
-                align: Some(rootvg::text::Align::Center),
                 ..Default::default()
             },
-            vertical_align: Align::Center,
-            min_clipped_size: Size::new(5.0, 5.0),
-            padding: Padding::new(6.0, 6.0, 6.0, 6.0),
+            icon_size: 20.0,
+            text_min_clipped_size: Size::new(5.0, 5.0),
+            text_padding: Padding::new(6.0, 6.0, 6.0, 6.0),
+            icon_padding: Padding::new(0.0, 0.0, 0.0, 6.0),
+
+            clip_mode: IconLabelClipMode::default(),
+            layout: IconLabelLayout::default(),
 
             idle: idle.clone(),
-            hovered: ButtonStylePart {
+            hovered: IconLabelButtonStylePart {
                 back_quad: QuadStyle {
                     bg: Background::Solid(RGBA8::new(55, 55, 55, 255)),
                     border: BorderStyle {
@@ -159,15 +127,16 @@ impl Default for ButtonStyle {
                 },
                 ..idle
             },
-            down: ButtonStylePart {
+            down: IconLabelButtonStylePart {
                 back_quad: QuadStyle {
                     bg: Background::Solid(RGBA8::new(40, 40, 40, 255)),
                     ..idle.back_quad
                 },
                 ..idle
             },
-            disabled: ButtonStylePart {
-                font_color: RGBA8::new(150, 150, 150, 255),
+            disabled: IconLabelButtonStylePart {
+                text_color: RGBA8::new(150, 150, 150, 255),
+                icon_color: RGBA8::new(150, 150, 150, 255),
                 back_quad: QuadStyle {
                     bg: Background::Solid(RGBA8::new(40, 40, 40, 255)),
                     border: BorderStyle {
@@ -181,47 +150,68 @@ impl Default for ButtonStyle {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ButtonState {
-    Idle,
-    Hovered,
-    Down,
-    Disabled,
+impl IconLabelButtonStyle {
+    pub fn icon_label_style(&self, state: ButtonState) -> IconLabelStyle {
+        let part = match state {
+            ButtonState::Idle => &self.idle,
+            ButtonState::Hovered => &self.hovered,
+            ButtonState::Down => &self.down,
+            ButtonState::Disabled => &self.disabled,
+        };
+
+        IconLabelStyle {
+            text_properties: self.text_properties,
+            icon_size: self.icon_size,
+            text_color: part.text_color,
+            icon_color: part.icon_color,
+            vertical_align: Align::Center,
+            text_min_clipped_size: self.text_min_clipped_size,
+            back_quad: part.back_quad.clone(),
+            text_padding: self.text_padding,
+            icon_padding: self.icon_padding,
+            layout: self.layout,
+            clip_mode: self.clip_mode,
+        }
+    }
 }
 
 /// A reusable button struct that can be used by other elements.
-pub struct ButtonInner {
+pub struct IconLabelButtonInner {
     state: ButtonState,
-    label: LabelInner,
+    icon_label: IconLabelInner,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct StateChangeResult {
-    pub state_changed: bool,
-    pub needs_repaint: bool,
-}
-
-impl ButtonInner {
+impl IconLabelButtonInner {
     pub fn new(
-        text: String,
-        style: &ButtonStyle,
-        res: &mut ResourceCtx,
+        text: Option<impl Into<String>>,
+        icon_id: Option<CustomGlyphID>,
         text_offset: Point,
+        icon_offset: Point,
+        icon_scale: f32,
+        style: &IconLabelButtonStyle,
+        res: &mut ResourceCtx,
     ) -> Self {
-        let label = LabelInner::new(
+        let icon_label = IconLabelInner::new(
             text,
-            &style.label_style(ButtonState::Idle),
+            icon_id,
             text_offset,
+            icon_offset,
+            icon_scale,
+            &style.icon_label_style(ButtonState::Idle),
             res,
         );
 
         Self {
-            label,
+            icon_label,
             state: ButtonState::Idle,
         }
     }
 
-    pub fn set_state(&mut self, state: ButtonState, style: &ButtonStyle) -> StateChangeResult {
+    pub fn set_state(
+        &mut self,
+        state: ButtonState,
+        style: &IconLabelButtonStyle,
+    ) -> StateChangeResult {
         if self.state != state {
             let old_part = match self.state {
                 ButtonState::Idle => &style.idle,
@@ -255,80 +245,91 @@ impl ButtonInner {
         self.state
     }
 
-    pub fn set_style(&mut self, style: &ButtonStyle, res: &mut ResourceCtx) {
-        self.label.set_style(&self.label_style(style), res);
+    pub fn set_style(&mut self, style: &IconLabelButtonStyle, res: &mut ResourceCtx) {
+        self.icon_label
+            .set_style(&self.icon_label_style(style), res);
     }
 
     /// Returns the size of the padded background rectangle if it were to
     /// cover the entire size of the unclipped text.
-    pub fn desired_padded_size(&mut self, style: &ButtonStyle) -> Size {
-        self.label.desired_padded_size(&self.label_style(style))
-    }
-
-    /// Returns the size of the unclipped text.
-    ///
-    /// This can be useful to lay out elements that depend on text size.
-    pub fn unclipped_text_size(&mut self) -> Size {
-        self.label.unclipped_text_size()
+    pub fn desired_padded_size(&mut self, style: &IconLabelButtonStyle) -> Size {
+        self.icon_label
+            .desired_padded_size(&self.icon_label_style(style))
     }
 
     /// Returns `true` if the text has changed.
-    pub fn set_text(&mut self, text: &str, res: &mut ResourceCtx) -> bool {
-        self.label.set_text(text, res)
+    pub fn set_text(
+        &mut self,
+        text: &str,
+        style: &IconLabelButtonStyle,
+        res: &mut ResourceCtx,
+    ) -> bool {
+        self.icon_label
+            .set_text(text, &style.icon_label_style(self.state), res)
     }
 
     pub fn text(&self) -> &str {
-        self.label.text()
+        self.icon_label.text()
     }
 
-    pub fn label_style(&self, style: &ButtonStyle) -> LabelStyle {
-        style.label_style(self.state)
+    pub fn icon_label_style(&self, style: &IconLabelButtonStyle) -> IconLabelStyle {
+        style.icon_label_style(self.state)
     }
 
     pub fn render_primitives(
         &mut self,
         bounds: Rect,
-        style: &ButtonStyle,
+        style: &IconLabelButtonStyle,
         res: &mut ResourceCtx,
-    ) -> LabelPrimitives {
-        self.label
-            .render_primitives(bounds, &self.label_style(style), res)
+    ) -> IconLabelPrimitives {
+        self.icon_label
+            .render_primitives(bounds, &self.icon_label_style(style), res)
     }
 
-    /// An offset that can be used mainly to correct the position of icon glyphs.
+    /// An offset that can be used mainly to correct the position of text.
     /// This does not effect the position of the background quad.
     ///
     /// Returns `true` if the text offset has changed.
     pub fn set_text_offset(&mut self, offset: Point) -> bool {
-        self.label.set_text_offset(offset)
+        self.icon_label.set_text_offset(offset)
     }
 
-    pub fn text_offset(&self) -> Point {
-        self.label.text_offset
+    /// An offset that can be used mainly to correct the position of the icon.
+    /// This does not effect the position of the background quad.
+    ///
+    /// Returns `true` if the text offset has changed.
+    pub fn set_icon_offset(&mut self, offset: Point) -> bool {
+        self.icon_label.set_icon_offset(offset)
     }
 }
 
-pub struct ButtonBuilder<A: Clone + 'static> {
+pub struct IconLabelButtonBuilder<A: Clone + 'static> {
     pub action: Option<A>,
     pub tooltip_message: Option<String>,
     pub tooltip_align: Align2,
-    pub text: String,
+    pub text: Option<String>,
+    pub icon_id: Option<CustomGlyphID>,
+    pub icon_scale: f32,
     pub text_offset: Point,
-    pub style: Rc<ButtonStyle>,
+    pub icon_offset: Point,
+    pub style: Rc<IconLabelButtonStyle>,
     pub z_index: ZIndex,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
     pub scissor_rect_id: ScissorRectID,
 }
 
-impl<A: Clone + 'static> ButtonBuilder<A> {
-    pub fn new(style: &Rc<ButtonStyle>) -> Self {
+impl<A: Clone + 'static> IconLabelButtonBuilder<A> {
+    pub fn new(style: &Rc<IconLabelButtonStyle>) -> Self {
         Self {
             action: None,
             tooltip_message: None,
             tooltip_align: Align2::TOP_CENTER,
-            text: String::new(),
+            text: None,
+            icon_id: None,
+            icon_scale: 1.0,
             text_offset: Point::default(),
+            icon_offset: Point::default(),
             style: Rc::clone(style),
             z_index: 0,
             bounding_rect: Rect::default(),
@@ -337,8 +338,8 @@ impl<A: Clone + 'static> ButtonBuilder<A> {
         }
     }
 
-    pub fn build(self, cx: &mut WindowContext<'_, A>) -> Button {
-        ButtonElement::create(self, cx)
+    pub fn build(self, cx: &mut WindowContext<'_, A>) -> IconLabelButton {
+        IconLabelButtonElement::create(self, cx)
     }
 
     pub fn on_select(mut self, action: A) -> Self {
@@ -357,15 +358,33 @@ impl<A: Clone + 'static> ButtonBuilder<A> {
         self
     }
 
-    pub fn text(mut self, text: impl Into<String>) -> Self {
-        self.text = text.into();
+    pub fn text(mut self, text: Option<impl Into<String>>) -> Self {
+        self.text = text.map(|t| t.into());
         self
     }
 
-    /// An offset that can be used mainly to correct the position of icon glyphs.
+    pub fn icon_id(mut self, icon_id: Option<impl Into<CustomGlyphID>>) -> Self {
+        self.icon_id = icon_id.map(|i| i.into());
+        self
+    }
+
+    /// Scale the icon when rendering (used to help make icons look consistent).
+    pub const fn icon_scale(mut self, scale: f32) -> Self {
+        self.icon_scale = scale;
+        self
+    }
+
+    /// An offset that can be used mainly to correct the position of the text.
     /// This does not effect the position of the background quad.
     pub const fn text_offset(mut self, offset: Point) -> Self {
         self.text_offset = offset;
+        self
+    }
+
+    /// An offset that can be used mainly to correct the position of the icon.
+    /// This does not effect the position of the background quad.
+    pub const fn icon_offset(mut self, offset: Point) -> Self {
+        self.icon_offset = offset;
         self
     }
 
@@ -391,21 +410,27 @@ impl<A: Clone + 'static> ButtonBuilder<A> {
 }
 
 /// A button element with a label.
-pub struct ButtonElement<A: Clone + 'static> {
+pub struct IconLabelButtonElement<A: Clone + 'static> {
     shared_state: Rc<RefCell<SharedState>>,
     action: Option<A>,
     tooltip_message: Option<String>,
     tooltip_align: Align2,
 }
 
-impl<A: Clone + 'static> ButtonElement<A> {
-    pub fn create(builder: ButtonBuilder<A>, cx: &mut WindowContext<'_, A>) -> Button {
-        let ButtonBuilder {
+impl<A: Clone + 'static> IconLabelButtonElement<A> {
+    pub fn create(
+        builder: IconLabelButtonBuilder<A>,
+        cx: &mut WindowContext<'_, A>,
+    ) -> IconLabelButton {
+        let IconLabelButtonBuilder {
             action,
             tooltip_message,
             tooltip_align,
             text,
+            icon_id,
+            icon_scale,
             text_offset,
+            icon_offset,
             style,
             z_index,
             bounding_rect,
@@ -414,7 +439,15 @@ impl<A: Clone + 'static> ButtonElement<A> {
         } = builder;
 
         let shared_state = Rc::new(RefCell::new(SharedState {
-            inner: ButtonInner::new(text, &style, &mut cx.res, text_offset),
+            inner: IconLabelButtonInner::new(
+                text,
+                icon_id,
+                text_offset,
+                icon_offset,
+                icon_scale,
+                &style,
+                &mut cx.res,
+            ),
             style,
         }));
 
@@ -435,11 +468,11 @@ impl<A: Clone + 'static> ButtonElement<A> {
             .view
             .add_element(element_builder, &mut cx.res, cx.clipboard);
 
-        Button { el, shared_state }
+        IconLabelButton { el, shared_state }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for ButtonElement<A> {
+impl<A: Clone + 'static> Element<A> for IconLabelButtonElement<A> {
     fn flags(&self) -> ElementFlags {
         ElementFlags::PAINTS | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
     }
@@ -557,27 +590,34 @@ impl<A: Clone + 'static> Element<A> for ButtonElement<A> {
             primitives.add(quad_primitive);
         }
 
-        if let Some(text_primitive) = label_primitives.text {
+        if let Some(p) = label_primitives.text {
             primitives.set_z_index(1);
-            primitives.add_text(text_primitive);
+            primitives.add_text(p);
+        }
+
+        if let Some(p) = label_primitives.icon {
+            primitives.set_z_index(1);
+            primitives.add_text(p);
         }
     }
 }
 
-struct SharedState {
-    inner: ButtonInner,
-    style: Rc<ButtonStyle>,
-}
-
-/// A handle to a [`ButtonElement`], a button with a label.
-pub struct Button {
+/// A handle to a [`IconLabelButtonElement`], a button with a label.
+pub struct IconLabelButton {
     pub el: ElementHandle,
     shared_state: Rc<RefCell<SharedState>>,
 }
 
-impl Button {
-    pub fn builder<A: Clone + 'static>(style: &Rc<ButtonStyle>) -> ButtonBuilder<A> {
-        ButtonBuilder::new(style)
+struct SharedState {
+    inner: IconLabelButtonInner,
+    style: Rc<IconLabelButtonStyle>,
+}
+
+impl IconLabelButton {
+    pub fn builder<A: Clone + 'static>(
+        style: &Rc<IconLabelButtonStyle>,
+    ) -> IconLabelButtonBuilder<A> {
+        IconLabelButtonBuilder::new(style)
     }
 
     /// Returns the size of the padded background rectangle if it were to
@@ -591,20 +631,22 @@ impl Button {
         inner.desired_padded_size(style)
     }
 
-    /// Returns the size of the unclipped text.
-    ///
-    /// This can be useful to lay out elements that depend on text size.
-    pub fn unclipped_text_size(&self) -> Size {
-        RefCell::borrow_mut(&self.shared_state)
-            .inner
-            .unclipped_text_size()
+    pub fn set_text(&mut self, text: &str, res: &mut ResourceCtx) {
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+        let SharedState { inner, style } = &mut *shared_state;
+
+        if inner.set_text(text, style, res) {
+            self.el.notify_custom_state_change();
+        }
     }
 
-    pub fn set_text(&mut self, text: &str, res: &mut ResourceCtx) {
-        if RefCell::borrow_mut(&self.shared_state)
-            .inner
-            .set_text(text, res)
-        {
+    pub fn set_icon_id(&mut self, icon_id: Option<impl Into<CustomGlyphID>>) {
+        let icon_id: Option<CustomGlyphID> = icon_id.map(|i| i.into());
+
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+
+        if shared_state.inner.icon_label.icon_id != icon_id {
+            shared_state.inner.icon_label.icon_id = icon_id;
             self.el.notify_custom_state_change();
         }
     }
@@ -613,7 +655,11 @@ impl Button {
         Ref::map(RefCell::borrow(&self.shared_state), |s| s.inner.text())
     }
 
-    pub fn set_style(&mut self, style: &Rc<ButtonStyle>, res: &mut ResourceCtx) {
+    pub fn icon_id(&self) -> Option<CustomGlyphID> {
+        RefCell::borrow(&self.shared_state).inner.icon_label.icon_id
+    }
+
+    pub fn set_style(&mut self, style: &Rc<IconLabelButtonStyle>, res: &mut ResourceCtx) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if !Rc::ptr_eq(&shared_state.style, style) {
@@ -623,7 +669,7 @@ impl Button {
         }
     }
 
-    pub fn style(&self) -> Rc<ButtonStyle> {
+    pub fn style(&self) -> Rc<IconLabelButtonStyle> {
         Rc::clone(&RefCell::borrow(&self.shared_state).style)
     }
 
@@ -640,7 +686,7 @@ impl Button {
         }
     }
 
-    /// An offset that can be used mainly to correct the position of icon glyphs.
+    /// An offset that can be used mainly to correct the position of the text.
     /// This does not effect the position of the background quad.
     pub fn set_text_offset(&mut self, offset: Point) {
         let changed = RefCell::borrow_mut(&self.shared_state)
@@ -648,6 +694,28 @@ impl Button {
             .set_text_offset(offset);
 
         if changed {
+            self.el.notify_custom_state_change();
+        }
+    }
+
+    /// An offset that can be used mainly to correct the position of the icon.
+    /// This does not effect the position of the background quad.
+    pub fn set_icon_offset(&mut self, offset: Point) {
+        let changed = RefCell::borrow_mut(&self.shared_state)
+            .inner
+            .set_icon_offset(offset);
+
+        if changed {
+            self.el.notify_custom_state_change();
+        }
+    }
+
+    /// Scale the icon when rendering (used to help make icons look consistent).
+    pub fn set_scale(&mut self, scale: f32) {
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+
+        if shared_state.inner.icon_label.icon_scale != scale {
+            shared_state.inner.icon_label.icon_scale = scale;
             self.el.notify_custom_state_change();
         }
     }

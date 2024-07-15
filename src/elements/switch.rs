@@ -203,7 +203,7 @@ impl<A: Clone + 'static> SwitchElement<A> {
 
         let el = cx
             .view
-            .add_element(element_builder, cx.font_system, cx.clipboard);
+            .add_element(element_builder, &mut cx.res, cx.clipboard);
 
         Switch { el, shared_state }
     }

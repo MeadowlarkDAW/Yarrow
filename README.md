@@ -1,20 +1,14 @@
+<div align="center">
+
+<img src="assets/logo.svg" width="140px" />
+
+# Yarrow
+
 [![Documentation](https://docs.rs/yarrow/badge.svg)](https://docs.rs/yarrow)
 [![Crates.io](https://img.shields.io/crates/v/yarrow.svg)](https://crates.io/crates/yarrow)
 [![License](https://img.shields.io/crates/l/yarrow.svg)](https://github.com/MeadowlarkDAW/Yarrow/blob/main/LICENSE)
 
-<div align="center">
-
-# Yarrow
-
 > **WORK IN PROGRESS. This library is currently in an unstable alpha state and is missing features. Check the [roadmap] for more details.**
-
-```
-'%%' '%% '%%'
-%'%\% | %/%'%
-    \ | /    
-     \|/     
-      |      
-```
 
 **A modern retained-mode GUI library in Rust with extreme performance and control, geared towards audio software.**
 

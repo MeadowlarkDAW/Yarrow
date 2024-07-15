@@ -21,6 +21,7 @@ use crate::action_queue::ActionSender;
 use crate::application::{AppContext, Application, TimerInterval, WindowRequest};
 use crate::event::{AppWindowEvent, EventCaptureStatus, PointerButton, WheelDeltaType};
 use crate::math::{PhysicalSizeI32, ScaleFactor};
+use crate::prelude::ResourceCtx;
 use crate::window::{WindowID, MAIN_WINDOW};
 
 use super::{
@@ -81,7 +82,7 @@ impl<A: Application> AppHandler<A> {
         self.user_app.on_tick(dt, &mut self.context);
 
         for window_state in self.context.window_map.values_mut() {
-            window_state.on_animation_tick(dt, &mut self.context.font_system);
+            window_state.on_animation_tick(dt, &mut self.context.res);
         }
 
         self.process_updates(event_loop);
@@ -99,7 +100,7 @@ impl<A: Application> AppHandler<A> {
             for window_state in self.context.window_map.values_mut() {
                 if window_state
                     .view
-                    .process_updates(&mut self.context.font_system, &mut window_state.clipboard)
+                    .process_updates(&mut self.context.res, &mut window_state.clipboard)
                 {
                     any_updates_processed = true;
                 }
@@ -126,14 +127,14 @@ impl<A: Application> AppHandler<A> {
                         window_state.scale_factor_recip,
                     );
 
-                    window_state.handle_locked_pointer_delta(delta, &mut self.context.font_system);
+                    window_state.handle_locked_pointer_delta(delta, &mut self.context.res);
                 }
             }
 
             if let Some(pos) = window_state.queued_pointer_position.take() {
                 match window_state.pointer_lock_state() {
                     PointerLockState::NotLocked => {
-                        window_state.handle_pointer_moved(pos, &mut self.context.font_system);
+                        window_state.handle_pointer_moved(pos, &mut self.context.res);
                     }
                     PointerLockState::LockedUsingOS => {
                         // Only send events from the raw device input when locked.
@@ -155,8 +156,7 @@ impl<A: Application> AppHandler<A> {
                                 );
                                 window_state.set_pointer_locked(PointerLockState::NotLocked);
 
-                                window_state
-                                    .handle_pointer_moved(pos, &mut self.context.font_system);
+                                window_state.handle_pointer_moved(pos, &mut self.context.res);
                             }
                         }
                     }
@@ -274,7 +274,13 @@ impl<A: Application> AppHandler<A> {
                         continue;
                     }
 
-                    match create_window(window_id, config, event_loop, &self.action_sender) {
+                    match create_window(
+                        window_id,
+                        config,
+                        event_loop,
+                        &self.action_sender,
+                        &mut self.context.res,
+                    ) {
                         Ok((window, window_state)) => {
                             self.winit_window_map
                                 .insert(window.id(), (window_id, window));
@@ -422,6 +428,7 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                 self.user_app.main_window_config(),
                 event_loop,
                 &self.action_sender,
+                &mut self.context.res,
             ) {
                 Ok(w) => w,
                 Err(e) => {
@@ -544,10 +551,7 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
 
                 let window_state = self.context.window_map.get_mut(&window_id).unwrap();
 
-                match window_state.render(
-                    || window.pre_present_notify(),
-                    &mut self.context.font_system,
-                ) {
+                match window_state.render(|| window.pre_present_notify(), &mut self.context.res) {
                     Ok(_) => {}
                     // Reconfigure the surface if lost
                     Err(wgpu::SurfaceError::Lost) => {
@@ -613,10 +617,10 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                 let window_state = self.context.window_map.get_mut(&window_id).unwrap();
 
                 let event = if focused {
-                    window_state.handle_window_focused(&mut self.context.font_system);
+                    window_state.handle_window_focused(&mut self.context.res);
                     AppWindowEvent::WindowFocused
                 } else {
-                    window_state.handle_window_unfocused(&mut self.context.font_system);
+                    window_state.handle_window_unfocused(&mut self.context.res);
                     AppWindowEvent::WindowUnfocused
                 };
 
@@ -627,10 +631,10 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                 let window_state = self.context.window_map.get_mut(&window_id).unwrap();
 
                 let event = if hidden {
-                    window_state.handle_window_hidden(&mut self.context.font_system);
+                    window_state.handle_window_hidden(&mut self.context.res);
                     AppWindowEvent::WindowHidden
                 } else {
-                    window_state.handle_window_shown(&mut self.context.font_system);
+                    window_state.handle_window_shown(&mut self.context.res);
                     AppWindowEvent::WindowShown
                 };
 
@@ -682,7 +686,7 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                     .window_map
                     .get_mut(&window_id)
                     .unwrap()
-                    .handle_mouse_button(button, state.is_pressed(), &mut self.context.font_system);
+                    .handle_mouse_button(button, state.is_pressed(), &mut self.context.res);
 
                 self.process_updates(event_loop);
             }
@@ -691,7 +695,7 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                     .window_map
                     .get_mut(&window_id)
                     .unwrap()
-                    .handle_pointer_left(&mut self.context.font_system);
+                    .handle_pointer_left(&mut self.context.res);
             }
             WinitWindowEvent::MouseWheel {
                 device_id: _,
@@ -710,7 +714,7 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                     .window_map
                     .get_mut(&window_id)
                     .unwrap()
-                    .handle_mouse_wheel(delta_type, &mut self.context.font_system);
+                    .handle_mouse_wheel(delta_type, &mut self.context.res);
             }
             WinitWindowEvent::Destroyed => {
                 self.user_app.on_window_event(
@@ -742,7 +746,7 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                     self::convert::convert_keyboard_event(&event, window_state.modifiers);
 
                 let mut captured = window_state
-                    .handle_keyboard_event(key_event.clone(), &mut self.context.font_system)
+                    .handle_keyboard_event(key_event.clone(), &mut self.context.res)
                     == EventCaptureStatus::Captured;
 
                 if !captured {
@@ -753,14 +757,14 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                                     state: CompositionState::Start,
                                     data: String::new(),
                                 },
-                                &mut self.context.font_system,
+                                &mut self.context.res,
                             ) == EventCaptureStatus::Captured;
                             captured |= window_state.handle_text_composition_event(
                                 CompositionEvent {
                                     state: CompositionState::End,
                                     data: text.to_string(),
                                 },
-                                &mut self.context.font_system,
+                                &mut self.context.res,
                             ) == EventCaptureStatus::Captured;
                         }
                     }
@@ -867,6 +871,7 @@ fn create_window<A: Clone + 'static>(
     config: WindowConfig,
     event_loop: &ActiveEventLoop,
     action_sender: &ActionSender<A>,
+    res: &mut ResourceCtx,
 ) -> Result<(Arc<winit::window::Window>, WindowState<A>), OpenWindowError> {
     #[allow(unused_mut)]
     let mut attributes = WinitWindow::default_attributes()
@@ -928,6 +933,7 @@ fn create_window<A: Clone + 'static>(
         config.surface_config,
         action_sender.clone(),
         id,
+        res,
     )?;
 
     Ok((window, window_state))

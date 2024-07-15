@@ -4,10 +4,17 @@ pub use crate::cursor_icon::*;
 pub use crate::elements::button::{Button, ButtonStyle};
 pub use crate::elements::click_area::ClickArea;
 pub use crate::elements::drop_down_menu::{DropDownMenu, DropDownMenuStyle, MenuEntry};
-pub use crate::elements::dual_button::{DualButton, DualButtonStyle};
-pub use crate::elements::dual_label::{DualLabel, DualLabelLayout, DualLabelStyle};
-pub use crate::elements::dual_tab::{DualTab, DualTabGroup, DualTabGroupOption, DualTabStyle};
-pub use crate::elements::dual_toggle_button::{DualToggleButton, DualToggleButtonStyle};
+pub use crate::elements::icon::{Icon, IconStyle};
+pub use crate::elements::icon_button::{IconButton, IconButtonStyle};
+pub use crate::elements::icon_label::{IconLabel, IconLabelLayout, IconLabelStyle};
+pub use crate::elements::icon_label_button::{IconLabelButton, IconLabelButtonStyle};
+pub use crate::elements::icon_label_tab::{
+    IconLabelTab, IconLabelTabGroup, IconLabelTabGroupOption, IconLabelTabStyle,
+};
+pub use crate::elements::icon_label_toggle_button::{
+    IconLabelToggleButton, IconLabelToggleButtonStyle,
+};
+pub use crate::elements::icon_toggle_button::{IconToggleButton, IconToggleButtonStyle};
 pub use crate::elements::knob::{
     Knob, KnobAngleRange, KnobBackStyle, KnobBackStyleQuad, KnobNotchStyle, KnobNotchStyleQuad,
     KnobStyle,
@@ -46,7 +53,10 @@ pub use crate::style::*;
 pub use crate::vg::color::RGBA8;
 pub use crate::vg::text::glyphon::fontdb::Source as FontSource;
 pub use crate::vg::text::glyphon::FontSystem;
-pub use crate::vg::text::{Align as TextAlign, Attrs, Family, TextProperties, Weight};
+pub use crate::vg::text::{
+    Align as TextAlign, Attrs, ContentType as IconContentType, CustomGlyphID as IconID, Family,
+    TextProperties, Weight,
+};
 pub use crate::view::{
     element::ElementHandle, ScissorRectID, TooltipInfo, View, MAIN_SCISSOR_RECT,
 };

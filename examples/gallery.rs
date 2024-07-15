@@ -8,6 +8,7 @@ mod knobs_and_sliders;
 mod style;
 
 use self::style::MyStyle;
+use style::MyIcon;
 use yarrow::prelude::*;
 
 #[repr(usize)]
@@ -98,7 +99,7 @@ struct MainWindowElements {
     basic_elements: basic_elements::Elements,
     knobs_and_sliders: knobs_and_sliders::Elements,
     menu: DropDownMenu,
-    menu_btn: Button,
+    menu_btn: IconButton,
     top_panel_bg: QuadElement,
     top_panel_border: QuadElement,
     left_panel_bg: QuadElement,
@@ -118,7 +119,7 @@ struct MyApp {
     about_window_elements: Option<about_window::Elements>,
 
     style: MyStyle,
-    did_load_fonts: bool,
+    did_load_resources: bool,
     current_tab: MyTab,
 }
 
@@ -133,7 +134,7 @@ impl MyApp {
             main_window_elements: None,
             about_window_elements: None,
             style: MyStyle::new(),
-            did_load_fonts: false,
+            did_load_resources: false,
             current_tab: MyTab::BasicElements,
         }
     }
@@ -155,27 +156,33 @@ impl MyApp {
             .z_index(OVERLAY_Z_INDEX)
             .build(cx);
 
-        let menu_btn = Button::builder(&self.style.menu_btn_style)
-            .text('\u{f0c9}')
+        let menu_btn = IconButton::builder(&self.style.menu_btn_style)
+            .icon_id(MyIcon::Menu)
             .on_select(MyAction::OpenMenu)
             .z_index(MAIN_Z_INDEX)
             .build(cx);
         let menu = DropDownMenu::builder(&self.style.menu_style)
             .entries(vec![
                 MenuEntry::Option {
+                    left_icon_id: None,
+                    icon_scale: 1.0,
                     left_text: format!("{}", MenuOption::Hello),
-                    right_text: MenuOption::Hello.right_text().into(),
+                    right_text: Some(MenuOption::Hello.right_text().into()),
                     unique_id: 0,
                 },
                 MenuEntry::Option {
+                    left_icon_id: None,
+                    icon_scale: 1.0,
                     left_text: format!("{}", MenuOption::World),
-                    right_text: MenuOption::World.right_text().into(),
+                    right_text: Some(MenuOption::World.right_text().into()),
                     unique_id: 1,
                 },
                 MenuEntry::Divider,
                 MenuEntry::Option {
+                    left_icon_id: None,
+                    icon_scale: 1.0,
                     left_text: format!("{}", MenuOption::About),
-                    right_text: MenuOption::About.right_text().into(),
+                    right_text: Some(MenuOption::About.right_text().into()),
                     unique_id: 2,
                 },
             ])
@@ -273,19 +280,18 @@ impl MyApp {
                 elements.menu.open(None);
             }
             MyAction::ShowTooltip((info, _window_id)) => {
-                elements.tooltip.show(
-                    &info.message,
-                    info.element_bounds,
-                    info.align,
-                    &mut cx.font_system,
-                );
+                elements
+                    .tooltip
+                    .show(&info.message, info.element_bounds, info.align, &mut cx.res);
             }
             MyAction::HideTooltip(_window_id) => {
                 elements.tooltip.hide();
             }
             MyAction::TabSelected(tab) => {
                 self.current_tab = tab;
-                elements.tab_group.updated_selected(tab as usize);
+                elements
+                    .tab_group
+                    .updated_selected(tab as usize, &mut cx.res);
                 elements
                     .basic_elements
                     .set_hidden(tab != MyTab::BasicElements);
@@ -402,8 +408,8 @@ impl Application for MyApp {
     fn main_window_config(&self) -> WindowConfig {
         WindowConfig {
             title: String::from("Yarrow Gallery Demo"),
-            size: Size::new(700.0, 400.0),
-            scale_factor: ScaleFactorConfig::Custom(1.0.into()),
+            size: Size::new(700.0, 425.0),
+            //scale_factor: ScaleFactorConfig::Custom(1.0.into()),
             /*
             surface_config: rootvg::surface::DefaultSurfaceConfig {
                 instance_descriptor: wgpu::InstanceDescriptor {
@@ -427,9 +433,9 @@ impl Application for MyApp {
             AppWindowEvent::WindowOpened => {
                 // Yarrow has first-class mutli-window support.
                 if window_id == MAIN_WINDOW {
-                    if !self.did_load_fonts {
-                        self.did_load_fonts = true;
-                        self.style.load_fonts(&mut cx.font_system);
+                    if !self.did_load_resources {
+                        self.did_load_resources = true;
+                        self.style.load_resources(&mut cx.res);
                     }
 
                     let mut main_window_cx = cx.window_context(MAIN_WINDOW).unwrap();

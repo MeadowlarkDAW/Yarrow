@@ -1,22 +1,76 @@
 use std::rc::Rc;
-use std::sync::Arc;
+use yarrow::elements::icon::IconStyle;
 use yarrow::elements::knob::KnobMarkersStyle;
 use yarrow::prelude::*;
 
-const ICON_FONT: &'static [u8] =
-    include_bytes!("../assets/Font Awesome 6 Free-Solid-900.otf").as_slice();
+#[repr(u16)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MyIcon {
+    Menu = 0,
+    Dropdown,
+    Info,
+    Search,
+    PowerOff,
+    PowerOn,
+    Save,
+    Cut,
+    Copy,
+    Paste,
+    Select,
+}
+
+impl MyIcon {
+    const ALL: [Self; 11] = [
+        Self::Menu,
+        Self::Dropdown,
+        Self::Info,
+        Self::Search,
+        Self::PowerOff,
+        Self::PowerOn,
+        Self::Save,
+        Self::Cut,
+        Self::Copy,
+        Self::Paste,
+        Self::Select,
+    ];
+
+    const fn source(&self) -> &'static [u8] {
+        match self {
+            Self::Menu => include_bytes!("../assets/menu.svg"),
+            Self::Dropdown => include_bytes!("../assets/dropdown.svg"),
+            Self::Info => include_bytes!("../assets/info.svg"),
+            Self::Search => include_bytes!("../assets/search.svg"),
+            Self::PowerOff => include_bytes!("../assets/power-off.svg"),
+            Self::PowerOn => include_bytes!("../assets/power-on.svg"),
+            Self::Save => include_bytes!("../assets/save.svg"),
+            Self::Cut => include_bytes!("../assets/cut.svg"),
+            Self::Copy => include_bytes!("../assets/copy.svg"),
+            Self::Paste => include_bytes!("../assets/paste.svg"),
+            Self::Select => include_bytes!("../assets/select.svg"),
+        }
+    }
+}
+
+impl Into<IconID> for MyIcon {
+    fn into(self) -> IconID {
+        self as IconID
+    }
+}
 
 pub struct MyStyle {
+    pub icon_style: Rc<IconStyle>,
     pub button_style: Rc<ButtonStyle>,
     pub toggle_btn_style: Rc<ToggleButtonStyle>,
-    pub dual_toggle_btn_style: Rc<DualToggleButtonStyle>,
+    pub icon_btn_style: Rc<IconButtonStyle>,
+    pub icon_toggle_btn_style: Rc<IconToggleButtonStyle>,
+    pub icon_label_toggle_btn_style: Rc<IconLabelToggleButtonStyle>,
     pub switch_style: Rc<SwitchStyle>,
     pub label_style: Rc<LabelStyle>,
-    pub dual_label_style: Rc<DualLabelStyle>,
+    pub icon_label_style: Rc<IconLabelStyle>,
     pub label_no_bg_style: Rc<LabelStyle>,
     pub radio_btn_style: Rc<RadioButtonStyle>,
-    pub drop_down_btn_style: Rc<DualButtonStyle>,
-    pub menu_btn_style: Rc<ButtonStyle>,
+    pub drop_down_btn_style: Rc<IconLabelButtonStyle>,
+    pub menu_btn_style: Rc<IconButtonStyle>,
     pub menu_style: Rc<DropDownMenuStyle>,
     pub text_input_style: Rc<TextInputStyle>,
     pub icon_text_input_style: Rc<IconTextInputStyle>,
@@ -58,21 +112,23 @@ pub struct MyStyle {
 
 impl MyStyle {
     pub fn new() -> Self {
-        let icon_attrs = Attrs::new().family(Family::Fantasy).weight(Weight::BLACK);
-
-        let mut menu_btn_style = ButtonStyle::default_menu_style();
-        menu_btn_style.properties.attrs = icon_attrs;
-
         Self {
-            button_style: Rc::new(ButtonStyle::default()),
-            toggle_btn_style: Rc::new(ToggleButtonStyle::default()),
-            dual_toggle_btn_style: Rc::new(DualToggleButtonStyle {
-                left_properties: TextProperties {
-                    attrs: icon_attrs,
-                    ..Default::default()
+            icon_style: Rc::new(IconStyle {
+                back_quad: QuadStyle {
+                    bg: Background::Solid(RGBA8::new(40, 40, 40, 255)),
+                    border: BorderStyle {
+                        radius: 30.0.into(),
+                        ..Default::default()
+                    },
                 },
+                padding: Padding::new(2.0, 10.0, 2.0, 10.0),
                 ..Default::default()
             }),
+            button_style: Rc::new(ButtonStyle::default()),
+            toggle_btn_style: Rc::new(ToggleButtonStyle::default()),
+            icon_btn_style: Rc::new(IconButtonStyle::default()),
+            icon_toggle_btn_style: Rc::new(IconToggleButtonStyle::default()),
+            icon_label_toggle_btn_style: Rc::new(IconLabelToggleButtonStyle::default()),
             switch_style: Rc::new(SwitchStyle::default()),
             label_style: Rc::new(LabelStyle {
                 back_quad: QuadStyle {
@@ -85,12 +141,8 @@ impl MyStyle {
                 padding: Padding::new(5.0, 10.0, 5.0, 10.0),
                 ..Default::default()
             }),
-            dual_label_style: Rc::new(DualLabelStyle {
-                left_properties: TextProperties {
-                    attrs: icon_attrs,
-                    ..Default::default()
-                },
-                left_font_color: DEFAULT_ACCENT_COLOR,
+            icon_label_style: Rc::new(IconLabelStyle {
+                icon_color: DEFAULT_ACCENT_COLOR,
                 back_quad: QuadStyle {
                     bg: Background::Solid(RGBA8::new(40, 40, 40, 255)),
                     border: BorderStyle {
@@ -98,30 +150,16 @@ impl MyStyle {
                         ..Default::default()
                     },
                 },
-                left_padding: Padding::new(5.0, 10.0, 5.0, 10.0),
-                right_padding: Padding::new(5.0, 10.0, 5.0, 0.0),
+                text_padding: Padding::new(5.0, 10.0, 5.0, 10.0),
+                icon_padding: Padding::new(0.0, 0.0, 0.0, 5.0),
                 ..Default::default()
             }),
             label_no_bg_style: Rc::new(LabelStyle::default()),
             radio_btn_style: Rc::new(RadioButtonStyle::default()),
-            drop_down_btn_style: Rc::new(DualButtonStyle {
-                right_properties: TextProperties {
-                    attrs: icon_attrs,
-                    ..Default::default()
-                },
-                layout: DualLabelLayout::LeftAndRightAlign,
-                right_padding: Padding::new(0.0, 10.0, 0.0, 0.0),
-                ..DualButtonStyle::default()
-            }),
-            menu_btn_style: Rc::new(menu_btn_style),
+            drop_down_btn_style: Rc::new(IconLabelButtonStyle::default_dropdown_style()),
+            menu_btn_style: Rc::new(IconButtonStyle::default_menu_style()),
             text_input_style: Rc::new(TextInputStyle::default()),
-            icon_text_input_style: Rc::new(IconTextInputStyle {
-                icon_properties: TextProperties {
-                    attrs: icon_attrs,
-                    ..Default::default()
-                },
-                ..Default::default()
-            }),
+            icon_text_input_style: Rc::new(IconTextInputStyle::default()),
             panel_bg_style: Rc::new(QuadStyle {
                 bg: Background::Solid(RGBA8::new(40, 40, 40, 255).into()),
                 ..Default::default()
@@ -183,14 +221,16 @@ impl MyStyle {
         }
     }
 
-    pub fn load_fonts(&self, font_system: &mut FontSystem) {
-        let _ = font_system
-            .db_mut()
-            .load_font_source(FontSource::Binary(Arc::new(ICON_FONT)));
-        // Since the fantasy font is never used, replace it with our icon
-        // font for simplicity.
-        font_system
-            .db_mut()
-            .set_fantasy_family("Font Awesome 6 Free");
+    pub fn load_resources(&self, res: &mut ResourceCtx) {
+        for icon in MyIcon::ALL {
+            res.svg_icon_system
+                .add_from_bytes(
+                    icon,
+                    icon.source(),
+                    &Default::default(),
+                    IconContentType::Mask,
+                )
+                .unwrap();
+        }
     }
 }

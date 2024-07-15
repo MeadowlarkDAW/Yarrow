@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use keyboard_types::{Code, CompositionEvent, KeyState, Modifiers};
 use rootvg::quad::{QuadPrimitive, SolidQuadBuilder, SolidQuadPrimitive};
 use rootvg::text::glyphon::cosmic_text::{Motion, Selection};
-use rootvg::text::glyphon::{Action, Affinity, Cursor, Edit, FontSystem};
+use rootvg::text::glyphon::{Action, Affinity, Cursor, Edit};
 use rootvg::text::{
     Attrs, EditorBorrowStatus, Family, RcTextBuffer, Shaping, TextPrimitive, TextProperties, Wrap,
 };
@@ -14,6 +14,7 @@ use crate::clipboard::{Clipboard, ClipboardKind};
 use crate::event::{EventCaptureStatus, KeyboardEvent, PointerButton};
 use crate::layout::{Align, Padding};
 use crate::math::{Point, Rect, Size};
+use crate::prelude::ResourceCtx;
 use crate::style::{
     Background, BorderStyle, QuadStyle, DEFAULT_ACCENT_COLOR, DEFAULT_TEXT_ATTRIBUTES,
 };
@@ -211,7 +212,7 @@ impl TextInputInner {
         has_tooltip_message: bool,
         select_all_when_focused: bool,
         style: &TextInputStyle,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
     ) -> Self {
         if text.len() > max_characters {
             text = String::from(&text[0..max_characters]);
@@ -243,7 +244,7 @@ impl TextInputInner {
             text_bounds_rect.height() + 2.0,
         );
 
-        let buffer = RcTextBuffer::new(&text, properties, buffer_size, true, font_system);
+        let buffer = RcTextBuffer::new(&text, properties, buffer_size, true, &mut res.font_system);
 
         let placeholder_buffer = if placeholder_text.is_empty() {
             None
@@ -256,7 +257,7 @@ impl TextInputInner {
                 placeholder_properties,
                 buffer_size,
                 true,
-                font_system,
+                &mut res.font_system,
             ))
         };
 
@@ -266,7 +267,7 @@ impl TextInputInner {
                 properties,
                 buffer_size,
                 false,
-                font_system,
+                &mut res.font_system,
             ))
         } else {
             None
@@ -301,16 +302,16 @@ impl TextInputInner {
     pub fn set_text(
         &mut self,
         text: &str,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
         select_all: bool,
     ) -> TextInputUpdateResult {
-        let mut res = TextInputUpdateResult::default();
+        let mut result = TextInputUpdateResult::default();
 
         if self.text == text {
-            return res;
+            return result;
         }
 
-        res.needs_repaint = true;
+        result.needs_repaint = true;
 
         self.text = if text.len() > self.max_characters {
             String::from(&text[0..self.max_characters])
@@ -342,12 +343,12 @@ impl TextInputInner {
                     has_text: !self.text.is_empty(),
                 }
             },
-            font_system,
+            &mut res.font_system,
         );
 
-        self.layout_contents(font_system);
+        self.layout_contents(res);
 
-        res
+        result
     }
 
     pub fn text(&self) -> &str {
@@ -357,23 +358,23 @@ impl TextInputInner {
     pub fn set_placeholder_text(
         &mut self,
         mut text: &str,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
         style: &TextInputStyle,
     ) -> TextInputUpdateResult {
-        let mut res = TextInputUpdateResult::default();
+        let mut result = TextInputUpdateResult::default();
 
         if text.len() > self.max_characters {
             text = &text[0..self.max_characters];
         }
 
         if self.placeholder_text == text {
-            return res;
+            return result;
         }
 
         self.placeholder_text = String::from(text);
 
         if let Some(buffer) = self.placeholder_buffer.as_mut() {
-            buffer.set_text(text, font_system);
+            buffer.set_text(text, &mut res.font_system);
         } else {
             let mut placeholder_properties = style.properties.clone();
             placeholder_properties.attrs = style.placeholder_text_attrs;
@@ -389,13 +390,13 @@ impl TextInputInner {
                 placeholder_properties,
                 buffer_size,
                 false,
-                font_system,
+                &mut res.font_system,
             ));
         }
 
-        res.needs_repaint = true;
+        result.needs_repaint = true;
 
-        res
+        result
     }
 
     pub fn placeholder_text(&self) -> &str {
@@ -406,7 +407,7 @@ impl TextInputInner {
         self.max_characters
     }
 
-    pub fn set_style(&mut self, style: &TextInputStyle, font_system: &mut FontSystem) {
+    pub fn set_style(&mut self, style: &TextInputStyle, res: &mut ResourceCtx) {
         let mut properties = style.properties;
         properties.wrap = Wrap::None;
         properties.shaping = Shaping::Advanced;
@@ -416,7 +417,7 @@ impl TextInputInner {
         }
 
         self.buffer
-            .set_text_and_props(&self.text, style.properties, font_system);
+            .set_text_and_props(&self.text, style.properties, &mut res.font_system);
 
         if let Some(placeholder_buffer) = self.placeholder_buffer.as_mut() {
             let mut placeholder_properties = style.properties.clone();
@@ -424,7 +425,7 @@ impl TextInputInner {
             placeholder_buffer.set_text_and_props(
                 &self.placeholder_text,
                 placeholder_properties,
-                font_system,
+                &mut res.font_system,
             );
         }
 
@@ -432,7 +433,7 @@ impl TextInputInner {
             password_buffer.set_text_and_props(
                 &text_to_password_text(&self.buffer),
                 properties,
-                font_system,
+                &mut res.font_system,
             );
         }
     }
@@ -456,35 +457,35 @@ impl TextInputInner {
     pub fn on_custom_state_changed(
         &mut self,
         clipboard: &mut Clipboard,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
     ) -> TextInputUpdateResult {
-        let mut res = TextInputUpdateResult::default();
+        let mut result = TextInputUpdateResult::default();
 
-        self.drain_actions(clipboard, font_system, &mut res);
+        self.drain_actions(clipboard, res, &mut result);
 
-        if res.needs_repaint {
-            self.layout_contents(font_system);
+        if result.needs_repaint {
+            self.layout_contents(res);
         }
 
         if self.focused && self.disabled {
             self.focused = false;
 
-            res.set_focus = Some(false);
+            result.set_focus = Some(false);
 
-            res.send_action = self.do_send_action;
+            result.send_action = self.do_send_action;
             self.do_send_action = false;
         }
 
-        res.needs_repaint = true;
+        result.needs_repaint = true;
 
-        res
+        result
     }
 
     pub fn on_size_changed(
         &mut self,
         bounds_size: Size,
         style: &TextInputStyle,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
     ) {
         if self.prev_bounds_size == bounds_size {
             return;
@@ -506,35 +507,35 @@ impl TextInputInner {
             self.text_bounds_rect.height() + 2.0,
         );
 
-        self.buffer.set_bounds(buffer_size, font_system);
+        self.buffer.set_bounds(buffer_size, &mut res.font_system);
 
         if let Some(buffer) = self.placeholder_buffer.as_mut() {
-            buffer.set_bounds(buffer_size, font_system);
+            buffer.set_bounds(buffer_size, &mut res.font_system);
         }
 
         if let Some(buffer) = self.password_buffer.as_mut() {
-            buffer.set_bounds(buffer_size, font_system);
+            buffer.set_bounds(buffer_size, &mut res.font_system);
         }
 
-        self.layout_contents(font_system);
+        self.layout_contents(res);
     }
 
     pub fn on_pointer_moved(
         &mut self,
         position: Point,
         bounds: Rect,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
     ) -> TextInputUpdateResult {
-        let mut res = TextInputUpdateResult::default();
+        let mut result = TextInputUpdateResult::default();
 
         if self.disabled {
-            return res;
+            return result;
         }
 
         let pointer_in_bounds = bounds.contains(position);
 
         if pointer_in_bounds && !self.pointer_hovered && self.has_tooltip_message {
-            res.start_hover_timeout = true;
+            result.start_hover_timeout = true;
         }
         self.pointer_hovered = pointer_in_bounds;
 
@@ -550,22 +551,22 @@ impl TextInputInner {
                         has_text: !self.text.is_empty(),
                     }
                 },
-                font_system,
+                &mut res.font_system,
             );
 
-            res.set_cursor_icon = true;
-            res.needs_repaint = true;
-            res.capture_status = EventCaptureStatus::Captured;
+            result.set_cursor_icon = true;
+            result.needs_repaint = true;
+            result.capture_status = EventCaptureStatus::Captured;
         } else if pointer_in_bounds {
-            res.set_cursor_icon = true;
-            res.capture_status = EventCaptureStatus::Captured;
+            result.set_cursor_icon = true;
+            result.capture_status = EventCaptureStatus::Captured;
         }
 
-        if res.needs_repaint {
-            self.layout_contents(font_system);
+        if result.needs_repaint {
+            self.layout_contents(res);
         }
 
-        res
+        result
     }
 
     pub fn on_pointer_button_just_pressed(
@@ -574,33 +575,33 @@ impl TextInputInner {
         button: PointerButton,
         click_count: usize,
         bounds: Rect,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
     ) -> TextInputUpdateResult {
-        let mut res = TextInputUpdateResult::default();
+        let mut result = TextInputUpdateResult::default();
 
         if self.disabled || !bounds.contains(pointer_position) {
-            return res;
+            return result;
         }
 
         if button == PointerButton::Secondary {
-            res.send_action = self.do_send_action;
+            result.send_action = self.do_send_action;
             self.do_send_action = false;
-            res.capture_status = EventCaptureStatus::Captured;
-            res.right_clicked_at = Some(pointer_position);
+            result.capture_status = EventCaptureStatus::Captured;
+            result.right_clicked_at = Some(pointer_position);
 
             if !self.focused {
-                res.set_focus = Some(true);
+                result.set_focus = Some(true);
             }
 
-            return res;
+            return result;
         } else if button != PointerButton::Primary {
-            return res;
+            return result;
         }
 
-        res.capture_status = EventCaptureStatus::Captured;
+        result.capture_status = EventCaptureStatus::Captured;
 
         if !self.focused {
-            res.set_focus = Some(true);
+            result.set_focus = Some(true);
         }
 
         self.dragging = true;
@@ -622,13 +623,13 @@ impl TextInputInner {
                     has_text: !self.text.is_empty(),
                 }
             },
-            font_system,
+            &mut res.font_system,
         );
 
-        res.needs_repaint = true;
-        self.layout_contents(font_system);
+        result.needs_repaint = true;
+        self.layout_contents(res);
 
-        res
+        result
     }
 
     pub fn on_pointer_button_just_released(
@@ -637,17 +638,17 @@ impl TextInputInner {
         button: PointerButton,
         bounds: Rect,
     ) -> TextInputUpdateResult {
-        let mut res = TextInputUpdateResult::default();
+        let mut result = TextInputUpdateResult::default();
 
         if button == PointerButton::Primary {
             self.dragging = false;
         }
 
         if !self.disabled && bounds.contains(pointer_position) {
-            res.capture_status = EventCaptureStatus::Captured;
+            result.capture_status = EventCaptureStatus::Captured;
         }
 
-        res
+        result
     }
 
     pub fn on_pointer_left(&mut self) {
@@ -658,17 +659,17 @@ impl TextInputInner {
         &mut self,
         event: &KeyboardEvent,
         clipboard: &mut Clipboard,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
     ) -> TextInputUpdateResult {
-        let mut res = TextInputUpdateResult::default();
+        let mut result = TextInputUpdateResult::default();
 
         if self.disabled || event.state == KeyState::Up || !self.focused {
-            return res;
+            return result;
         }
 
         match event.code {
             Code::Backspace => {
-                res.capture_status = EventCaptureStatus::Captured;
+                result.capture_status = EventCaptureStatus::Captured;
 
                 let mut text_changed = false;
 
@@ -694,17 +695,17 @@ impl TextInputInner {
                             has_text: !self.text.is_empty(),
                         }
                     },
-                    font_system,
+                    &mut res.font_system,
                 );
 
                 if text_changed {
-                    res.needs_repaint = true;
+                    result.needs_repaint = true;
                     self.do_send_action = true;
                 }
             }
             Code::Escape => {
-                res.capture_status = EventCaptureStatus::Captured;
-                res.escape_key_pressed = true;
+                result.capture_status = EventCaptureStatus::Captured;
+                result.escape_key_pressed = true;
 
                 self.buffer.with_editor_mut(
                     |editor, font_system| -> EditorBorrowStatus {
@@ -715,13 +716,13 @@ impl TextInputInner {
                             has_text: !self.text.is_empty(),
                         }
                     },
-                    font_system,
+                    &mut res.font_system,
                 );
 
-                res.needs_repaint = true;
+                result.needs_repaint = true;
             }
             Code::Delete => {
-                res.capture_status = EventCaptureStatus::Captured;
+                result.capture_status = EventCaptureStatus::Captured;
 
                 let mut text_changed = false;
 
@@ -747,16 +748,16 @@ impl TextInputInner {
                             has_text: !self.text.is_empty(),
                         }
                     },
-                    font_system,
+                    &mut res.font_system,
                 );
 
                 if text_changed {
-                    res.needs_repaint = true;
+                    result.needs_repaint = true;
                     self.do_send_action = true;
                 }
             }
             Code::ArrowLeft => {
-                res.capture_status = EventCaptureStatus::Captured;
+                result.capture_status = EventCaptureStatus::Captured;
 
                 self.buffer.with_editor_mut(
                     |editor, font_system| -> EditorBorrowStatus {
@@ -771,13 +772,13 @@ impl TextInputInner {
                             has_text: !self.text.is_empty(),
                         }
                     },
-                    font_system,
+                    &mut res.font_system,
                 );
 
-                res.needs_repaint = true;
+                result.needs_repaint = true;
             }
             Code::ArrowRight => {
-                res.capture_status = EventCaptureStatus::Captured;
+                result.capture_status = EventCaptureStatus::Captured;
 
                 self.buffer.with_editor_mut(
                     |editor, font_system| -> EditorBorrowStatus {
@@ -792,76 +793,76 @@ impl TextInputInner {
                             has_text: !self.text.is_empty(),
                         }
                     },
-                    font_system,
+                    &mut res.font_system,
                 );
 
-                res.needs_repaint = true;
+                result.needs_repaint = true;
             }
             Code::Enter => {
-                res.capture_status = EventCaptureStatus::Captured;
+                result.capture_status = EventCaptureStatus::Captured;
 
-                res.enter_key_pressed = true;
+                result.enter_key_pressed = true;
 
                 if self.do_send_action {
                     self.do_send_action = false;
-                    res.send_action = true;
+                    result.send_action = true;
                 }
             }
             // TODO: Make this keyboard shortcut configurable.
             Code::KeyA => {
                 if event.modifiers.contains(Modifiers::CONTROL) {
-                    res.capture_status = EventCaptureStatus::Captured;
+                    result.capture_status = EventCaptureStatus::Captured;
                     self.queue_action(TextInputAction::SelectAll);
                 }
             }
             // TODO: Make this keyboard shortcut configurable.
             Code::KeyX => {
                 if event.modifiers.contains(Modifiers::CONTROL) {
-                    res.capture_status = EventCaptureStatus::Captured;
+                    result.capture_status = EventCaptureStatus::Captured;
                     self.queue_action(TextInputAction::Cut);
                 }
             }
             // TODO: Make this keyboard shortcut configurable.
             Code::KeyC => {
                 if event.modifiers.contains(Modifiers::CONTROL) {
-                    res.capture_status = EventCaptureStatus::Captured;
+                    result.capture_status = EventCaptureStatus::Captured;
                     self.queue_action(TextInputAction::Copy);
                 }
             }
             // TODO: Make this keyboard shortcut configurable.
             Code::KeyV => {
                 if event.modifiers.contains(Modifiers::CONTROL) {
-                    res.capture_status = EventCaptureStatus::Captured;
+                    result.capture_status = EventCaptureStatus::Captured;
                     self.queue_action(TextInputAction::Paste);
                 }
             }
             _ => {}
         }
 
-        self.drain_actions(clipboard, font_system, &mut res);
+        self.drain_actions(clipboard, res, &mut result);
 
-        if res.needs_repaint {
-            self.layout_contents(font_system);
+        if result.needs_repaint {
+            self.layout_contents(res);
         }
 
-        res
+        result
     }
 
     pub fn on_text_composition_event(
         &mut self,
         event: &CompositionEvent,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
     ) -> TextInputUpdateResult {
-        let mut res = TextInputUpdateResult::default();
+        let mut result = TextInputUpdateResult::default();
 
         if !self.focused || self.disabled {
-            return res;
+            return result;
         }
 
-        res.capture_status = EventCaptureStatus::Captured;
+        result.capture_status = EventCaptureStatus::Captured;
 
         if event.data.is_empty() || self.text.len() >= self.max_characters {
-            return res;
+            return result;
         }
 
         let contents = if self.text.len() + event.data.len() > self.max_characters {
@@ -894,29 +895,29 @@ impl TextInputInner {
                     has_text: !self.text.is_empty(),
                 }
             },
-            font_system,
+            &mut res.font_system,
         );
 
         if text_changed {
             self.do_send_action = true;
-            res.needs_repaint = true;
+            result.needs_repaint = true;
 
-            self.layout_contents(font_system);
+            self.layout_contents(res);
         }
 
-        res
+        result
     }
 
     pub fn on_focus_changed(
         &mut self,
         has_focus: bool,
         clipboard: &mut Clipboard,
-        font_system: &mut FontSystem,
+        res: &mut ResourceCtx,
     ) -> TextInputUpdateResult {
-        let mut res = TextInputUpdateResult::default();
+        let mut result = TextInputUpdateResult::default();
 
         if has_focus {
-            res.listen_to_pointer_clicked_off = true;
+            result.listen_to_pointer_clicked_off = true;
             self.cursor_blink_state_on = true;
             self.cursor_blink_last_toggle_instant = Instant::now();
             self.focused = true;
@@ -925,10 +926,10 @@ impl TextInputInner {
                 self.queue_action(TextInputAction::SelectAll);
             }
 
-            self.drain_actions(clipboard, font_system, &mut res);
+            self.drain_actions(clipboard, res, &mut result);
 
-            if res.needs_repaint {
-                self.layout_contents(font_system);
+            if result.needs_repaint {
+                self.layout_contents(res);
             }
         } else {
             self.focused = false;
@@ -936,25 +937,25 @@ impl TextInputInner {
 
             if self.do_send_action {
                 self.do_send_action = false;
-                res.send_action = true;
+                result.send_action = true;
             }
         }
 
-        res.set_animating = Some(has_focus);
-        res.needs_repaint = true;
+        result.set_animating = Some(has_focus);
+        result.needs_repaint = true;
 
-        res
+        result
     }
 
     pub fn on_clicked_off(&mut self) -> TextInputUpdateResult {
-        let mut res = TextInputUpdateResult::default();
+        let mut result = TextInputUpdateResult::default();
 
         if self.focused {
-            res.set_focus = Some(false);
+            result.set_focus = Some(false);
         }
         self.dragging = false;
 
-        res
+        result
     }
 
     pub fn queue_action(&mut self, action: TextInputAction) {
@@ -964,8 +965,8 @@ impl TextInputInner {
     fn drain_actions(
         &mut self,
         clipboard: &mut Clipboard,
-        font_system: &mut FontSystem,
-        res: &mut TextInputUpdateResult,
+        res: &mut ResourceCtx,
+        result: &mut TextInputUpdateResult,
     ) {
         for action in self.queued_actions.drain(..) {
             match action {
@@ -993,7 +994,7 @@ impl TextInputInner {
                                 });
 
                                 self.do_send_action = true;
-                                res.needs_repaint = true;
+                                result.needs_repaint = true;
                             }
 
                             EditorBorrowStatus {
@@ -1001,7 +1002,7 @@ impl TextInputInner {
                                 has_text: !self.text.is_empty(),
                             }
                         },
-                        font_system,
+                        &mut res.font_system,
                     );
                 }
                 TextInputAction::Copy => {
@@ -1016,7 +1017,7 @@ impl TextInputInner {
                                 has_text: !self.text.is_empty(),
                             }
                         },
-                        font_system,
+                        &mut res.font_system,
                     );
                 }
                 TextInputAction::Paste => {
@@ -1052,12 +1053,12 @@ impl TextInputInner {
                                         has_text: !self.text.is_empty(),
                                     }
                                 },
-                                font_system,
+                                &mut res.font_system,
                             );
 
                             if text_changed {
                                 self.do_send_action = true;
-                                res.needs_repaint = true;
+                                result.needs_repaint = true;
                             }
                         }
                     }
@@ -1076,16 +1077,16 @@ impl TextInputInner {
                                 has_text: !self.text.is_empty(),
                             }
                         },
-                        font_system,
+                        &mut res.font_system,
                     );
 
-                    res.needs_repaint = true;
+                    result.needs_repaint = true;
                 }
             }
         }
     }
 
-    fn layout_contents(&mut self, font_system: &mut FontSystem) {
+    fn layout_contents(&mut self, res: &mut ResourceCtx) {
         self.cursor_x = 0.0;
         self.select_highlight_range = None;
 
@@ -1095,7 +1096,7 @@ impl TextInputInner {
         }
 
         if let Some(password_buffer) = self.password_buffer.as_mut() {
-            password_buffer.set_text(&text_to_password_text(&self.buffer), font_system);
+            password_buffer.set_text(&text_to_password_text(&self.buffer), &mut res.font_system);
         }
 
         if self.focused {
@@ -1265,7 +1266,7 @@ impl TextInputInner {
             };
 
             primitives.text = Some(TextPrimitive {
-                buffer,
+                buffer: Some(buffer),
                 pos: self.text_bounds_rect.origin + text_offset.to_vector()
                     - Point::new(scroll_x, 0.0).to_vector()
                     + bounds.origin.to_vector(),
@@ -1274,16 +1275,18 @@ impl TextInputInner {
                     Point::new(scroll_x, 0.0) + bounds.origin.to_vector(),
                     self.text_bounds_rect.size,
                 ),
+                icons: SmallVec::new(),
             });
         } else if !self.placeholder_text.is_empty() {
             if let Some(placeholder_buffer) = &self.placeholder_buffer {
                 primitives.text = Some(TextPrimitive {
-                    buffer: placeholder_buffer.clone(),
+                    buffer: Some(placeholder_buffer.clone()),
                     pos: self.text_bounds_rect.origin
                         + text_offset.to_vector()
                         + bounds.origin.to_vector(),
                     color: style.font_color_placeholder,
                     clipping_bounds: Rect::new(bounds.origin, self.text_bounds_rect.size),
+                    icons: SmallVec::new(),
                 });
             }
         }

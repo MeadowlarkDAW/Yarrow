@@ -1,10 +1,13 @@
 pub mod button;
 pub mod click_area;
 pub mod drop_down_menu;
-pub mod dual_button;
-pub mod dual_label;
-pub mod dual_tab;
-pub mod dual_toggle_button;
+pub mod icon;
+pub mod icon_button;
+pub mod icon_label;
+pub mod icon_label_button;
+pub mod icon_label_tab;
+pub mod icon_label_toggle_button;
+pub mod icon_toggle_button;
 pub mod knob;
 pub mod label;
 pub mod paragraph;
