@@ -57,7 +57,7 @@ pub struct IconTextInputBuilder<A: Clone + 'static> {
     pub placeholder_text: String,
     pub text: String,
     pub text_offset: Point,
-    pub icon_id: CustomGlyphID,
+    pub icon: CustomGlyphID,
     pub icon_scale: f32,
     pub icon_offset: Point,
     pub select_all_when_focused: bool,
@@ -81,7 +81,7 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
             placeholder_text: String::new(),
             text: String::new(),
             text_offset: Point::default(),
-            icon_id: CustomGlyphID::MAX,
+            icon: CustomGlyphID::MAX,
             icon_scale: 1.0,
             icon_offset: Point::default(),
             select_all_when_focused: false,
@@ -133,8 +133,8 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
         self
     }
 
-    pub fn icon_id(mut self, id: impl Into<CustomGlyphID>) -> Self {
-        self.icon_id = id.into();
+    pub fn icon(mut self, id: impl Into<CustomGlyphID>) -> Self {
+        self.icon = id.into();
         self
     }
 
@@ -222,7 +222,7 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
             placeholder_text,
             text,
             text_offset,
-            icon_id,
+            icon,
             icon_scale,
             icon_offset,
             select_all_when_focused,
@@ -236,7 +236,7 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
             scissor_rect_id,
         } = builder;
 
-        let icon = IconInner::new(icon_id, icon_scale, icon_offset);
+        let icon = IconInner::new(icon, icon_scale, icon_offset);
 
         let layout_res = layout(bounding_rect.size, &style);
 

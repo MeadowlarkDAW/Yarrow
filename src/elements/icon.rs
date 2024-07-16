@@ -129,7 +129,7 @@ impl IconInner {
 }
 
 pub struct IconBuilder {
-    pub icon_id: CustomGlyphID,
+    pub icon: CustomGlyphID,
     pub scale: f32,
     pub offset: Point,
     pub style: Rc<IconStyle>,
@@ -142,7 +142,7 @@ pub struct IconBuilder {
 impl IconBuilder {
     pub fn new(style: &Rc<IconStyle>) -> Self {
         Self {
-            icon_id: CustomGlyphID::MAX,
+            icon: CustomGlyphID::MAX,
             scale: 1.0,
             offset: Point::default(),
             style: Rc::clone(style),
@@ -157,8 +157,8 @@ impl IconBuilder {
         IconElement::create(self, cx)
     }
 
-    pub fn icon_id(mut self, id: impl Into<CustomGlyphID>) -> Self {
-        self.icon_id = id.into();
+    pub fn icon(mut self, id: impl Into<CustomGlyphID>) -> Self {
+        self.icon = id.into();
         self
     }
 
@@ -204,7 +204,7 @@ pub struct IconElement {
 impl IconElement {
     pub fn create<A: Clone + 'static>(builder: IconBuilder, cx: &mut WindowContext<'_, A>) -> Icon {
         let IconBuilder {
-            icon_id,
+            icon,
             scale,
             offset,
             style,
@@ -215,7 +215,7 @@ impl IconElement {
         } = builder;
 
         let shared_state = Rc::new(RefCell::new(SharedState {
-            inner: IconInner::new(icon_id, scale, offset),
+            inner: IconInner::new(icon, scale, offset),
             style,
         }));
 

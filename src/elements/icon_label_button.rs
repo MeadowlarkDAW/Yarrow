@@ -363,7 +363,7 @@ impl<A: Clone + 'static> IconLabelButtonBuilder<A> {
         self
     }
 
-    pub fn icon_id(mut self, icon_id: Option<impl Into<CustomGlyphID>>) -> Self {
+    pub fn icon(mut self, icon_id: Option<impl Into<CustomGlyphID>>) -> Self {
         self.icon_id = icon_id.map(|i| i.into());
         self
     }

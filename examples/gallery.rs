@@ -34,11 +34,11 @@ enum MenuOption {
 impl MenuOption {
     pub const ALL: [Self; 3] = [Self::Hello, Self::World, Self::About];
 
-    pub fn right_text(&self) -> &'static str {
+    pub fn right_text(&self) -> Option<&'static str> {
         match self {
-            Self::Hello => "",
-            Self::World => "",
-            Self::About => "Ctrl+A",
+            Self::Hello => None,
+            Self::World => None,
+            Self::About => Some("Ctrl+A"),
         }
     }
 }
@@ -157,34 +157,15 @@ impl MyApp {
             .build(cx);
 
         let menu_btn = IconButton::builder(&self.style.menu_btn_style)
-            .icon_id(MyIcon::Menu)
+            .icon(MyIcon::Menu)
             .on_select(MyAction::OpenMenu)
             .z_index(MAIN_Z_INDEX)
             .build(cx);
         let menu = DropDownMenu::builder(&self.style.menu_style)
             .entries(vec![
-                MenuEntry::Option {
-                    left_icon_id: None,
-                    icon_scale: 1.0,
-                    left_text: format!("{}", MenuOption::Hello),
-                    right_text: Some(MenuOption::Hello.right_text().into()),
-                    unique_id: 0,
-                },
-                MenuEntry::Option {
-                    left_icon_id: None,
-                    icon_scale: 1.0,
-                    left_text: format!("{}", MenuOption::World),
-                    right_text: Some(MenuOption::World.right_text().into()),
-                    unique_id: 1,
-                },
-                MenuEntry::Divider,
-                MenuEntry::Option {
-                    left_icon_id: None,
-                    icon_scale: 1.0,
-                    left_text: format!("{}", MenuOption::About),
-                    right_text: Some(MenuOption::About.right_text().into()),
-                    unique_id: 2,
-                },
+                MenuEntry::option_with_right_text("Hello", MenuOption::Hello.right_text(), 0),
+                MenuEntry::option_with_right_text("World", MenuOption::World.right_text(), 1),
+                MenuEntry::option_with_right_text("About", MenuOption::About.right_text(), 2),
             ])
             .on_entry_selected(|id| MyAction::MenuItemSelected(MenuOption::ALL[id]))
             .z_index(OVERLAY_Z_INDEX)

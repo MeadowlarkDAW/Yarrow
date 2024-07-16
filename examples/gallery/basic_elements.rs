@@ -109,7 +109,7 @@ impl Elements {
             .build(cx);
 
         let icon = Icon::builder(&style.icon_style)
-            .icon_id(MyIcon::Info)
+            .icon(MyIcon::Info)
             .z_index(MAIN_Z_INDEX)
             .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
             .build(cx);
@@ -130,7 +130,7 @@ impl Elements {
             .build(cx);
 
         let icon_btn = IconButton::builder(&style.icon_btn_style)
-            .icon_id(MyIcon::Save)
+            .icon(MyIcon::Save)
             .on_select(Action::IconBtnPressed.into())
             .z_index(MAIN_Z_INDEX)
             .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
@@ -205,7 +205,7 @@ impl Elements {
                         } as IconID;
 
                         MenuEntry::Option {
-                            left_icon_id: Some(icon),
+                            left_icon: Some(icon),
                             icon_scale: 1.0,
                             left_text: format!("{s}"),
                             right_text: Some(s.right_text().into()),
@@ -222,7 +222,7 @@ impl Elements {
 
         let search_text_input = IconTextInput::builder(&style.icon_text_input_style)
             .placeholder_text("search something...")
-            .icon_id(MyIcon::Search)
+            .icon(MyIcon::Search)
             .on_changed(|text| Action::SearchTextChanged(text).into())
             .on_right_click(|pos| {
                 Action::OpenTextInputMenu {
@@ -238,7 +238,7 @@ impl Elements {
 
         let drop_down_menu_btn = IconLabelButton::builder(&style.drop_down_btn_style)
             .text(Some(format!("{}", DropDownOption::ALL[0])))
-            .icon_id(Some(MyIcon::Dropdown))
+            .icon(Some(MyIcon::Dropdown))
             .on_select(Action::OpenDropDown.into())
             .z_index(MAIN_Z_INDEX)
             .scissor_rect(SCROLL_AREA_SCISSOR_RECT)

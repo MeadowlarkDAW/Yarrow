@@ -34,7 +34,7 @@ use super::label::{LabelInner, LabelStyle};
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MenuEntry {
     Option {
-        left_icon_id: Option<CustomGlyphID>,
+        left_icon: Option<CustomGlyphID>,
         icon_scale: f32,
         left_text: String,
         right_text: Option<String>,
@@ -47,7 +47,7 @@ pub enum MenuEntry {
 impl MenuEntry {
     pub fn option(text: impl Into<String>, unique_id: usize) -> Self {
         Self::Option {
-            left_icon_id: None,
+            left_icon: None,
             icon_scale: 1.0,
             left_text: text.into(),
             right_text: None,
@@ -61,7 +61,7 @@ impl MenuEntry {
         unique_id: usize,
     ) -> Self {
         Self::Option {
-            left_icon_id: None,
+            left_icon: None,
             icon_scale: 1.0,
             left_text: left_text.into(),
             right_text: right_text.map(|t| t.into()),
@@ -76,7 +76,7 @@ impl MenuEntry {
         unique_id: usize,
     ) -> Self {
         Self::Option {
-            left_icon_id: icon_id.map(|i| i.into()),
+            left_icon: icon_id.map(|i| i.into()),
             icon_scale,
             left_text: text.into(),
             right_text: None,
@@ -746,7 +746,7 @@ fn build_entries(
         .into_iter()
         .map(|entry| match entry {
             MenuEntry::Option {
-                left_icon_id,
+                left_icon,
                 icon_scale,
                 left_text,
                 right_text,
@@ -754,7 +754,7 @@ fn build_entries(
             } => MenuEntryInner::Option {
                 left_label: IconLabelInner::new(
                     Some(left_text),
-                    left_icon_id,
+                    left_icon,
                     Point::default(),
                     Point::default(),
                     icon_scale,
