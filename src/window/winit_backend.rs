@@ -922,7 +922,7 @@ fn create_window<A: Clone + 'static>(
 
     let window = event_loop.create_window(attributes).map(|w| Arc::new(w))?;
 
-    // Fixes an issue in MacOS with wgpu
+    // Might fix an issue in MacOS with wgpu
     // https://github.com/gfx-rs/wgpu/issues/5722
     window.request_redraw();
 
