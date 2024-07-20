@@ -11,10 +11,6 @@ use winit::event::{
     WindowEvent as WinitWindowEvent,
 };
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::platform::startup_notify::EventLoopExtStartupNotify;
-use winit::platform::startup_notify::WindowAttributesExtStartupNotify;
-use winit::platform::wayland::ActiveEventLoopExtWayland;
-use winit::platform::x11::ActiveEventLoopExtX11;
 use winit::window::{CursorGrabMode, Window as WinitWindow, WindowId as WinitWindowId};
 
 use crate::action_queue::ActionSender;
@@ -413,6 +409,9 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                 target_os = "netbsd",
             ))]
             {
+                use winit::platform::wayland::ActiveEventLoopExtWayland;
+                use winit::platform::x11::ActiveEventLoopExtX11;
+
                 self.context.linux_backend_type = if event_loop.is_x11() {
                     Some(LinuxBackendType::X11)
                 } else if event_loop.is_wayland() {
@@ -908,15 +907,24 @@ fn create_window<A: Clone + 'static>(
         ),
         not(target_family = "wasm")
     ))]
-    if config.focus_on_creation {
-        if let Some(token) = event_loop.read_token_from_env() {
-            winit::platform::startup_notify::reset_activation_token_env();
-            log::info!("Using token {:?} to activate a window", token);
-            attributes = attributes.with_activation_token(token);
+    {
+        use winit::platform::startup_notify::EventLoopExtStartupNotify;
+        use winit::platform::startup_notify::WindowAttributesExtStartupNotify;
+
+        if config.focus_on_creation {
+            if let Some(token) = event_loop.read_token_from_env() {
+                winit::platform::startup_notify::reset_activation_token_env();
+                log::info!("Using token {:?} to activate a window", token);
+                attributes = attributes.with_activation_token(token);
+            }
         }
     }
 
     let window = event_loop.create_window(attributes).map(|w| Arc::new(w))?;
+
+    // Fixes an issue in MacOS with wgpu
+    // https://github.com/gfx-rs/wgpu/issues/5722
+    window.request_redraw();
 
     let physical_size = window.inner_size();
     let physical_size =
