@@ -14,9 +14,7 @@ pub const DEFAULT_TEXT_ATTRIBUTES: Attrs<'static> = Attrs {
     family: Family::SansSerif,
     stretch: rootvg::text::Stretch::Normal,
     style: rootvg::text::Style::Normal,
-    // Glyphon currently makes text look a bit too bold, so use the light
-    // weight by default for now until that is fixed.
-    weight: Weight::LIGHT,
+    weight: Weight::NORMAL,
     metadata: 0,
     cache_key_flags: CacheKeyFlags::empty(),
     metrics_opt: None,
