@@ -43,7 +43,7 @@ rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "bd54238ab0b09
 #rootvg = { path = "../rootvg" }
 
 [dev-dependencies]
-winit = "0.30.0"
+wgpu = "0.20.1"
 env_logger = { version = "0.11.3", default-features = false }
 derive_more = "0.99.17"
 
