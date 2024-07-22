@@ -36,12 +36,12 @@ pub struct IconToggleButtonStyle {
 
     pub idle_on: ButtonStylePart,
     pub hovered_on: ButtonStylePart,
-    //pub down_on: ButtonStylePart,
+    pub down_on: ButtonStylePart,
     pub disabled_on: ButtonStylePart,
 
     pub idle_off: ButtonStylePart,
     pub hovered_off: ButtonStylePart,
-    //pub down_off: ButtonStylePart,
+    pub down_off: ButtonStylePart,
     pub disabled_off: ButtonStylePart,
 }
 
@@ -50,13 +50,15 @@ impl IconToggleButtonStyle {
         let part = if toggled {
             match state {
                 ButtonState::Idle => &self.idle_on,
-                ButtonState::Hovered | ButtonState::Down => &self.hovered_on,
+                ButtonState::Hovered => &self.hovered_on,
+                ButtonState::Down => &self.down_on,
                 ButtonState::Disabled => &self.disabled_on,
             }
         } else {
             match state {
                 ButtonState::Idle => &self.idle_off,
-                ButtonState::Hovered | ButtonState::Down => &self.hovered_off,
+                ButtonState::Hovered => &self.hovered_off,
+                ButtonState::Down => &self.down_off,
                 ButtonState::Disabled => &self.disabled_off,
             }
         };
@@ -108,15 +110,18 @@ impl Default for IconToggleButtonStyle {
                 },
                 ..idle_on
             },
-            /*
             down_on: ButtonStylePart {
                 back_quad: QuadStyle {
-                    bg: Background::Solid(RGBA8::new(40, 40, 40, 255)),
+                    bg: Background::Solid(RGBA8::new(
+                        DEFAULT_ACCENT_COLOR.r,
+                        DEFAULT_ACCENT_COLOR.g,
+                        DEFAULT_ACCENT_COLOR.b,
+                        200,
+                    )),
                     ..idle_on.back_quad
                 },
                 ..idle_on
             },
-            */
             disabled_on: ButtonStylePart {
                 font_color: RGBA8::new(150, 150, 150, 255),
                 back_quad: QuadStyle {
@@ -130,6 +135,7 @@ impl Default for IconToggleButtonStyle {
             },
 
             idle_off: idle_off.clone(),
+            down_off: idle_off.clone(),
             hovered_off: ButtonStylePart {
                 back_quad: QuadStyle {
                     border: BorderStyle {
@@ -140,15 +146,6 @@ impl Default for IconToggleButtonStyle {
                 },
                 ..idle_off
             },
-            /*
-            down_off: ButtonStylePart {
-                back_quad: QuadStyle {
-                    bg: Background::Solid(RGBA8::new(40, 40, 40, 255)),
-                    ..idle_off.back_quad
-                },
-                ..idle_off
-            },
-            */
             disabled_off: ButtonStylePart {
                 font_color: RGBA8::new(150, 150, 150, 255),
                 back_quad: QuadStyle {
@@ -223,34 +220,38 @@ impl IconToggleButtonInner {
             let old_part = if self.toggled {
                 match self.state {
                     ButtonState::Idle => &style.idle_on,
-                    ButtonState::Hovered | ButtonState::Down => &style.hovered_on,
+                    ButtonState::Hovered => &style.hovered_on,
+                    ButtonState::Down => &style.down_on,
                     ButtonState::Disabled => &style.disabled_on,
                 }
             } else {
                 match self.state {
                     ButtonState::Idle => &style.idle_off,
-                    ButtonState::Hovered | ButtonState::Down => &style.hovered_off,
+                    ButtonState::Hovered => &style.hovered_off,
+                    ButtonState::Down => &style.down_off,
                     ButtonState::Disabled => &style.disabled_off,
                 }
             };
 
+            self.state = state;
+
             let new_part = if self.toggled {
                 match state {
                     ButtonState::Idle => &style.idle_on,
-                    ButtonState::Hovered | ButtonState::Down => &style.hovered_on,
+                    ButtonState::Hovered => &style.hovered_on,
+                    ButtonState::Down => &style.down_on,
                     ButtonState::Disabled => &style.disabled_on,
                 }
             } else {
                 match state {
                     ButtonState::Idle => &style.idle_off,
-                    ButtonState::Hovered | ButtonState::Down => &style.hovered_off,
+                    ButtonState::Hovered => &style.hovered_off,
+                    ButtonState::Down => &style.down_off,
                     ButtonState::Disabled => &style.disabled_off,
                 }
             };
 
             let needs_repaint = old_part != new_part;
-
-            self.state = state;
 
             StateChangeResult {
                 state_changed: true,

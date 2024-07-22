@@ -74,6 +74,7 @@ impl Default for TabStyle {
                 padding: Padding::new(6.0, 6.0, 6.0, 6.0),
 
                 idle_on: idle_on.clone(),
+                down_on: idle_on.clone(),
                 hovered_on: ButtonStylePart {
                     back_quad: QuadStyle {
                         ..idle_on.back_quad
@@ -90,6 +91,7 @@ impl Default for TabStyle {
                 },
 
                 idle_off: idle_off.clone(),
+                down_off: idle_off.clone(),
                 hovered_off: ButtonStylePart {
                     back_quad: QuadStyle {
                         bg: Background::Solid(RGBA8::new(50, 50, 50, 255)),

@@ -59,10 +59,12 @@ pub struct IconLabelToggleButtonStyle {
 
     pub idle_on: IconLabelButtonStylePart,
     pub hovered_on: IconLabelButtonStylePart,
+    pub down_on: IconLabelButtonStylePart,
     pub disabled_on: IconLabelButtonStylePart,
 
     pub idle_off: IconLabelButtonStylePart,
     pub hovered_off: IconLabelButtonStylePart,
+    pub down_off: IconLabelButtonStylePart,
     pub disabled_off: IconLabelButtonStylePart,
 }
 
@@ -114,6 +116,18 @@ impl Default for IconLabelToggleButtonStyle {
                 },
                 ..idle_on
             },
+            down_on: IconLabelButtonStylePart {
+                back_quad: QuadStyle {
+                    bg: Background::Solid(RGBA8::new(
+                        DEFAULT_ACCENT_COLOR.r,
+                        DEFAULT_ACCENT_COLOR.g,
+                        DEFAULT_ACCENT_COLOR.b,
+                        200,
+                    )),
+                    ..idle_on.back_quad
+                },
+                ..idle_on
+            },
             disabled_on: IconLabelButtonStylePart {
                 text_color: RGBA8::new(150, 150, 150, 255),
                 icon_color: RGBA8::new(150, 150, 150, 255),
@@ -128,6 +142,7 @@ impl Default for IconLabelToggleButtonStyle {
             },
 
             idle_off: idle_off.clone(),
+            down_off: idle_off.clone(),
             hovered_off: IconLabelButtonStylePart {
                 back_quad: QuadStyle {
                     border: BorderStyle {
@@ -160,14 +175,14 @@ impl IconLabelToggleButtonStyle {
             match state {
                 ButtonState::Idle => &self.idle_on,
                 ButtonState::Hovered => &self.hovered_on,
-                ButtonState::Down => &self.hovered_on,
+                ButtonState::Down => &self.down_on,
                 ButtonState::Disabled => &self.disabled_on,
             }
         } else {
             match state {
                 ButtonState::Idle => &self.idle_off,
                 ButtonState::Hovered => &self.hovered_off,
-                ButtonState::Down => &self.hovered_off,
+                ButtonState::Down => &self.down_off,
                 ButtonState::Disabled => &self.disabled_off,
             }
         };
@@ -252,37 +267,37 @@ impl IconLabelToggleButtonInner {
                 match self.state {
                     ButtonState::Idle => &style.idle_on,
                     ButtonState::Hovered => &style.hovered_on,
-                    ButtonState::Down => &style.hovered_on,
+                    ButtonState::Down => &style.down_on,
                     ButtonState::Disabled => &style.disabled_on,
                 }
             } else {
                 match self.state {
                     ButtonState::Idle => &style.idle_off,
                     ButtonState::Hovered => &style.hovered_off,
-                    ButtonState::Down => &style.hovered_off,
+                    ButtonState::Down => &style.down_off,
                     ButtonState::Disabled => &style.disabled_off,
                 }
             };
+
+            self.state = state;
 
             let new_part = if self.toggled {
                 match state {
                     ButtonState::Idle => &style.idle_on,
                     ButtonState::Hovered => &style.hovered_on,
-                    ButtonState::Down => &style.hovered_on,
+                    ButtonState::Down => &style.down_on,
                     ButtonState::Disabled => &style.disabled_on,
                 }
             } else {
                 match state {
                     ButtonState::Idle => &style.idle_off,
                     ButtonState::Hovered => &style.hovered_off,
-                    ButtonState::Down => &style.hovered_off,
+                    ButtonState::Down => &style.down_off,
                     ButtonState::Disabled => &style.disabled_off,
                 }
             };
 
             let needs_repaint = old_part != new_part;
-
-            self.state = state;
 
             StateChangeResult {
                 state_changed: true,

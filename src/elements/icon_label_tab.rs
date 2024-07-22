@@ -76,6 +76,7 @@ impl Default for IconLabelTabStyle {
                 layout: IconLabelLayout::default(),
 
                 idle_on: idle_on.clone(),
+                down_on: idle_on.clone(),
                 hovered_on: IconLabelButtonStylePart {
                     back_quad: QuadStyle {
                         ..idle_on.back_quad
@@ -93,6 +94,7 @@ impl Default for IconLabelTabStyle {
                 },
 
                 idle_off: idle_off.clone(),
+                down_off: idle_off.clone(),
                 hovered_off: IconLabelButtonStylePart {
                     back_quad: QuadStyle {
                         bg: Background::Solid(RGBA8::new(50, 50, 50, 255)),
