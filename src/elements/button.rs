@@ -189,6 +189,16 @@ pub enum ButtonState {
     Disabled,
 }
 
+impl ButtonState {
+    pub fn new(disabled: bool) -> Self {
+        if disabled {
+            Self::Disabled
+        } else {
+            Self::Idle
+        }
+    }
+}
+
 /// A reusable button struct that can be used by other elements.
 pub struct ButtonInner {
     state: ButtonState,
@@ -207,18 +217,13 @@ impl ButtonInner {
         style: &ButtonStyle,
         res: &mut ResourceCtx,
         text_offset: Point,
+        disabled: bool,
     ) -> Self {
-        let label = LabelInner::new(
-            text,
-            &style.label_style(ButtonState::Idle),
-            text_offset,
-            res,
-        );
+        let state = ButtonState::new(disabled);
 
-        Self {
-            label,
-            state: ButtonState::Idle,
-        }
+        let label = LabelInner::new(text, &style.label_style(state), text_offset, res);
+
+        Self { label, state }
     }
 
     pub fn set_state(&mut self, state: ButtonState, style: &ButtonStyle) -> StateChangeResult {
@@ -318,6 +323,7 @@ pub struct ButtonBuilder<A: Clone + 'static> {
     pub z_index: ZIndex,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
+    pub disabled: bool,
     pub scissor_rect_id: ScissorRectID,
 }
 
@@ -333,6 +339,7 @@ impl<A: Clone + 'static> ButtonBuilder<A> {
             z_index: 0,
             bounding_rect: Rect::default(),
             manually_hidden: false,
+            disabled: false,
             scissor_rect_id: MAIN_SCISSOR_RECT,
         }
     }
@@ -384,6 +391,11 @@ impl<A: Clone + 'static> ButtonBuilder<A> {
         self
     }
 
+    pub const fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
         self.scissor_rect_id = scissor_rect_id;
         self
@@ -410,11 +422,12 @@ impl<A: Clone + 'static> ButtonElement<A> {
             z_index,
             bounding_rect,
             manually_hidden,
+            disabled,
             scissor_rect_id,
         } = builder;
 
         let shared_state = Rc::new(RefCell::new(SharedState {
-            inner: ButtonInner::new(text, &style, &mut cx.res, text_offset),
+            inner: ButtonInner::new(text, &style, &mut cx.res, text_offset, disabled),
             style,
         }));
 

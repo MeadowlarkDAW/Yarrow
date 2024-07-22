@@ -124,6 +124,7 @@ pub struct TabBuilder<A: Clone + 'static> {
     pub z_index: ZIndex,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
+    pub disabled: bool,
     pub scissor_rect_id: ScissorRectID,
 }
 
@@ -141,6 +142,7 @@ impl<A: Clone + 'static> TabBuilder<A> {
             z_index: 0,
             bounding_rect: Rect::default(),
             manually_hidden: false,
+            disabled: false,
             scissor_rect_id: MAIN_SCISSOR_RECT,
         }
     }
@@ -198,6 +200,11 @@ impl<A: Clone + 'static> TabBuilder<A> {
         self
     }
 
+    pub const fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
         self.scissor_rect_id = scissor_rect_id;
         self
@@ -227,6 +234,7 @@ impl<A: Clone + 'static> TabElement<A> {
             z_index,
             bounding_rect,
             manually_hidden,
+            disabled,
             scissor_rect_id,
         } = builder;
 
@@ -235,6 +243,7 @@ impl<A: Clone + 'static> TabElement<A> {
                 ToggleText::Single(text),
                 text_offset,
                 toggled,
+                disabled,
                 &style.toggle_btn_style,
                 &mut cx.res,
             ),
@@ -556,6 +565,7 @@ pub struct TabGroupOption {
     pub text: String,
     pub tooltip_message: String,
     pub text_offset: Point,
+    pub disabled: bool,
 }
 
 impl TabGroupOption {
@@ -568,6 +578,7 @@ impl TabGroupOption {
             text: text.into(),
             tooltip_message: tooltip_message.into(),
             text_offset,
+            disabled: false,
         }
     }
 }
@@ -631,6 +642,7 @@ impl TabGroup {
                     .on_indicator_line_placement(on_indicator_line_placement)
                     .z_index(z_index)
                     .text_offset(option.text_offset)
+                    .disabled(option.disabled)
                     .scissor_rect(scissor_rect_id)
                     .build(cx)
             })

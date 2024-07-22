@@ -205,6 +205,7 @@ impl IconLabelToggleButtonInner {
         icon_offset: Point,
         icon_scale: f32,
         toggled: bool,
+        disabled: bool,
         style: &IconLabelToggleButtonStyle,
         res: &mut ResourceCtx,
     ) -> Self {
@@ -220,13 +221,15 @@ impl IconLabelToggleButtonInner {
 
         let icon_id = toggle_icons.map(|i| i.icon(toggled));
 
+        let state = ButtonState::new(disabled);
+
         let icon_label = IconLabelInner::new(
             text,
             icon_id,
             text_offset,
             icon_offset,
             icon_scale,
-            &style.icon_label_style(ButtonState::Idle, toggled),
+            &style.icon_label_style(state, toggled),
             res,
         );
 
@@ -234,7 +237,7 @@ impl IconLabelToggleButtonInner {
             icon_label,
             dual_text,
             toggle_icons,
-            state: ButtonState::Idle,
+            state,
             toggled,
         }
     }
@@ -432,17 +435,16 @@ pub struct IconLabelToggleButtonBuilder<A: Clone + 'static> {
     pub tooltip_message: Option<String>,
     pub tooltip_align: Align2,
     pub toggled: bool,
-
     pub text: Option<ToggleText>,
     pub icons: Option<ToggleIcons>,
     pub icon_scale: f32,
     pub text_offset: Point,
     pub icon_offset: Point,
-
     pub style: Rc<IconLabelToggleButtonStyle>,
     pub z_index: ZIndex,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
+    pub disabled: bool,
     pub scissor_rect_id: ScissorRectID,
 }
 
@@ -462,6 +464,7 @@ impl<A: Clone + 'static> IconLabelToggleButtonBuilder<A> {
             z_index: 0,
             bounding_rect: Rect::default(),
             manually_hidden: false,
+            disabled: false,
             scissor_rect_id: MAIN_SCISSOR_RECT,
         }
     }
@@ -558,6 +561,11 @@ impl<A: Clone + 'static> IconLabelToggleButtonBuilder<A> {
         self
     }
 
+    pub const fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
         self.scissor_rect_id = scissor_rect_id;
         self
@@ -591,6 +599,7 @@ impl<A: Clone + 'static> IconLabelToggleButtonElement<A> {
             z_index,
             bounding_rect,
             manually_hidden,
+            disabled,
             scissor_rect_id,
         } = builder;
 
@@ -602,6 +611,7 @@ impl<A: Clone + 'static> IconLabelToggleButtonElement<A> {
                 icon_offset,
                 icon_scale,
                 toggled,
+                disabled,
                 &style,
                 &mut cx.res,
             ),

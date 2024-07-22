@@ -131,6 +131,7 @@ pub struct IconLabelTabBuilder<A: Clone + 'static> {
     pub z_index: ZIndex,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
+    pub disabled: bool,
     pub scissor_rect_id: ScissorRectID,
 }
 
@@ -151,6 +152,7 @@ impl<A: Clone + 'static> IconLabelTabBuilder<A> {
             z_index: 0,
             bounding_rect: Rect::default(),
             manually_hidden: false,
+            disabled: false,
             scissor_rect_id: MAIN_SCISSOR_RECT,
         }
     }
@@ -242,6 +244,11 @@ impl<A: Clone + 'static> IconLabelTabBuilder<A> {
         self
     }
 
+    pub const fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
         self.scissor_rect_id = scissor_rect_id;
         self
@@ -274,6 +281,7 @@ impl<A: Clone + 'static> IconLabelTabElement<A> {
             z_index,
             bounding_rect,
             manually_hidden,
+            disabled,
             scissor_rect_id,
         } = builder;
 
@@ -285,6 +293,7 @@ impl<A: Clone + 'static> IconLabelTabElement<A> {
                 icon_offset,
                 icon_scale,
                 toggled,
+                disabled,
                 &style.toggle_btn_style,
                 &mut cx.res,
             ),
@@ -650,6 +659,7 @@ pub struct IconLabelTabGroupOption {
     pub text_offset: Point,
     pub icon_offset: Point,
     pub icon_scale: f32,
+    pub disabled: bool,
 }
 
 impl IconLabelTabGroupOption {
@@ -665,6 +675,7 @@ impl IconLabelTabGroupOption {
             text_offset: Point::default(),
             icon_offset: Point::default(),
             icon_scale: 1.0,
+            disabled: false,
         }
     }
 }
@@ -706,6 +717,7 @@ impl IconLabelTabGroup {
                     .z_index(z_index)
                     .text_offset(option.text_offset)
                     .icon_offset(option.icon_offset)
+                    .disabled(option.disabled)
                     .build(cx)
             })
             .collect();

@@ -145,13 +145,12 @@ pub struct IconButtonInner {
 }
 
 impl IconButtonInner {
-    pub fn new(icon_id: CustomGlyphID, scale: f32, offset: Point) -> Self {
+    pub fn new(icon_id: CustomGlyphID, scale: f32, offset: Point, disabled: bool) -> Self {
         let icon = IconInner::new(icon_id, scale, offset);
 
-        Self {
-            icon,
-            state: ButtonState::Idle,
-        }
+        let state = ButtonState::new(disabled);
+
+        Self { icon, state }
     }
 
     pub fn set_state(&mut self, state: ButtonState, style: &IconButtonStyle) -> StateChangeResult {
@@ -213,15 +212,14 @@ pub struct IconButtonBuilder<A: Clone + 'static> {
     pub action: Option<A>,
     pub tooltip_message: Option<String>,
     pub tooltip_align: Align2,
-
     pub icon: CustomGlyphID,
     pub scale: f32,
     pub offset: Point,
-
     pub style: Rc<IconButtonStyle>,
     pub z_index: ZIndex,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
+    pub disabled: bool,
     pub scissor_rect_id: ScissorRectID,
 }
 
@@ -238,6 +236,7 @@ impl<A: Clone + 'static> IconButtonBuilder<A> {
             z_index: 0,
             bounding_rect: Rect::default(),
             manually_hidden: false,
+            disabled: false,
             scissor_rect_id: MAIN_SCISSOR_RECT,
         }
     }
@@ -295,6 +294,11 @@ impl<A: Clone + 'static> IconButtonBuilder<A> {
         self
     }
 
+    pub const fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
         self.scissor_rect_id = scissor_rect_id;
         self
@@ -322,11 +326,12 @@ impl<A: Clone + 'static> IconButtonElement<A> {
             z_index,
             bounding_rect,
             manually_hidden,
+            disabled,
             scissor_rect_id,
         } = builder;
 
         let shared_state = Rc::new(RefCell::new(SharedState {
-            inner: IconButtonInner::new(icon, scale, offset),
+            inner: IconButtonInner::new(icon, scale, offset, disabled),
             style,
         }));
 

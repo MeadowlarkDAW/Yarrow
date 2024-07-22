@@ -88,11 +88,11 @@ pub struct SwitchBuilder<A: Clone + 'static> {
     pub tooltip_message: Option<String>,
     pub tooltip_align: Align2,
     pub toggled: bool,
-    pub disabled: bool,
     pub style: Rc<SwitchStyle>,
     pub z_index: ZIndex,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
+    pub disabled: bool,
     pub scissor_rect_id: ScissorRectID,
 }
 
@@ -103,11 +103,11 @@ impl<A: Clone + 'static> SwitchBuilder<A> {
             tooltip_message: None,
             tooltip_align: Align2::TOP_CENTER,
             toggled: false,
-            disabled: false,
             style: Rc::clone(style),
             z_index: 0,
             bounding_rect: Rect::default(),
             manually_hidden: false,
+            disabled: false,
             scissor_rect_id: MAIN_SCISSOR_RECT,
         }
     }
@@ -132,11 +132,6 @@ impl<A: Clone + 'static> SwitchBuilder<A> {
         self
     }
 
-    pub const fn disabled(mut self, disabled: bool) -> Self {
-        self.disabled = disabled;
-        self
-    }
-
     pub const fn z_index(mut self, z_index: ZIndex) -> Self {
         self.z_index = z_index;
         self
@@ -149,6 +144,11 @@ impl<A: Clone + 'static> SwitchBuilder<A> {
 
     pub const fn hidden(mut self, hidden: bool) -> Self {
         self.manually_hidden = hidden;
+        self
+    }
+
+    pub const fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
         self
     }
 

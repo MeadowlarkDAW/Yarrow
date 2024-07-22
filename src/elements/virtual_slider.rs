@@ -246,8 +246,8 @@ pub struct VirtualSliderBuilder<A: Clone + 'static, R: VirtualSliderRenderer> {
     pub z_index: ZIndex,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
-    pub scissor_rect_id: ScissorRectID,
     pub disabled: bool,
+    pub scissor_rect_id: ScissorRectID,
 }
 
 impl<A: Clone + 'static, R: VirtualSliderRenderer> VirtualSliderBuilder<A, R> {
@@ -272,8 +272,8 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer> VirtualSliderBuilder<A, R> {
             z_index: 0,
             bounding_rect: Rect::default(),
             manually_hidden: false,
-            scissor_rect_id: MAIN_SCISSOR_RECT,
             disabled: false,
+            scissor_rect_id: MAIN_SCISSOR_RECT,
         }
     }
 
@@ -369,13 +369,13 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer> VirtualSliderBuilder<A, R> {
         self
     }
 
-    pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
-        self.scissor_rect_id = scissor_rect_id;
+    pub const fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
         self
     }
 
-    pub const fn disabled(mut self, disabled: bool) -> Self {
-        self.disabled = disabled;
+    pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
+        self.scissor_rect_id = scissor_rect_id;
         self
     }
 }
@@ -420,8 +420,8 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
             z_index,
             bounding_rect,
             manually_hidden,
-            scissor_rect_id,
             disabled,
+            scissor_rect_id,
         } = builder;
 
         let shared_state = Rc::new(RefCell::new(SharedState {

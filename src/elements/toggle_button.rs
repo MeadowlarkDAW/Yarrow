@@ -195,6 +195,7 @@ impl ToggleButtonInner {
         text: ToggleText,
         text_offset: Point,
         toggled: bool,
+        disabled: bool,
         style: &ToggleButtonStyle,
         res: &mut ResourceCtx,
     ) -> Self {
@@ -206,16 +207,14 @@ impl ToggleButtonInner {
             ),
         };
 
-        let label_state = LabelInner::new(
-            text,
-            &style.label_style(ButtonState::Idle, toggled),
-            text_offset,
-            res,
-        );
+        let state = ButtonState::new(disabled);
+
+        let label_state =
+            LabelInner::new(text, &style.label_style(state, toggled), text_offset, res);
 
         Self {
             label_state,
-            state: ButtonState::Idle,
+            state,
             toggled,
             dual_text,
         }
@@ -385,6 +384,7 @@ pub struct ToggleButtonBuilder<A: Clone + 'static> {
     pub z_index: ZIndex,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
+    pub disabled: bool,
     pub scissor_rect_id: ScissorRectID,
 }
 
@@ -401,6 +401,7 @@ impl<A: Clone + 'static> ToggleButtonBuilder<A> {
             z_index: 0,
             bounding_rect: Rect::default(),
             manually_hidden: false,
+            disabled: false,
             scissor_rect_id: MAIN_SCISSOR_RECT,
         }
     }
@@ -460,6 +461,11 @@ impl<A: Clone + 'static> ToggleButtonBuilder<A> {
         self
     }
 
+    pub const fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
         self.scissor_rect_id = scissor_rect_id;
         self
@@ -487,11 +493,19 @@ impl<A: Clone + 'static> ToggleButtonElement<A> {
             z_index,
             bounding_rect,
             manually_hidden,
+            disabled,
             scissor_rect_id,
         } = builder;
 
         let shared_state = Rc::new(RefCell::new(SharedState {
-            inner: ToggleButtonInner::new(text, text_offset, toggled, &style, &mut cx.res),
+            inner: ToggleButtonInner::new(
+                text,
+                text_offset,
+                toggled,
+                disabled,
+                &style,
+                &mut cx.res,
+            ),
             style,
         }));
 

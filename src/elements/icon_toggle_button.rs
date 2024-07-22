@@ -197,13 +197,19 @@ pub struct IconToggleButtonInner {
 }
 
 impl IconToggleButtonInner {
-    pub fn new(toggle_icons: ToggleIcons, scale: f32, offset: Point, toggled: bool) -> Self {
+    pub fn new(
+        toggle_icons: ToggleIcons,
+        scale: f32,
+        offset: Point,
+        toggled: bool,
+        disabled: bool,
+    ) -> Self {
         let icon = IconInner::new(toggle_icons.icon(toggled), scale, offset);
 
         Self {
             icon,
             toggle_icons,
-            state: ButtonState::Idle,
+            state: ButtonState::new(disabled),
             toggled,
         }
     }
@@ -340,6 +346,7 @@ pub struct IconToggleButtonBuilder<A: Clone + 'static> {
     pub z_index: ZIndex,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
+    pub disabled: bool,
     pub scissor_rect_id: ScissorRectID,
 }
 
@@ -357,6 +364,7 @@ impl<A: Clone + 'static> IconToggleButtonBuilder<A> {
             z_index: 0,
             bounding_rect: Rect::default(),
             manually_hidden: false,
+            disabled: false,
             scissor_rect_id: MAIN_SCISSOR_RECT,
         }
     }
@@ -426,6 +434,11 @@ impl<A: Clone + 'static> IconToggleButtonBuilder<A> {
         self
     }
 
+    pub const fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
         self.scissor_rect_id = scissor_rect_id;
         self
@@ -457,11 +470,12 @@ impl<A: Clone + 'static> IconToggleButtonElement<A> {
             z_index,
             bounding_rect,
             manually_hidden,
+            disabled,
             scissor_rect_id,
         } = builder;
 
         let shared_state = Rc::new(RefCell::new(SharedState {
-            inner: IconToggleButtonInner::new(icons, scale, offset, toggled),
+            inner: IconToggleButtonInner::new(icons, scale, offset, toggled, disabled),
             style,
         }));
 
