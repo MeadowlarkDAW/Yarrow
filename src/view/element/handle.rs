@@ -175,6 +175,15 @@ impl ElementHandle {
         }
     }
 
+    /// Offset the element's rectangular area.
+    pub fn offset_pos(&mut self, offset: Point) {
+        self.rect.origin += offset.to_vector();
+        self.mod_queue_sender.send(ElementModification {
+            element_id: self.element_id,
+            type_: ElementModificationType::RectChanged(self.rect),
+        });
+    }
+
     /// Set the z index of this element instance.
     ///
     /// An update will only be sent to the view if the z index has changed.
