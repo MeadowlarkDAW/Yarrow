@@ -35,15 +35,14 @@ unicode-segmentation = "1.11.0"
 keyboard-types = { version = "0.7.0", default-features = false }
 raw-window-handle = { version = "0.6.0", features = ["std"] }
 winit = { version = "0.30.0", optional = true, default-features = false, features = ["rwh_06"] }
-wgpu = { version = "0.20.1", default-features = false, features = ["wgsl"] }
+wgpu = { version = "22", default-features = false, features = ["wgsl"] }
 window_clipboard = "0.4.1"
 thiserror = "1.0.61"
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
-rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "bfbc7d73a5612dccc087cf9f6df44eab3f8b299d" }
-#rootvg = { path = "../rootvg" }
+rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "7c732d2023feef901be53e2a6a798780f6438a7f" }
 
 [dev-dependencies]
-wgpu = "0.20.1"
+wgpu = { version = "22", default-features = true }
 env_logger = { version = "0.11.3", default-features = false }
 derive_more = "0.99.17"
 
