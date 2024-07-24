@@ -5,7 +5,7 @@ use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent
 use crate::layout::Align2;
 use crate::math::{Rect, ZIndex};
 use crate::view::element::{Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle};
-use crate::view::{ScissorRectID, MAIN_SCISSOR_RECT};
+use crate::view::ScissorRectID;
 use crate::window::WindowContext;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -23,9 +23,9 @@ pub struct ClickAreaBuilder<A: Clone + 'static> {
     pub click_count: usize,
     pub pointer_type: Option<PointerType>,
     pub bounding_rect: Rect,
-    pub z_index: ZIndex,
+    pub z_index: Option<ZIndex>,
     pub disabled: bool,
-    pub scissor_rect_id: ScissorRectID,
+    pub scissor_rect_id: Option<ScissorRectID>,
 }
 
 impl<A: Clone + 'static> ClickAreaBuilder<A> {
@@ -39,9 +39,9 @@ impl<A: Clone + 'static> ClickAreaBuilder<A> {
             click_count: 0,
             pointer_type: None,
             bounding_rect: Rect::default(),
-            z_index: 0,
+            z_index: None,
             disabled: false,
-            scissor_rect_id: MAIN_SCISSOR_RECT,
+            scissor_rect_id: None,
         }
     }
 
@@ -81,7 +81,7 @@ impl<A: Clone + 'static> ClickAreaBuilder<A> {
     }
 
     pub const fn z_index(mut self, z_index: ZIndex) -> Self {
-        self.z_index = z_index;
+        self.z_index = Some(z_index);
         self
     }
 
@@ -96,7 +96,7 @@ impl<A: Clone + 'static> ClickAreaBuilder<A> {
     }
 
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
-        self.scissor_rect_id = scissor_rect_id;
+        self.scissor_rect_id = Some(scissor_rect_id);
         self
     }
 }
@@ -126,6 +126,8 @@ impl<A: Clone + 'static> ClickAreaElement<A> {
             disabled,
             scissor_rect_id,
         } = builder;
+
+        let (z_index, scissor_rect_id) = cx.z_index_and_scissor_rect_id(z_index, scissor_rect_id);
 
         let element_builder = ElementBuilder {
             element: Box::new(Self {

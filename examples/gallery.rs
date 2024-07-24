@@ -43,6 +43,7 @@ impl MenuOption {
     }
 }
 
+const RIGHT_CLICK_AREA_Z_INDEX: ZIndex = 0;
 const MAIN_Z_INDEX: ZIndex = 10;
 const SCROLL_AREA_Z_INDEX: ZIndex = 20;
 const OVERLAY_Z_INDEX: ZIndex = 30;
@@ -143,6 +144,9 @@ impl MyApp {
         cx.view.clear_color = self.style.clear_color.into();
         cx.view.set_num_additional_scissor_rects(2);
 
+        // Push the main Z index onto the stack to make it the default.
+        cx.push_z_index(MAIN_Z_INDEX);
+
         let top_panel_bg = QuadElement::builder(&self.style.panel_bg_style).build(cx);
         let top_panel_border = QuadElement::builder(&self.style.panel_border_style).build(cx);
 
@@ -153,13 +157,14 @@ impl MyApp {
             .on_resized(|new_span| MyAction::LeftPanelResized(new_span))
             .on_resize_finished(|new_span| MyAction::LeftPanelResizeFinished(new_span))
             .min_span(100.0)
+            // If a z index or scissoring rect ID is set in an element builder, it will
+            // override the default one in `cx`.
             .z_index(OVERLAY_Z_INDEX)
             .build(cx);
 
         let menu_btn = IconButton::builder(&self.style.menu_btn_style)
             .icon(MyIcon::Menu)
             .on_select(MyAction::OpenMenu)
-            .z_index(MAIN_Z_INDEX)
             .build(cx);
         let menu = DropDownMenu::builder(&self.style.menu_style)
             .entries(vec![
@@ -181,10 +186,10 @@ impl MyApp {
             self.current_tab as usize,
             |i| MyAction::TabSelected(MyTab::ALL[i]),
             &self.style.tab_style,
-            MAIN_Z_INDEX,
             IndicatorLinePlacement::Left,
             Align2::CENTER_RIGHT,
-            MAIN_SCISSOR_RECT,
+            None,
+            None,
             cx,
         );
 

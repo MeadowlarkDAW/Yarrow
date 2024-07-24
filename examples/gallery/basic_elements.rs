@@ -1,5 +1,5 @@
 use crate::style::{MyIcon, MyStyle};
-use crate::{MyAction, MAIN_Z_INDEX, OVERLAY_Z_INDEX, SCROLL_AREA_Z_INDEX};
+use crate::{MyAction, OVERLAY_Z_INDEX, RIGHT_CLICK_AREA_Z_INDEX, SCROLL_AREA_Z_INDEX};
 use yarrow::prelude::*;
 
 pub const SCROLL_AREA_SCISSOR_RECT: ScissorRectID = 1;
@@ -102,95 +102,6 @@ pub struct Elements {
 
 impl Elements {
     pub fn new(style: &MyStyle, cx: &mut WindowContext<'_, MyAction>) -> Self {
-        let label = Label::builder(&style.label_style)
-            .text("Label")
-            .z_index(MAIN_Z_INDEX)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .build(cx);
-
-        let icon = Icon::builder(&style.icon_style)
-            .icon(MyIcon::Info)
-            .z_index(MAIN_Z_INDEX)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .build(cx);
-
-        let icon_label = IconLabel::builder(&style.icon_label_style)
-            .icon(Some(MyIcon::Info))
-            .text(Some("Icon Label"))
-            .z_index(MAIN_Z_INDEX)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .build(cx);
-
-        let click_me_btn = Button::builder(&style.button_style)
-            .text("Click Me!")
-            .on_select(Action::ClickMePressed.into())
-            .tooltip_message("A cool button", Align2::TOP_CENTER)
-            .z_index(MAIN_Z_INDEX)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .build(cx);
-
-        let icon_btn = IconButton::builder(&style.icon_btn_style)
-            .icon(MyIcon::Save)
-            .on_select(Action::IconBtnPressed.into())
-            .z_index(MAIN_Z_INDEX)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .build(cx);
-
-        let toggle_btn = ToggleButton::builder(&style.toggle_btn_style)
-            .dual_text("off", "on")
-            .on_toggled(|toggled| Action::ToggleValue(toggled).into())
-            .z_index(MAIN_Z_INDEX)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .build(cx);
-
-        let icon_toggle_btn = IconToggleButton::builder(&style.icon_toggle_btn_style)
-            .dual_icons(MyIcon::PowerOff, MyIcon::PowerOn)
-            .on_toggled(|toggled| Action::ToggleValue(toggled).into())
-            .z_index(MAIN_Z_INDEX)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .build(cx);
-
-        let icon_label_toggle_btn =
-            IconLabelToggleButton::builder(&style.icon_label_toggle_btn_style)
-                .dual_icons(Some((MyIcon::PowerOff, MyIcon::PowerOn)))
-                .dual_text(Some(("off", "on")))
-                .on_toggled(|toggled| Action::ToggleValue(toggled).into())
-                .z_index(MAIN_Z_INDEX)
-                .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-                .build(cx);
-
-        let switch = Switch::builder(&style.switch_style)
-            .on_toggled(|toggled| Action::ToggleValue(toggled).into())
-            .z_index(MAIN_Z_INDEX)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .build(cx);
-
-        let radio_group = RadioButtonGroup::new(
-            DropDownOption::ALL.iter().map(|o| format!("{}", *o)),
-            0,
-            |id| Action::OptionSelected(DropDownOption::ALL[id]).into(),
-            &style.label_no_bg_style,
-            &style.radio_btn_style,
-            MAIN_Z_INDEX,
-            SCROLL_AREA_SCISSOR_RECT,
-            cx,
-        );
-
-        let text_input = TextInput::builder(&style.text_input_style)
-            .placeholder_text("write something...")
-            .tooltip_message("A text input :)", Align2::TOP_LEFT)
-            .on_changed(|text| Action::TextChanged(text).into())
-            .on_right_click(|pos| {
-                Action::OpenTextInputMenu {
-                    click_pos: pos,
-                    text_input_id: TextInputID::Standard,
-                }
-                .into()
-            })
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .password_mode(false) // There is an optional password mode if desired.
-            .z_index(MAIN_Z_INDEX)
-            .build(cx);
         let text_input_menu = DropDownMenu::builder(&style.menu_style)
             .entries(
                 TextMenuOption::ALL
@@ -217,32 +128,9 @@ impl Elements {
             .on_entry_selected(|id| {
                 Action::TextInputMenuOptionSelected(TextMenuOption::ALL[id]).into()
             })
-            .z_index(100)
+            .z_index(OVERLAY_Z_INDEX)
             .build(cx);
 
-        let search_text_input = IconTextInput::builder(&style.icon_text_input_style)
-            .placeholder_text("search something...")
-            .icon(MyIcon::Search)
-            .on_changed(|text| Action::SearchTextChanged(text).into())
-            .on_right_click(|pos| {
-                Action::OpenTextInputMenu {
-                    click_pos: pos,
-                    text_input_id: TextInputID::Search,
-                }
-                .into()
-            })
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .password_mode(false) // There is an optional password mode if desired.
-            .z_index(MAIN_Z_INDEX)
-            .build(cx);
-
-        let drop_down_menu_btn = IconLabelButton::builder(&style.drop_down_btn_style)
-            .text(Some(format!("{}", DropDownOption::ALL[0])))
-            .icon(Some(MyIcon::Dropdown))
-            .on_select(Action::OpenDropDown.into())
-            .z_index(MAIN_Z_INDEX)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .build(cx);
         let drop_down_menu = DropDownMenu::builder(&style.menu_style)
             .entries(
                 DropDownOption::ALL
@@ -258,8 +146,9 @@ impl Elements {
         let right_click_area = ClickArea::builder()
             .button(PointerButton::Secondary)
             .on_clicked(|info| Action::OpenRightClickMenu(info.click_position).into())
-            .z_index(0)
+            .z_index(RIGHT_CLICK_AREA_Z_INDEX)
             .build(cx);
+
         let right_click_menu = DropDownMenu::builder(&style.menu_style)
             .entries(
                 ["I am", "a right", "click", "menu"]
@@ -277,39 +166,109 @@ impl Elements {
             .z_index(SCROLL_AREA_Z_INDEX)
             .build(cx);
 
-        let separator_1 = Separator::builder(&style.separator_style)
-            .z_index(MAIN_Z_INDEX)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .build(cx);
+        cx.with_scissor_rect(SCROLL_AREA_SCISSOR_RECT, |cx| {
+            Self {
+                label: Label::builder(&style.label_style).text("Label").build(cx),
 
-        let separator_2 = Separator::builder(&style.separator_style)
-            .z_index(MAIN_Z_INDEX)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .build(cx);
+                icon: Icon::builder(&style.icon_style)
+                    .icon(MyIcon::Info)
+                    .build(cx),
 
-        Self {
-            label,
-            icon,
-            icon_label,
-            click_me_btn,
-            icon_btn,
-            switch,
-            toggle_btn,
-            icon_toggle_btn,
-            icon_label_toggle_btn,
-            radio_group,
-            drop_down_menu_btn,
-            drop_down_menu,
-            text_input,
-            text_input_menu,
-            search_text_input,
-            right_click_area,
-            right_click_menu,
-            scroll_area,
-            separator_1,
-            separator_2,
-            active_text_input_menu: None,
-        }
+                icon_label: IconLabel::builder(&style.icon_label_style)
+                    .icon(Some(MyIcon::Info))
+                    .text(Some("Icon Label"))
+                    .build(cx),
+
+                click_me_btn: Button::builder(&style.button_style)
+                    .text("Click Me!")
+                    .on_select(Action::ClickMePressed.into())
+                    .tooltip_message("A cool button", Align2::TOP_CENTER)
+                    .build(cx),
+
+                icon_btn: IconButton::builder(&style.icon_btn_style)
+                    .icon(MyIcon::Save)
+                    .on_select(Action::IconBtnPressed.into())
+                    .build(cx),
+
+                toggle_btn: ToggleButton::builder(&style.toggle_btn_style)
+                    .dual_text("off", "on")
+                    .on_toggled(|toggled| Action::ToggleValue(toggled).into())
+                    .build(cx),
+
+                icon_toggle_btn: IconToggleButton::builder(&style.icon_toggle_btn_style)
+                    .dual_icons(MyIcon::PowerOff, MyIcon::PowerOn)
+                    .on_toggled(|toggled| Action::ToggleValue(toggled).into())
+                    .build(cx),
+
+                icon_label_toggle_btn: IconLabelToggleButton::builder(
+                    &style.icon_label_toggle_btn_style,
+                )
+                .dual_icons(Some((MyIcon::PowerOff, MyIcon::PowerOn)))
+                .dual_text(Some(("off", "on")))
+                .on_toggled(|toggled| Action::ToggleValue(toggled).into())
+                .build(cx),
+
+                switch: Switch::builder(&style.switch_style)
+                    .on_toggled(|toggled| Action::ToggleValue(toggled).into())
+                    .build(cx),
+
+                radio_group: RadioButtonGroup::new(
+                    DropDownOption::ALL.iter().map(|o| format!("{}", *o)),
+                    0,
+                    |id| Action::OptionSelected(DropDownOption::ALL[id]).into(),
+                    &style.label_no_bg_style,
+                    &style.radio_btn_style,
+                    None,
+                    None,
+                    cx,
+                ),
+
+                text_input: TextInput::builder(&style.text_input_style)
+                    .placeholder_text("write something...")
+                    .tooltip_message("A text input :)", Align2::TOP_LEFT)
+                    .on_changed(|text| Action::TextChanged(text).into())
+                    .on_right_click(|pos| {
+                        Action::OpenTextInputMenu {
+                            click_pos: pos,
+                            text_input_id: TextInputID::Standard,
+                        }
+                        .into()
+                    })
+                    .password_mode(false) // There is an optional password mode if desired.
+                    .build(cx),
+
+                search_text_input: IconTextInput::builder(&style.icon_text_input_style)
+                    .placeholder_text("search something...")
+                    .icon(MyIcon::Search)
+                    .on_changed(|text| Action::SearchTextChanged(text).into())
+                    .on_right_click(|pos| {
+                        Action::OpenTextInputMenu {
+                            click_pos: pos,
+                            text_input_id: TextInputID::Search,
+                        }
+                        .into()
+                    })
+                    .password_mode(false) // There is an optional password mode if desired.
+                    .build(cx),
+
+                drop_down_menu_btn: IconLabelButton::builder(&style.drop_down_btn_style)
+                    .text(Some(format!("{}", DropDownOption::ALL[0])))
+                    .icon(Some(MyIcon::Dropdown))
+                    .on_select(Action::OpenDropDown.into())
+                    .build(cx),
+
+                separator_1: Separator::builder(&style.separator_style).build(cx),
+                separator_2: Separator::builder(&style.separator_style).build(cx),
+
+                text_input_menu,
+                drop_down_menu,
+                right_click_area,
+                right_click_menu,
+                scroll_area,
+
+                active_text_input_menu: None,
+            }
+        })
     }
 
     /// Returns `true` if the the contents need to be laid out.

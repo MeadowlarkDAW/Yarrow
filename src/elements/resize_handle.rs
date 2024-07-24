@@ -13,7 +13,7 @@ use crate::math::{Rect, Size, ZIndex};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
 };
-use crate::view::{ScissorRectID, MAIN_SCISSOR_RECT};
+use crate::view::ScissorRectID;
 use crate::window::WindowContext;
 use crate::CursorIcon;
 
@@ -93,9 +93,9 @@ pub struct ResizeHandleBuilder<A: Clone + 'static> {
     pub current_span: f32,
     pub layout: Option<ResizeHandleLayout>,
     pub style: Rc<ResizeHandleStyle>,
-    pub z_index: ZIndex,
+    pub z_index: Option<ZIndex>,
     pub manually_hidden: bool,
-    pub scissor_rect_id: ScissorRectID,
+    pub scissor_rect_id: Option<ScissorRectID>,
     pub disabled: bool,
 }
 
@@ -110,10 +110,10 @@ impl<A: Clone + 'static> ResizeHandleBuilder<A> {
             default_span: 200.0,
             current_span: 200.0,
             style: Rc::clone(style),
-            z_index: 0,
+            z_index: None,
             layout: None,
             manually_hidden: false,
-            scissor_rect_id: MAIN_SCISSOR_RECT,
+            scissor_rect_id: None,
             disabled: false,
         }
     }
@@ -158,7 +158,7 @@ impl<A: Clone + 'static> ResizeHandleBuilder<A> {
     }
 
     pub const fn z_index(mut self, z_index: ZIndex) -> Self {
-        self.z_index = z_index;
+        self.z_index = Some(z_index);
         self
     }
 
@@ -173,7 +173,7 @@ impl<A: Clone + 'static> ResizeHandleBuilder<A> {
     }
 
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
-        self.scissor_rect_id = scissor_rect_id;
+        self.scissor_rect_id = Some(scissor_rect_id);
         self
     }
 
@@ -221,6 +221,8 @@ impl<A: Clone + 'static> ResizeHandleElement<A> {
             scissor_rect_id,
             disabled,
         } = builder;
+
+        let (z_index, scissor_rect_id) = cx.z_index_and_scissor_rect_id(z_index, scissor_rect_id);
 
         let max_span = if max_span < min_span {
             min_span

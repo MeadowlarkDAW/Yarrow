@@ -12,7 +12,7 @@ use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
 };
-use crate::view::{ScissorRectID, MAIN_SCISSOR_RECT};
+use crate::view::ScissorRectID;
 use crate::window::WindowContext;
 
 /// The style of a scroll bar in a [`ScrollArea`] element.
@@ -67,23 +67,20 @@ impl Default for ScrollBarStyle {
 
 pub struct ScrollAreaBuilder<A: Clone + 'static> {
     pub scrolled_action: Option<Box<dyn FnMut(Point) -> A>>,
-
     pub bounds: Rect,
     pub content_size: Size,
     pub scroll_offset: Point,
-
     pub scroll_horizontally: bool,
     pub scroll_vertically: bool,
     pub scroll_with_scroll_wheel: bool,
     pub show_slider_when_content_fits: bool,
     pub capture_scroll_wheel: bool,
     pub points_per_line: f32,
-
     pub style: Rc<ScrollBarStyle>,
-    pub z_index: ZIndex,
+    pub z_index: Option<ZIndex>,
     pub manually_hidden: bool,
-    pub scissor_rect_id: ScissorRectID,
     pub disabled: bool,
+    pub scissor_rect_id: Option<ScissorRectID>,
 }
 
 impl<A: Clone + 'static> ScrollAreaBuilder<A> {
@@ -100,10 +97,10 @@ impl<A: Clone + 'static> ScrollAreaBuilder<A> {
             capture_scroll_wheel: true,
             points_per_line: 24.0,
             style: Rc::clone(style),
-            z_index: 0,
+            z_index: None,
             manually_hidden: false,
-            scissor_rect_id: MAIN_SCISSOR_RECT,
             disabled: false,
+            scissor_rect_id: None,
         }
     }
 
@@ -162,7 +159,7 @@ impl<A: Clone + 'static> ScrollAreaBuilder<A> {
     }
 
     pub const fn z_index(mut self, z_index: ZIndex) -> Self {
-        self.z_index = z_index;
+        self.z_index = Some(z_index);
         self
     }
 
@@ -171,13 +168,13 @@ impl<A: Clone + 'static> ScrollAreaBuilder<A> {
         self
     }
 
-    pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
-        self.scissor_rect_id = scissor_rect_id;
+    pub const fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
         self
     }
 
-    pub const fn disabled(mut self, disabled: bool) -> Self {
-        self.disabled = disabled;
+    pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
+        self.scissor_rect_id = Some(scissor_rect_id);
         self
     }
 }
@@ -227,6 +224,8 @@ impl<A: Clone + 'static> ScrollAreaElement<A> {
             scissor_rect_id,
             disabled,
         } = builder;
+
+        let (z_index, scissor_rect_id) = cx.z_index_and_scissor_rect_id(z_index, scissor_rect_id);
 
         let res = update_sliders_state(
             bounds.size,

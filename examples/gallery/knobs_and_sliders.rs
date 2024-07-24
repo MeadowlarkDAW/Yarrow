@@ -1,5 +1,5 @@
 use crate::style::MyStyle;
-use crate::{MyAction, MAIN_Z_INDEX};
+use crate::{MyAction, OVERLAY_Z_INDEX, RIGHT_CLICK_AREA_Z_INDEX};
 use yarrow::prelude::*;
 
 pub const SCROLL_AREA_SCISSOR_RECT: ScissorRectID = 2;
@@ -38,145 +38,111 @@ pub struct Elements {
 
 impl Elements {
     pub fn new(style: &MyStyle, cx: &mut WindowContext<'_, MyAction>) -> Self {
-        let knob_0 = Knob::builder(0, &style.knob_style_1)
-            .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
-            .on_open_text_entry(|info| Action::OpenTextInput(info).into())
-            .on_tooltip_request(
-                |info| Action::ShowParamTooltip(info).into(),
-                Align2::TOP_CENTER,
-            )
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .z_index(MAIN_Z_INDEX)
-            .build(cx);
-        let knob_0_label = Label::builder(&style.label_no_bg_style)
-            .text("Normal")
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .z_index(MAIN_Z_INDEX)
-            .build(cx);
-
-        let knob_1 = Knob::builder(1, &style.knob_style_1)
-            .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
-            .on_open_text_entry(|info| Action::OpenTextInput(info).into())
-            .on_tooltip_request(
-                |info| Action::ShowParamTooltip(info).into(),
-                Align2::TOP_CENTER,
-            )
-            .bipolar(true)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .z_index(MAIN_Z_INDEX)
-            .normal_value(0.5)
-            .default_normal(0.5)
-            .build(cx);
-        let knob_1_label = Label::builder(&style.label_no_bg_style)
-            .text("Bipolar")
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .z_index(MAIN_Z_INDEX)
-            .build(cx);
-
-        let knob_2 = Knob::builder(2, &style.knob_style_2)
-            .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
-            .on_open_text_entry(|info| Action::OpenTextInput(info).into())
-            .on_tooltip_request(
-                |info| Action::ShowParamTooltip(info).into(),
-                Align2::TOP_CENTER,
-            )
-            .num_quantized_steps(Some(5))
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .z_index(MAIN_Z_INDEX)
-            .build(cx);
-        let knob_2_label = Label::builder(&style.label_no_bg_style)
-            .text("Stepped")
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .z_index(MAIN_Z_INDEX)
-            .build(cx);
-
-        let slider_3 = Slider::builder(3, &style.slider_style_1)
-            .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
-            .on_open_text_entry(|info| Action::OpenTextInput(info).into())
-            .on_tooltip_request(
-                |info| Action::ShowParamTooltip(info).into(),
-                Align2::TOP_CENTER,
-            )
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .z_index(MAIN_Z_INDEX)
-            .build(cx);
-
-        let slider_4 = Slider::builder(4, &style.slider_style_1)
-            .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
-            .on_open_text_entry(|info| Action::OpenTextInput(info).into())
-            .on_tooltip_request(
-                |info| Action::ShowParamTooltip(info).into(),
-                Align2::TOP_CENTER,
-            )
-            .bipolar(true)
-            .default_normal(0.5)
-            .normal_value(0.5)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .z_index(MAIN_Z_INDEX)
-            .build(cx);
-
-        let slider_5 = Slider::builder(5, &style.slider_style_1)
-            .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
-            .on_open_text_entry(|info| Action::OpenTextInput(info).into())
-            .on_tooltip_request(
-                |info| Action::ShowParamTooltip(info).into(),
-                Align2::TOP_CENTER,
-            )
-            .horizontal(true)
-            .drag_horizontally(true)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .z_index(MAIN_Z_INDEX)
-            .build(cx);
-
-        let slider_6 = Slider::builder(6, &style.slider_style_1)
-            .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
-            .on_open_text_entry(|info| Action::OpenTextInput(info).into())
-            .on_tooltip_request(
-                |info| Action::ShowParamTooltip(info).into(),
-                Align2::TOP_CENTER,
-            )
-            .horizontal(true)
-            .drag_horizontally(true)
-            .bipolar(true)
-            .default_normal(0.5)
-            .normal_value(0.5)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .z_index(MAIN_Z_INDEX)
-            .build(cx);
-
         let scroll_area = ScrollArea::builder(&style.scroll_bar_style)
             .on_scrolled(|scroll_offset| Action::ScrollOffsetChanged(scroll_offset).into())
-            .z_index(0)
+            .z_index(RIGHT_CLICK_AREA_Z_INDEX)
             .build(cx);
 
         let floating_text_input = FloatingTextInput::builder(&style.text_input_style)
             .on_result(|new_text| Action::FloatingTextInput(new_text).into())
             .bounding_rect(Rect::from_size(style.floating_text_input_size))
-            .z_index(200)
+            .z_index(OVERLAY_Z_INDEX)
             .build(cx);
 
-        let separator = Separator::builder(&style.separator_style)
-            .scissor_rect(SCROLL_AREA_SCISSOR_RECT)
-            .z_index(MAIN_Z_INDEX)
-            .build(cx);
+        cx.with_scissor_rect(SCROLL_AREA_SCISSOR_RECT, |cx| Self {
+            knob_0: Knob::builder(0, &style.knob_style_1)
+                .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
+                .on_open_text_entry(|info| Action::OpenTextInput(info).into())
+                .on_tooltip_request(
+                    |info| Action::ShowParamTooltip(info).into(),
+                    Align2::TOP_CENTER,
+                )
+                .build(cx),
+            knob_0_label: Label::builder(&style.label_no_bg_style)
+                .text("Normal")
+                .build(cx),
 
-        Self {
-            knob_0,
-            knob_0_label,
-            knob_1,
-            knob_1_label,
-            knob_2,
-            knob_2_label,
-            slider_3,
-            slider_4,
-            slider_5,
-            slider_6,
+            knob_1: Knob::builder(1, &style.knob_style_1)
+                .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
+                .on_open_text_entry(|info| Action::OpenTextInput(info).into())
+                .on_tooltip_request(
+                    |info| Action::ShowParamTooltip(info).into(),
+                    Align2::TOP_CENTER,
+                )
+                .bipolar(true)
+                .normal_value(0.5)
+                .default_normal(0.5)
+                .build(cx),
+            knob_1_label: Label::builder(&style.label_no_bg_style)
+                .text("Bipolar")
+                .build(cx),
+
+            knob_2: Knob::builder(2, &style.knob_style_2)
+                .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
+                .on_open_text_entry(|info| Action::OpenTextInput(info).into())
+                .on_tooltip_request(
+                    |info| Action::ShowParamTooltip(info).into(),
+                    Align2::TOP_CENTER,
+                )
+                .num_quantized_steps(Some(5))
+                .build(cx),
+            knob_2_label: Label::builder(&style.label_no_bg_style)
+                .text("Stepped")
+                .build(cx),
+
+            slider_3: Slider::builder(3, &style.slider_style_1)
+                .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
+                .on_open_text_entry(|info| Action::OpenTextInput(info).into())
+                .on_tooltip_request(
+                    |info| Action::ShowParamTooltip(info).into(),
+                    Align2::TOP_CENTER,
+                )
+                .build(cx),
+
+            slider_4: Slider::builder(4, &style.slider_style_1)
+                .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
+                .on_open_text_entry(|info| Action::OpenTextInput(info).into())
+                .on_tooltip_request(
+                    |info| Action::ShowParamTooltip(info).into(),
+                    Align2::TOP_CENTER,
+                )
+                .bipolar(true)
+                .default_normal(0.5)
+                .normal_value(0.5)
+                .build(cx),
+
+            slider_5: Slider::builder(5, &style.slider_style_1)
+                .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
+                .on_open_text_entry(|info| Action::OpenTextInput(info).into())
+                .on_tooltip_request(
+                    |info| Action::ShowParamTooltip(info).into(),
+                    Align2::TOP_CENTER,
+                )
+                .horizontal(true)
+                .drag_horizontally(true)
+                .build(cx),
+
+            slider_6: Slider::builder(6, &style.slider_style_1)
+                .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
+                .on_open_text_entry(|info| Action::OpenTextInput(info).into())
+                .on_tooltip_request(
+                    |info| Action::ShowParamTooltip(info).into(),
+                    Align2::TOP_CENTER,
+                )
+                .horizontal(true)
+                .drag_horizontally(true)
+                .bipolar(true)
+                .default_normal(0.5)
+                .normal_value(0.5)
+                .build(cx),
+
+            separator: Separator::builder(&style.separator_style).build(cx),
+
             scroll_area,
             floating_text_input,
-            separator,
 
             text_input_param_id: None,
-        }
+        })
     }
 
     /// Returns `true` if the the contents need to be laid out.

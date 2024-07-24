@@ -41,6 +41,7 @@ impl Elements {
             .text("Close")
             .on_select(Action::CloseAboutWindow.into())
             .build(cx);
+
         close_btn.layout_aligned(
             Point::new(
                 window_size.width * 0.5,

@@ -11,7 +11,7 @@ use crate::prelude::ResourceCtx;
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
 };
-use crate::view::{ScissorRectID, MAIN_SCISSOR_RECT};
+use crate::view::ScissorRectID;
 use crate::window::WindowContext;
 
 use super::label::{LabelPrimitives, LabelStyle};
@@ -221,10 +221,10 @@ pub struct ParagraphBuilder {
     pub text_offset: Point,
     pub bounds_width: Option<f32>,
     pub style: Rc<LabelStyle>,
-    pub z_index: ZIndex,
+    pub z_index: Option<ZIndex>,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
-    pub scissor_rect_id: ScissorRectID,
+    pub scissor_rect_id: Option<ScissorRectID>,
 }
 
 impl ParagraphBuilder {
@@ -234,10 +234,10 @@ impl ParagraphBuilder {
             text_offset: Point::default(),
             bounds_width: None,
             style: Rc::clone(style),
-            z_index: 0,
+            z_index: None,
             bounding_rect: Rect::default(),
             manually_hidden: false,
-            scissor_rect_id: MAIN_SCISSOR_RECT,
+            scissor_rect_id: None,
         }
     }
 
@@ -263,7 +263,7 @@ impl ParagraphBuilder {
     }
 
     pub const fn z_index(mut self, z_index: ZIndex) -> Self {
-        self.z_index = z_index;
+        self.z_index = Some(z_index);
         self
     }
 
@@ -278,7 +278,7 @@ impl ParagraphBuilder {
     }
 
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
-        self.scissor_rect_id = scissor_rect_id;
+        self.scissor_rect_id = Some(scissor_rect_id);
         self
     }
 }
@@ -303,6 +303,8 @@ impl ParagraphElement {
             manually_hidden,
             scissor_rect_id,
         } = builder;
+
+        let (z_index, scissor_rect_id) = cx.z_index_and_scissor_rect_id(z_index, scissor_rect_id);
 
         let bounds_width = bounds_width.unwrap_or(bounding_rect.width());
 

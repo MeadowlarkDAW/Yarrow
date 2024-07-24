@@ -16,7 +16,7 @@ use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
 };
-use crate::view::{ScissorRectID, MAIN_SCISSOR_RECT};
+use crate::view::ScissorRectID;
 use crate::window::WindowContext;
 use crate::CursorIcon;
 
@@ -393,11 +393,11 @@ pub struct ToggleButtonBuilder<A: Clone + 'static> {
     pub text: ToggleText,
     pub text_offset: Point,
     pub style: Rc<ToggleButtonStyle>,
-    pub z_index: ZIndex,
+    pub z_index: Option<ZIndex>,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
     pub disabled: bool,
-    pub scissor_rect_id: ScissorRectID,
+    pub scissor_rect_id: Option<ScissorRectID>,
 }
 
 impl<A: Clone + 'static> ToggleButtonBuilder<A> {
@@ -410,11 +410,11 @@ impl<A: Clone + 'static> ToggleButtonBuilder<A> {
             text: ToggleText::Single(String::new()),
             text_offset: Point::default(),
             style: Rc::clone(style),
-            z_index: 0,
+            z_index: None,
             bounding_rect: Rect::default(),
             manually_hidden: false,
             disabled: false,
-            scissor_rect_id: MAIN_SCISSOR_RECT,
+            scissor_rect_id: None,
         }
     }
 
@@ -459,7 +459,7 @@ impl<A: Clone + 'static> ToggleButtonBuilder<A> {
     }
 
     pub const fn z_index(mut self, z_index: ZIndex) -> Self {
-        self.z_index = z_index;
+        self.z_index = Some(z_index);
         self
     }
 
@@ -479,7 +479,7 @@ impl<A: Clone + 'static> ToggleButtonBuilder<A> {
     }
 
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
-        self.scissor_rect_id = scissor_rect_id;
+        self.scissor_rect_id = Some(scissor_rect_id);
         self
     }
 }
@@ -508,6 +508,8 @@ impl<A: Clone + 'static> ToggleButtonElement<A> {
             disabled,
             scissor_rect_id,
         } = builder;
+
+        let (z_index, scissor_rect_id) = cx.z_index_and_scissor_rect_id(z_index, scissor_rect_id);
 
         let shared_state = Rc::new(RefCell::new(SharedState {
             inner: ToggleButtonInner::new(

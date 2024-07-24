@@ -1,5 +1,5 @@
 use keyboard_types::{CompositionEvent, Modifiers};
-use rootvg::math::{to_logical_size_i32, PhysicalPoint, Point};
+use rootvg::math::{to_logical_size_i32, PhysicalPoint, Point, ZIndex};
 use rootvg::surface::{DefaultSurface, DefaultSurfaceConfig, NewSurfaceError};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -12,8 +12,8 @@ use crate::event::{
 };
 use crate::math::{PhysicalSizeI32, ScaleFactor, Size};
 use crate::prelude::ResourceCtx;
-use crate::CursorIcon;
 use crate::{view::ViewConfig, View};
+use crate::{CursorIcon, ScissorRectID, MAIN_SCISSOR_RECT};
 
 #[cfg(feature = "winit")]
 mod winit_backend;
@@ -432,6 +432,8 @@ impl<A: Clone + 'static> WindowState<A> {
             view: &mut self.view,
             res,
             clipboard: &mut self.clipboard,
+            z_index_stack: Vec::new(),
+            scissor_rect_id_stack: Vec::new(),
             logical_size: self.logical_size,
             physical_size: self.physical_size,
             scale_factor: self.scale_factor,
@@ -515,6 +517,8 @@ pub struct WindowContext<'a, A: Clone + 'static> {
     pub view: &'a mut View<A>,
     pub res: &'a mut ResourceCtx,
     pub clipboard: &'a mut Clipboard,
+    z_index_stack: Vec<ZIndex>,
+    scissor_rect_id_stack: Vec<ScissorRectID>,
     logical_size: Size,
     physical_size: PhysicalSizeI32,
     scale_factor: ScaleFactor,
@@ -541,6 +545,98 @@ impl<'a, A: Clone + 'static> WindowContext<'a, A> {
 
     pub fn scale_factor_config(&self) -> ScaleFactorConfig {
         self.scale_factor_config
+    }
+
+    /// Get the current z index from the stack (peek)
+    pub fn z_index(&self) -> ZIndex {
+        self.z_index_stack.last().copied().unwrap_or_default()
+    }
+
+    /// Get the current scissor rect ID from the stack (peek)
+    pub fn scissor_rect_id(&self) -> ScissorRectID {
+        self.scissor_rect_id_stack
+            .last()
+            .copied()
+            .unwrap_or(MAIN_SCISSOR_RECT)
+    }
+
+    /// Push a z index onto the stack
+    pub fn push_z_index(&mut self, z_index: ZIndex) {
+        self.z_index_stack.push(z_index)
+    }
+
+    /// Push a z index onto the stack that is equal to `WindowContext::z_index() + 1`
+    pub fn push_next_z_index(&mut self) {
+        self.z_index_stack.push(self.z_index() + 1)
+    }
+
+    /// Push a scissor rect ID onto the stack
+    pub fn push_scissor_rect(&mut self, scissor_rect_id: ScissorRectID) {
+        self.scissor_rect_id_stack.push(scissor_rect_id);
+    }
+
+    /// Pop a z index from the stack
+    pub fn pop_z_index(&mut self) -> Option<ZIndex> {
+        self.z_index_stack.pop()
+    }
+
+    /// Pop a scissor rect ID from the stack
+    pub fn pop_scissor_rect(&mut self) -> Option<ScissorRectID> {
+        self.scissor_rect_id_stack.pop()
+    }
+
+    /// Reset the z index stack.
+    pub fn reset_z_index(&mut self) {
+        self.z_index_stack.clear();
+    }
+
+    /// Reset the scissor rect ID stack
+    pub fn reset_scissor_rect(&mut self) {
+        self.scissor_rect_id_stack.clear();
+    }
+
+    /// Returns the z index and scissor rect ID from the given builder values.
+    pub fn z_index_and_scissor_rect_id(
+        &self,
+        z_index: Option<ZIndex>,
+        scissor_rect_id: Option<ScissorRectID>,
+    ) -> (ZIndex, ScissorRectID) {
+        (
+            z_index.unwrap_or_else(|| self.z_index()),
+            scissor_rect_id.unwrap_or_else(|| self.scissor_rect_id()),
+        )
+    }
+
+    pub fn with_z_index<T, F: FnOnce(&mut Self) -> T>(&mut self, z_index: ZIndex, f: F) -> T {
+        self.push_z_index(z_index);
+        let r = (f)(self);
+        self.pop_z_index();
+        r
+    }
+
+    pub fn with_scissor_rect<T, F: FnOnce(&mut Self) -> T>(
+        &mut self,
+        scissor_rect_id: ScissorRectID,
+        f: F,
+    ) -> T {
+        self.push_scissor_rect(scissor_rect_id);
+        let r = (f)(self);
+        self.pop_scissor_rect();
+        r
+    }
+
+    pub fn with_z_index_and_scissor_rect<T, F: FnOnce(&mut Self) -> T>(
+        &mut self,
+        z_index: ZIndex,
+        scissor_rect_id: ScissorRectID,
+        f: F,
+    ) -> T {
+        self.push_z_index(z_index);
+        self.push_scissor_rect(scissor_rect_id);
+        let r = (f)(self);
+        self.pop_z_index();
+        self.pop_scissor_rect();
+        r
     }
 }
 
