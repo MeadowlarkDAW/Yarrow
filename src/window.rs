@@ -19,6 +19,8 @@ use crate::{CursorIcon, ScissorRectID, MAIN_SCISSOR_RECT};
 mod winit_backend;
 #[cfg(feature = "winit")]
 pub use winit_backend::{run_blocking, OpenWindowError};
+// TODO: baseview feature
+mod baseview_backend;
 
 pub type WindowID = u32;
 
