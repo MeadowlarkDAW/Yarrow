@@ -1,3 +1,4 @@
+use baseview_backend::BaseviewWindowWrapper;
 use keyboard_types::{CompositionEvent, Modifiers};
 use rootvg::math::{to_logical_size_i32, PhysicalPoint, Point, ZIndex};
 use rootvg::surface::{DefaultSurface, DefaultSurfaceConfig, NewSurfaceError};
@@ -71,8 +72,10 @@ pub(crate) struct WindowState<A: Clone + 'static> {
     scale_factor_config: ScaleFactorConfig,
     pub queued_pointer_position: Option<PhysicalPoint>,
     pub queued_pointer_delta: Option<(f64, f64)>,
-    #[cfg(feature = "winit")]
-    pub winit_window: Arc<winit::window::Window>,
+    // TODO:
+    // #[cfg(feature = "winit")]
+    // pub winit_window: Arc<winit::window::Window>,
+    pub baseview_window: Arc<BaseviewWindowWrapper<'static>>,
     clipboard: Clipboard,
 
     pub prev_pointer_pos: Option<Point>,
@@ -85,7 +88,9 @@ pub(crate) struct WindowState<A: Clone + 'static> {
 
 impl<A: Clone + 'static> WindowState<A> {
     pub fn new(
-        #[cfg(feature = "winit")] winit_window: &Arc<winit::window::Window>,
+        // TODO:
+        // #[cfg(feature = "winit")] winit_window: &Arc<winit::window::Window>,
+        baseview_window: &Arc<BaseviewWindowWrapper>,
         logical_size: Size,
         physical_size: PhysicalSizeI32,
         system_scale_factor: ScaleFactor,
@@ -101,7 +106,7 @@ impl<A: Clone + 'static> WindowState<A> {
         let surface = DefaultSurface::new(
             physical_size,
             scale_factor,
-            Arc::clone(winit_window),
+            Arc::clone(baseview_window),
             surface_config,
         )?;
         let renderer = rootvg::Canvas::new(
@@ -114,6 +119,7 @@ impl<A: Clone + 'static> WindowState<A> {
 
         let view = View::new(physical_size, scale_factor, view_config, action_sender, id);
 
+        // TODO:
         let clipboard = Clipboard::new(winit_window);
 
         Ok(Self {
@@ -128,7 +134,9 @@ impl<A: Clone + 'static> WindowState<A> {
             scale_factor_config,
             queued_pointer_position: None,
             queued_pointer_delta: None,
-            winit_window: Arc::clone(winit_window),
+            // TODO:
+            baseview_window: Arc::clone(baseview_window),
+            // winit_window: Arc::clone(winit_window),
             prev_pointer_pos: None,
             pointer_btn_states: [PointerBtnState::default(); 5],
             modifiers: Modifiers::empty(),
