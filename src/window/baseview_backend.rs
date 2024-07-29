@@ -1,18 +1,17 @@
-use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use std::error::Error;
 use std::sync::Arc;
-use wgpu::{WasmNotSend, WasmNotSendSync, WindowHandle};
-
-use crate::action_queue::ActionSender;
-use crate::application::{AppContext, Application};
 
 use baseview::{
     Window as BaseviewWindow, WindowHandler as BaseviewWindowHandler, WindowOpenOptions,
     WindowScalePolicy,
 };
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+
 use rootvg::math::{PhysicalSizeI32, ScaleFactor, Size};
 
 use super::{ScaleFactorConfig, WindowState, MAIN_WINDOW};
+use crate::action_queue::ActionSender;
+use crate::application::{AppContext, Application};
 
 struct AppHandler<A: Application> {
     user_app: A,
@@ -34,8 +33,6 @@ impl<A: Application> AppHandler<A> {
         })
     }
 }
-
-unsafe impl<A: Application> Send for AppHandler<A> {}
 
 impl<A: Application> BaseviewWindowHandler for AppHandler<A> {
     fn on_frame(&mut self, window: &mut BaseviewWindow) {
@@ -74,9 +71,11 @@ impl HasDisplayHandle for BaseviewWindowWrapper<'_> {
     }
 }
 
+// TODO: ok figure out if this is really a good idea
+unsafe impl Sync for BaseviewWindowWrapper<'_> {}
 unsafe impl Send for BaseviewWindowWrapper<'_> {}
 
-pub fn run_blocking<A: Application + 'static>(
+pub fn run_blocking<A: Application + 'static + Send>(
     user_app: A,
     action_sender: ActionSender<A::Action>,
 ) -> Result<(), Box<dyn Error>>
@@ -92,10 +91,9 @@ where
     let size = baseview::Size::new(config.size.width as f64, config.size.height as f64);
     let options = WindowOpenOptions { title, scale, size };
 
-    let mut app_handler = AppHandler::new(user_app, action_sender.clone())?;
-
     BaseviewWindow::open_blocking(options, move |window: &mut BaseviewWindow| {
         // TODO: get rid of unwrap
+        let mut app_handler = AppHandler::new(user_app, action_sender.clone()).unwrap();
         let window_state = WindowState::new(
             &Arc::new(BaseviewWindowWrapper { bv_window: window }),
             config.size,
