@@ -60,7 +60,8 @@ impl PointerLockState {
     }
 }
 
-pub(crate) struct WindowState<A: Clone + 'static> {
+// TODO: check that lifetime is ok here
+pub(crate) struct WindowState<'window_state, A: Clone + 'static> {
     view: View<A>,
     renderer: rootvg::Canvas,
     surface: Option<DefaultSurface>,
@@ -75,7 +76,7 @@ pub(crate) struct WindowState<A: Clone + 'static> {
     // TODO:
     // #[cfg(feature = "winit")]
     // pub winit_window: Arc<winit::window::Window>,
-    pub baseview_window: Arc<BaseviewWindowWrapper<'static>>,
+    pub baseview_window: Arc<BaseviewWindowWrapper<'window_state>>,
     clipboard: Clipboard,
 
     pub prev_pointer_pos: Option<Point>,
@@ -86,7 +87,7 @@ pub(crate) struct WindowState<A: Clone + 'static> {
     current_cursor_icon: CursorIcon,
 }
 
-impl<A: Clone + 'static> WindowState<A> {
+impl<A: Clone + 'static> WindowState<'_, A> {
     pub fn new(
         // TODO:
         // #[cfg(feature = "winit")] winit_window: &Arc<winit::window::Window>,
@@ -106,7 +107,7 @@ impl<A: Clone + 'static> WindowState<A> {
         let surface = DefaultSurface::new(
             physical_size,
             scale_factor,
-            Arc::clone(baseview_window),
+            baseview_window.clone(),
             surface_config,
         )?;
         let renderer = rootvg::Canvas::new(
@@ -120,7 +121,7 @@ impl<A: Clone + 'static> WindowState<A> {
         let view = View::new(physical_size, scale_factor, view_config, action_sender, id);
 
         // TODO:
-        let clipboard = Clipboard::new(winit_window);
+        let clipboard = Clipboard::new(baseview_window);
 
         Ok(Self {
             view,

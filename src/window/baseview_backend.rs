@@ -1,11 +1,12 @@
-use std::error::Error;
-use std::sync::Arc;
+use std::{error::Error, sync::Arc};
 
 use baseview::{
     Window as BaseviewWindow, WindowHandler as BaseviewWindowHandler, WindowOpenOptions,
     WindowScalePolicy,
 };
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+#[allow(deprecated)]
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 use rootvg::math::{PhysicalSizeI32, ScaleFactor, Size};
 
@@ -51,15 +52,15 @@ impl<A: Application> BaseviewWindowHandler for AppHandler<A> {
     }
 }
 
-pub struct BaseviewWindowWrapper<'bv_window_wrapper> {
-    bv_window: &'bv_window_wrapper BaseviewWindow<'bv_window_wrapper>,
+pub struct BaseviewWindowWrapper<'bv_window_wrap> {
+    bv_window: &'bv_window_wrap BaseviewWindow<'bv_window_wrap>,
 }
 
 impl HasWindowHandle for BaseviewWindowWrapper<'_> {
     fn window_handle(
         &self,
     ) -> Result<raw_window_handle::WindowHandle<'_>, raw_window_handle::HandleError> {
-        todo!()
+        self.bv_window.raw_window_handle()
     }
 }
 
@@ -67,11 +68,13 @@ impl HasDisplayHandle for BaseviewWindowWrapper<'_> {
     fn display_handle(
         &self,
     ) -> Result<raw_window_handle::DisplayHandle<'_>, raw_window_handle::HandleError> {
-        todo!()
+        self.bv_window.raw_display_handle()
     }
 }
 
-// TODO: ok figure out if this is really a good idea
+// TODO: ok figure out if this is really a good idea, we need this to be true
+// for the wgpu WasmNotSendSync trait to be implemented it seems like, but it
+// makes me nervous
 unsafe impl Sync for BaseviewWindowWrapper<'_> {}
 unsafe impl Send for BaseviewWindowWrapper<'_> {}
 

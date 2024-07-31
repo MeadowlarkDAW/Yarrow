@@ -21,7 +21,11 @@ pub struct Clipboard {
 }
 
 impl Clipboard {
-    pub(crate) fn new(#[cfg(feature = "winit")] window: &Arc<winit::window::Window>) -> Clipboard {
+    pub(crate) fn new(
+        // TODO:
+        // #[cfg(feature = "winit")] window: &Arc<winit::window::Window>
+        window: &Arc<crate::window::BaseviewWindowWrapper>,
+    ) -> Clipboard {
         // SAFETY:
         // A reference-counted handle to the window is stored in this struct,
         // ensuring that the window will not be dropped before the clipboard
