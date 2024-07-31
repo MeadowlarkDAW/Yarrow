@@ -87,11 +87,11 @@ pub(crate) struct WindowState<'window_state, A: Clone + 'static> {
     current_cursor_icon: CursorIcon,
 }
 
-impl<A: Clone + 'static> WindowState<'_, A> {
+impl<'window_state, A: Clone + 'static> WindowState<'window_state, A> {
     pub fn new(
         // TODO:
         // #[cfg(feature = "winit")] winit_window: &Arc<winit::window::Window>,
-        baseview_window: &Arc<BaseviewWindowWrapper>,
+        baseview_window: &Arc<BaseviewWindowWrapper<'window_state>>,
         logical_size: Size,
         physical_size: PhysicalSizeI32,
         system_scale_factor: ScaleFactor,
@@ -107,7 +107,7 @@ impl<A: Clone + 'static> WindowState<'_, A> {
         let surface = DefaultSurface::new(
             physical_size,
             scale_factor,
-            baseview_window.clone(),
+            Arc::clone(baseview_window),
             surface_config,
         )?;
         let renderer = rootvg::Canvas::new(

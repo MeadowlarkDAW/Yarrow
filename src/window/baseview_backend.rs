@@ -5,8 +5,8 @@ use baseview::{
     WindowScalePolicy,
 };
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-#[allow(deprecated)]
-use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+// #[allow(deprecated)]
+// use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 use rootvg::math::{PhysicalSizeI32, ScaleFactor, Size};
 
@@ -52,15 +52,19 @@ impl<A: Application> BaseviewWindowHandler for AppHandler<A> {
     }
 }
 
-pub struct BaseviewWindowWrapper<'bv_window_wrap> {
-    bv_window: &'bv_window_wrap BaseviewWindow<'bv_window_wrap>,
+pub struct BaseviewWindowWrapper<'window_wrapper> {
+    bv_window: &'window_wrapper BaseviewWindow<'window_wrapper>,
 }
 
 impl HasWindowHandle for BaseviewWindowWrapper<'_> {
     fn window_handle(
         &self,
     ) -> Result<raw_window_handle::WindowHandle<'_>, raw_window_handle::HandleError> {
-        self.bv_window.raw_window_handle()
+        // self.bv_window.raw_window_handle()
+        // for some reason, rust isnt letting me import both the HasX trait
+        // and the HasRawX trait at the same time, but i need both in scope for
+        // this to work
+        todo!()
     }
 }
 
@@ -68,7 +72,8 @@ impl HasDisplayHandle for BaseviewWindowWrapper<'_> {
     fn display_handle(
         &self,
     ) -> Result<raw_window_handle::DisplayHandle<'_>, raw_window_handle::HandleError> {
-        self.bv_window.raw_display_handle()
+        // self.bv_window.raw_display_handle()
+        todo!()
     }
 }
 
