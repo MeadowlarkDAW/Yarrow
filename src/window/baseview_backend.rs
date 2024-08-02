@@ -1,14 +1,11 @@
-use std::{error::Error, sync::Arc};
+use std::error::Error;
 
 use baseview::{
     Window as BaseviewWindow, WindowHandler as BaseviewWindowHandler, WindowOpenOptions,
     WindowScalePolicy,
 };
-use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-// #[allow(deprecated)]
-// use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
-use rootvg::math::{PhysicalSizeI32, ScaleFactor, Size};
+use rootvg::math::{PhysicalSizeI32, ScaleFactor};
 
 use super::{ScaleFactorConfig, WindowState, MAIN_WINDOW};
 use crate::action_queue::ActionSender;
@@ -52,37 +49,6 @@ impl<A: Application> BaseviewWindowHandler for AppHandler<A> {
     }
 }
 
-pub struct BaseviewWindowWrapper<'window_wrapper> {
-    bv_window: &'window_wrapper BaseviewWindow<'window_wrapper>,
-}
-
-impl HasWindowHandle for BaseviewWindowWrapper<'_> {
-    fn window_handle(
-        &self,
-    ) -> Result<raw_window_handle::WindowHandle<'_>, raw_window_handle::HandleError> {
-        // self.bv_window.raw_window_handle()
-        // for some reason, rust isnt letting me import both the HasX trait
-        // and the HasRawX trait at the same time, but i need both in scope for
-        // this to work
-        todo!()
-    }
-}
-
-impl HasDisplayHandle for BaseviewWindowWrapper<'_> {
-    fn display_handle(
-        &self,
-    ) -> Result<raw_window_handle::DisplayHandle<'_>, raw_window_handle::HandleError> {
-        // self.bv_window.raw_display_handle()
-        todo!()
-    }
-}
-
-// TODO: ok figure out if this is really a good idea, we need this to be true
-// for the wgpu WasmNotSendSync trait to be implemented it seems like, but it
-// makes me nervous
-unsafe impl Sync for BaseviewWindowWrapper<'_> {}
-unsafe impl Send for BaseviewWindowWrapper<'_> {}
-
 pub fn run_blocking<A: Application + 'static + Send>(
     user_app: A,
     action_sender: ActionSender<A::Action>,
@@ -103,7 +69,7 @@ where
         // TODO: get rid of unwrap
         let mut app_handler = AppHandler::new(user_app, action_sender.clone()).unwrap();
         let window_state = WindowState::new(
-            &Arc::new(BaseviewWindowWrapper { bv_window: window }),
+            window,
             config.size,
             // TODO:
             PhysicalSizeI32::new(config.size.width as i32, config.size.height as i32),

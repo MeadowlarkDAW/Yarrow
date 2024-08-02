@@ -1,4 +1,3 @@
-use baseview_backend::BaseviewWindowWrapper;
 use keyboard_types::{CompositionEvent, Modifiers};
 use rootvg::math::{to_logical_size_i32, PhysicalPoint, Point, ZIndex};
 use rootvg::surface::{DefaultSurface, DefaultSurfaceConfig, NewSurfaceError};
@@ -22,6 +21,9 @@ mod winit_backend;
 pub use winit_backend::{run_blocking, OpenWindowError};
 // TODO: baseview feature
 mod baseview_backend;
+use baseview::Window as BaseviewWindow;
+#[allow(deprecated)]
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 pub type WindowID = u32;
 
@@ -61,7 +63,7 @@ impl PointerLockState {
 }
 
 // TODO: check that lifetime is ok here
-pub(crate) struct WindowState<'window_state, A: Clone + 'static> {
+pub(crate) struct WindowState<A: Clone + 'static> {
     view: View<A>,
     renderer: rootvg::Canvas,
     surface: Option<DefaultSurface<'static>>,
@@ -76,7 +78,7 @@ pub(crate) struct WindowState<'window_state, A: Clone + 'static> {
     // TODO:
     // #[cfg(feature = "winit")]
     // pub winit_window: Arc<winit::window::Window>,
-    pub baseview_window: Arc<BaseviewWindowWrapper<'window_state>>,
+    // pub baseview_window: &'window_state mut BaseviewWindow<'window_state>,
     clipboard: Clipboard,
 
     pub prev_pointer_pos: Option<Point>,
@@ -87,11 +89,11 @@ pub(crate) struct WindowState<'window_state, A: Clone + 'static> {
     current_cursor_icon: CursorIcon,
 }
 
-impl<'window_state, A: Clone + 'static> WindowState<'window_state, A> {
-    pub fn new(
+impl<A: Clone + 'static> WindowState<A> {
+    pub fn new<'new>(
         // TODO:
         // #[cfg(feature = "winit")] winit_window: &Arc<winit::window::Window>,
-        baseview_window: &Arc<BaseviewWindowWrapper<'window_state>>,
+        baseview_window: &mut BaseviewWindow<'new>,
         logical_size: Size,
         physical_size: PhysicalSizeI32,
         system_scale_factor: ScaleFactor,
@@ -104,12 +106,17 @@ impl<'window_state, A: Clone + 'static> WindowState<'window_state, A> {
     ) -> Result<Self, NewSurfaceError> {
         let scale_factor = scale_factor_config.scale_factor(system_scale_factor);
 
-        let surface = DefaultSurface::new(
-            physical_size,
-            scale_factor,
-            Arc::clone(baseview_window),
-            surface_config,
-        )?;
+        let surface = unsafe {
+            DefaultSurface::new_unsafe(
+                physical_size,
+                scale_factor,
+                wgpu::SurfaceTargetUnsafe::RawHandle {
+                    raw_display_handle: baseview_window.raw_display_handle(),
+                    raw_window_handle: baseview_window.raw_window_handle(),
+                },
+                surface_config,
+            )?
+        };
         let renderer = rootvg::Canvas::new(
             &surface.device,
             &surface.queue,
@@ -136,7 +143,7 @@ impl<'window_state, A: Clone + 'static> WindowState<'window_state, A> {
             queued_pointer_position: None,
             queued_pointer_delta: None,
             // TODO:
-            baseview_window: Arc::clone(baseview_window),
+            // baseview_window,
             // winit_window: Arc::clone(winit_window),
             prev_pointer_pos: None,
             pointer_btn_states: [PointerBtnState::default(); 5],
