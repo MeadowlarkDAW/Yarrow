@@ -1,8 +1,15 @@
 use keyboard_types::{CompositionEvent, Modifiers};
+use raw_window_handle_06::{
+    AppKitDisplayHandle, AppKitWindowHandle, Win32WindowHandle, WindowsDisplayHandle,
+    XcbDisplayHandle, XcbWindowHandle, XlibDisplayHandle, XlibWindowHandle,
+};
 use rootvg::math::{to_logical_size_i32, PhysicalPoint, Point, ZIndex};
 use rootvg::surface::{DefaultSurface, DefaultSurfaceConfig, NewSurfaceError};
+use std::num::{NonZeroIsize, NonZeroU32};
+use std::ptr::NonNull;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use wgpu::SurfaceTargetUnsafe;
 
 use crate::action_queue::ActionSender;
 use crate::clipboard::Clipboard;
@@ -22,7 +29,6 @@ pub use winit_backend::{run_blocking, OpenWindowError};
 // TODO: baseview feature
 mod baseview_backend;
 use baseview::Window as BaseviewWindow;
-#[allow(deprecated)]
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 pub type WindowID = u32;
@@ -80,7 +86,6 @@ pub(crate) struct WindowState<A: Clone + 'static> {
     // pub winit_window: Arc<winit::window::Window>,
     // pub baseview_window: &'window_state mut BaseviewWindow<'window_state>,
     clipboard: Clipboard,
-
     pub prev_pointer_pos: Option<Point>,
     pointer_btn_states: [PointerBtnState; 5],
     pointer_lock_state: PointerLockState,
@@ -93,7 +98,7 @@ impl<A: Clone + 'static> WindowState<A> {
     pub fn new<'new>(
         // TODO:
         // #[cfg(feature = "winit")] winit_window: &Arc<winit::window::Window>,
-        baseview_window: &mut BaseviewWindow<'new>,
+        baseview_window: &'new mut BaseviewWindow,
         logical_size: Size,
         physical_size: PhysicalSizeI32,
         system_scale_factor: ScaleFactor,
@@ -106,16 +111,65 @@ impl<A: Clone + 'static> WindowState<A> {
     ) -> Result<Self, NewSurfaceError> {
         let scale_factor = scale_factor_config.scale_factor(system_scale_factor);
 
+        let raw_display_handle = baseview_window.raw_display_handle();
+        let raw_window_handle = baseview_window.raw_window_handle();
+
+        let target = SurfaceTargetUnsafe::RawHandle {
+            raw_display_handle: match raw_display_handle {
+                raw_window_handle::RawDisplayHandle::AppKit(_) => {
+                    raw_window_handle_06::RawDisplayHandle::AppKit(AppKitDisplayHandle::new())
+                }
+                raw_window_handle::RawDisplayHandle::Xlib(handle) => {
+                    raw_window_handle_06::RawDisplayHandle::Xlib(XlibDisplayHandle::new(
+                        NonNull::new(handle.display),
+                        handle.screen,
+                    ))
+                }
+                raw_window_handle::RawDisplayHandle::Xcb(handle) => {
+                    raw_window_handle_06::RawDisplayHandle::Xcb(XcbDisplayHandle::new(
+                        NonNull::new(handle.connection),
+                        handle.screen,
+                    ))
+                }
+                raw_window_handle::RawDisplayHandle::Windows(_) => {
+                    raw_window_handle_06::RawDisplayHandle::Windows(WindowsDisplayHandle::new())
+                }
+                _ => todo!(),
+            },
+            raw_window_handle: match raw_window_handle {
+                raw_window_handle::RawWindowHandle::AppKit(handle) => {
+                    raw_window_handle_06::RawWindowHandle::AppKit(AppKitWindowHandle::new(
+                        NonNull::new(handle.ns_view).unwrap(),
+                    ))
+                }
+                raw_window_handle::RawWindowHandle::Xlib(handle) => {
+                    raw_window_handle_06::RawWindowHandle::Xlib(XlibWindowHandle::new(
+                        handle.window,
+                    ))
+                }
+                raw_window_handle::RawWindowHandle::Xcb(handle) => {
+                    raw_window_handle_06::RawWindowHandle::Xcb(XcbWindowHandle::new(
+                        NonZeroU32::new(handle.window).unwrap(),
+                    ))
+                }
+                raw_window_handle::RawWindowHandle::Win32(handle) => {
+                    // will this work? i have no idea!
+                    let mut raw_handle =
+                        Win32WindowHandle::new(NonZeroIsize::new(handle.hwnd as isize).unwrap());
+
+                    raw_handle.hinstance = handle
+                        .hinstance
+                        .is_null()
+                        .then(|| NonZeroIsize::new(handle.hinstance as isize).unwrap());
+
+                    raw_window_handle_06::RawWindowHandle::Win32(raw_handle)
+                }
+                _ => todo!(),
+            },
+        };
+
         let surface = unsafe {
-            DefaultSurface::new_unsafe(
-                physical_size,
-                scale_factor,
-                wgpu::SurfaceTargetUnsafe::RawHandle {
-                    raw_display_handle: baseview_window.raw_display_handle(),
-                    raw_window_handle: baseview_window.raw_window_handle(),
-                },
-                surface_config,
-            )?
+            DefaultSurface::new_unsafe(physical_size, scale_factor, target, surface_config)?
         };
         let renderer = rootvg::Canvas::new(
             &surface.device,
