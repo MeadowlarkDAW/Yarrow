@@ -64,7 +64,7 @@ impl PointerLockState {
 pub(crate) struct WindowState<'window_state, A: Clone + 'static> {
     view: View<A>,
     renderer: rootvg::Canvas,
-    surface: Option<DefaultSurface>,
+    surface: Option<DefaultSurface<'static>>,
     logical_size: Size,
     physical_size: PhysicalSizeI32,
     scale_factor: ScaleFactor,
@@ -438,7 +438,7 @@ impl<'window_state, A: Clone + 'static> WindowState<'window_state, A> {
         self.logical_size
     }
 
-    pub fn context<'a>(&'a mut self, res: &'a mut ResourceCtx) -> WindowContext<'a, A> {
+    pub fn context<'b>(&'b mut self, res: &'b mut ResourceCtx) -> WindowContext<'b, A> {
         WindowContext {
             view: &mut self.view,
             res,
