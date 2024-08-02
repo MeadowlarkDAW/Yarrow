@@ -49,7 +49,8 @@ impl ParagraphInner {
         let text_buffer = RcTextBuffer::new(
             &text,
             style.properties,
-            Size::new(width, 1000.0),
+            Some(width),
+            None,
             false,
             &mut res.font_system,
         );
@@ -122,7 +123,7 @@ impl ParagraphInner {
             let text_width = self.text_width(style);
 
             self.text_buffer
-                .set_bounds(Size::new(text_width, 1000.0), &mut res.font_system);
+                .set_bounds(Some(text_width), None, &mut res.font_system);
             self.text_size_needs_calculated = true;
         }
     }
@@ -142,12 +143,7 @@ impl ParagraphInner {
         self.text_size_needs_calculated = true;
     }
 
-    pub fn render_primitives(
-        &mut self,
-        bounds: Rect,
-        style: &LabelStyle,
-        res: &mut ResourceCtx,
-    ) -> LabelPrimitives {
+    pub fn render_primitives(&mut self, bounds: Rect, style: &LabelStyle) -> LabelPrimitives {
         let mut needs_layout = self.text_size_needs_calculated;
 
         if self.prev_bounds_size != bounds.size {
@@ -168,15 +164,6 @@ impl ParagraphInner {
                 style.padding,
                 style.min_clipped_size,
                 style.vertical_align,
-            );
-
-            self.text_buffer.set_bounds(
-                Size::new(
-                    self.text_bounds_rect.width(),
-                    // Add some extra padding below so that text doesn't get clipped.
-                    self.text_bounds_rect.height() + 2.0,
-                ),
-                &mut res.font_system,
             );
         }
 
@@ -352,8 +339,7 @@ impl<A: Clone + 'static> Element<A> for ParagraphElement {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
         let SharedState { inner, style } = &mut *shared_state;
 
-        let paragraph_primitives =
-            inner.render_primitives(Rect::from_size(cx.bounds_size), style, cx.res);
+        let paragraph_primitives = inner.render_primitives(Rect::from_size(cx.bounds_size), style);
 
         if let Some(quad_primitive) = paragraph_primitives.bg_quad {
             primitives.add(quad_primitive);

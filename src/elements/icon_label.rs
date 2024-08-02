@@ -166,7 +166,8 @@ impl IconLabelInner {
             let text_buffer = RcTextBuffer::new(
                 &text,
                 text_properties,
-                Size::new(1000.0, 200.0),
+                None,
+                None,
                 false,
                 &mut res.font_system,
             );
@@ -272,7 +273,8 @@ impl IconLabelInner {
             let text_buffer = RcTextBuffer::new(
                 &text,
                 text_properties,
-                Size::new(1000.0, 200.0),
+                None,
+                None,
                 false,
                 &mut res.font_system,
             );
@@ -335,11 +337,8 @@ impl IconLabelInner {
 
             if let Some(inner) = &mut self.text_inner {
                 inner.text_buffer.set_bounds(
-                    Size::new(
-                        self.text_bounds_rect.width(),
-                        // Add some extra padding below so that text doesn't get clipped.
-                        self.text_bounds_rect.height() + 2.0,
-                    ),
+                    Some(self.text_bounds_rect.width()),
+                    None,
                     &mut res.font_system,
                 );
             }

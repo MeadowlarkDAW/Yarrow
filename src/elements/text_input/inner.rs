@@ -238,13 +238,14 @@ impl TextInputInner {
             properties.attrs.family = Family::Monospace;
         }
 
-        let buffer_size = Size::new(
-            text_bounds_rect.width(),
-            // Add some extra padding below so that text doesn't get clipped.
-            text_bounds_rect.height() + 2.0,
+        let buffer = RcTextBuffer::new(
+            &text,
+            properties,
+            Some(text_bounds_rect.width()),
+            None,
+            true,
+            &mut res.font_system,
         );
-
-        let buffer = RcTextBuffer::new(&text, properties, buffer_size, true, &mut res.font_system);
 
         let placeholder_buffer = if placeholder_text.is_empty() {
             None
@@ -255,7 +256,8 @@ impl TextInputInner {
             Some(RcTextBuffer::new(
                 &placeholder_text,
                 placeholder_properties,
-                buffer_size,
+                Some(text_bounds_rect.width()),
+                None,
                 true,
                 &mut res.font_system,
             ))
@@ -265,7 +267,8 @@ impl TextInputInner {
             Some(RcTextBuffer::new(
                 &text_to_password_text(&buffer),
                 properties,
-                buffer_size,
+                Some(text_bounds_rect.width()),
+                None,
                 false,
                 &mut res.font_system,
             ))
@@ -379,16 +382,11 @@ impl TextInputInner {
             let mut placeholder_properties = style.properties.clone();
             placeholder_properties.attrs = style.placeholder_text_attrs;
 
-            let buffer_size = Size::new(
-                self.text_bounds_rect.width(),
-                // Add some extra padding below so that text doesn't get clipped.
-                self.text_bounds_rect.height() + 2.0,
-            );
-
             self.placeholder_buffer = Some(RcTextBuffer::new(
                 text,
                 placeholder_properties,
-                buffer_size,
+                Some(self.text_bounds_rect.width()),
+                None,
                 false,
                 &mut res.font_system,
             ));
@@ -501,20 +499,26 @@ impl TextInputInner {
             style.properties.metrics.line_height,
         );
 
-        let buffer_size = Size::new(
-            self.text_bounds_rect.width(),
-            // Add some extra padding below so that text doesn't get clipped.
-            self.text_bounds_rect.height() + 2.0,
+        self.buffer.set_bounds(
+            Some(self.text_bounds_rect.width()),
+            None,
+            &mut res.font_system,
         );
 
-        self.buffer.set_bounds(buffer_size, &mut res.font_system);
-
         if let Some(buffer) = self.placeholder_buffer.as_mut() {
-            buffer.set_bounds(buffer_size, &mut res.font_system);
+            buffer.set_bounds(
+                Some(self.text_bounds_rect.width()),
+                None,
+                &mut res.font_system,
+            );
         }
 
         if let Some(buffer) = self.password_buffer.as_mut() {
-            buffer.set_bounds(buffer_size, &mut res.font_system);
+            buffer.set_bounds(
+                Some(self.text_bounds_rect.width()),
+                None,
+                &mut res.font_system,
+            );
         }
 
         self.layout_contents(res);
@@ -1271,10 +1275,10 @@ impl TextInputInner {
                     - Point::new(scroll_x, 0.0).to_vector()
                     + bounds.origin.to_vector(),
                 color,
-                clipping_bounds: Rect::new(
+                clipping_bounds: Some(Rect::new(
                     Point::new(scroll_x, 0.0) + bounds.origin.to_vector(),
                     self.text_bounds_rect.size,
-                ),
+                )),
                 icons: SmallVec::new(),
             });
         } else if !self.placeholder_text.is_empty() {
@@ -1285,7 +1289,7 @@ impl TextInputInner {
                         + text_offset.to_vector()
                         + bounds.origin.to_vector(),
                     color: style.font_color_placeholder,
-                    clipping_bounds: Rect::new(bounds.origin, self.text_bounds_rect.size),
+                    clipping_bounds: Some(Rect::new(bounds.origin, self.text_bounds_rect.size)),
                     icons: SmallVec::new(),
                 });
             }
