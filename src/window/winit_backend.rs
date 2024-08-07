@@ -287,6 +287,11 @@ impl<A: Application> AppHandler<A> {
                         Err(e) => failed_open_requests.push((window_id, e)),
                     }
                 }
+                WindowRequest::NotifyThemeChange => {
+                    if let Some(window_state) = self.context.window_map.get_mut(&window_id) {
+                        window_state.on_theme_changed(&mut self.context.res);
+                    }
+                }
             }
         }
 

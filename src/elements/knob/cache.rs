@@ -2,10 +2,10 @@
 //! the same style, use a render cache to re-use expensive mesh primitives
 //! across instances.
 
-use std::{any::Any, hash::Hash, rc::Rc};
+use std::{any::Any, hash::Hash};
 
+use ahash::AHashMap;
 use rootvg::{math::Rect, mesh::MeshPrimitive};
-use rustc_hash::FxHashMap;
 
 use crate::{
     elements::knob::KnobMarkersStyle, prelude::KnobNotchStyle, view::element::ElementRenderCache,
@@ -15,20 +15,20 @@ use super::{KnobNotchLinePrimitives, KnobStyle};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct KnobNotchLineCacheKey {
-    style_ptr: usize,
+    class: &'static str,
     back_size: i32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct KnobMarkersArcCacheKey {
-    style_ptr: usize,
+    class: &'static str,
     back_size: i32,
 }
 
 #[derive(Default)]
 pub struct KnobRenderCacheInner {
-    notch_line_meshes: FxHashMap<KnobNotchLineCacheKey, (KnobNotchLinePrimitives, bool)>,
-    marker_arc_meshes: FxHashMap<KnobMarkersArcCacheKey, (MeshPrimitive, bool)>,
+    notch_line_meshes: AHashMap<KnobNotchLineCacheKey, (KnobNotchLinePrimitives, bool)>,
+    marker_arc_meshes: AHashMap<KnobMarkersArcCacheKey, (MeshPrimitive, bool)>,
 }
 
 impl KnobRenderCacheInner {
@@ -48,7 +48,8 @@ impl KnobRenderCacheInner {
 
     pub fn notch_line_mesh(
         &mut self,
-        style: &Rc<KnobStyle>,
+        class: &'static str,
+        style: &KnobStyle,
         back_size: f32,
     ) -> Option<&KnobNotchLinePrimitives> {
         let KnobNotchStyle::Line(notch_style) = &style.notch else {
@@ -56,7 +57,7 @@ impl KnobRenderCacheInner {
         };
 
         let key = KnobNotchLineCacheKey {
-            style_ptr: Rc::as_ptr(style) as usize,
+            class,
             back_size: back_size.round() as i32,
         };
 
@@ -73,7 +74,8 @@ impl KnobRenderCacheInner {
 
     pub fn marker_arc_back_mesh(
         &mut self,
-        style: &Rc<KnobStyle>,
+        class: &'static str,
+        style: &KnobStyle,
         back_bounds: Rect,
     ) -> Option<MeshPrimitive> {
         let KnobMarkersStyle::Arc(arc_style) = &style.markers else {
@@ -81,7 +83,7 @@ impl KnobRenderCacheInner {
         };
 
         let key = KnobMarkersArcCacheKey {
-            style_ptr: Rc::as_ptr(style) as usize,
+            class,
             back_size: back_bounds.width().round() as i32,
         };
 

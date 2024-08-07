@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{any::Any, rc::Rc};
 
 use rootvg::{
     color::RGBA8,
@@ -9,6 +9,7 @@ use rootvg::{
 
 use crate::{
     layout::{Padding, SizeType},
+    prelude::ElementStyle,
     style::{Background, BorderStyle, QuadStyle, DEFAULT_ACCENT_COLOR, DEFAULT_ACCENT_HOVER_COLOR},
     view::element::RenderContext,
 };
@@ -33,6 +34,18 @@ impl SliderStyle {
 impl Default for SliderStyle {
     fn default() -> Self {
         Self::Modern(SliderStyleModern::default())
+    }
+}
+
+impl ElementStyle for SliderStyle {
+    const ID: &'static str = "vs-sldr";
+
+    fn default_dark_style() -> Self {
+        Self::default()
+    }
+
+    fn default_light_style() -> Self {
+        todo!()
     }
 }
 
@@ -185,18 +198,28 @@ pub enum SliderFillMode {
     AvoidHandle,
 }
 
-#[derive(Default)]
-pub struct SliderRenderer {}
+pub struct SliderRenderer {
+    style: Rc<dyn Any>,
+}
 
 impl VirtualSliderRenderer for SliderRenderer {
     type Style = SliderStyle;
+
+    fn new(style: Rc<dyn Any>) -> Self {
+        Self { style }
+    }
+
+    fn style_changed(&mut self, new_style: Rc<dyn Any>) {
+        self.style = new_style;
+    }
 
     fn on_state_changed(
         &mut self,
         prev_state: VirtualSliderState,
         new_state: VirtualSliderState,
-        style: &Rc<Self::Style>,
     ) -> UpdateResult {
+        let style = self.style.downcast_ref::<SliderStyle>().unwrap();
+
         // Only repaint if the appearance is different.
         UpdateResult {
             repaint: style.states_differ(prev_state, new_state),
@@ -206,12 +229,13 @@ impl VirtualSliderRenderer for SliderRenderer {
 
     fn render_primitives(
         &mut self,
-        style: &Rc<Self::Style>,
         info: VirtualSliderRenderInfo<'_>,
         cx: RenderContext<'_>,
         primitives: &mut PrimitiveGroup,
     ) {
-        match style.as_ref() {
+        let style = self.style.downcast_ref::<SliderStyle>().unwrap();
+
+        match style {
             SliderStyle::Modern(style) => {
                 if info.horizontal {
                     let to_horizontal = |r: Rect| -> Rect {

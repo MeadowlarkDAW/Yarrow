@@ -49,6 +49,7 @@ pub enum ElementEvent {
     Animation { delta_seconds: f64 },
     Hidden,
     Shown,
+    StyleChanged,
     Pointer(PointerEvent),
     Keyboard(KeyboardEvent),
     TextComposition(CompositionEvent),

@@ -1,5 +1,3 @@
-use std::{cell::RefCell, rc::Rc};
-
 use rootvg::{
     color::RGBA8,
     math::{Point, Rect, Size, ZIndex},
@@ -9,6 +7,7 @@ use rootvg::{
 use crate::{
     event::{ElementEvent, EventCaptureStatus},
     layout::Align,
+    prelude::ElementStyle,
     style::{Background, BorderStyle, QuadStyle},
     view::element::{
         Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
@@ -66,8 +65,20 @@ impl Default for SeparatorStyle {
     }
 }
 
+impl ElementStyle for SeparatorStyle {
+    const ID: &'static str = "sptr";
+
+    fn default_dark_style() -> Self {
+        Self::default()
+    }
+
+    fn default_light_style() -> Self {
+        Self::default()
+    }
+}
+
 pub struct SeparatorBuilder {
-    pub style: Rc<SeparatorStyle>,
+    pub class: Option<&'static str>,
     pub vertical: bool,
     pub z_index: Option<ZIndex>,
     pub bounding_rect: Rect,
@@ -76,9 +87,9 @@ pub struct SeparatorBuilder {
 }
 
 impl SeparatorBuilder {
-    pub fn new(style: &Rc<SeparatorStyle>) -> Self {
+    pub fn new() -> Self {
         Self {
-            style: Rc::clone(style),
+            class: None,
             vertical: false,
             z_index: None,
             bounding_rect: Rect::default(),
@@ -96,21 +107,45 @@ impl SeparatorBuilder {
         self
     }
 
+    /// The style class name
+    ///
+    /// If this method is not used, then the current class from the window context will
+    /// be used.
+    pub const fn class(mut self, class: &'static str) -> Self {
+        self.class = Some(class);
+        self
+    }
+
+    /// The z index of the element
+    ///
+    /// If this method is not used, then the current z index from the window context will
+    /// be used.
     pub const fn z_index(mut self, z_index: ZIndex) -> Self {
         self.z_index = Some(z_index);
         self
     }
 
+    /// The bounding rectangle of the element
+    ///
+    /// If this method is not used, then the element will have a size and position of
+    /// zero and will not be visible until its bounding rectangle is set.
     pub const fn bounding_rect(mut self, rect: Rect) -> Self {
         self.bounding_rect = rect;
         self
     }
 
+    /// Whether or not this element is manually hidden
+    ///
+    /// By default this is set to `false`.
     pub const fn hidden(mut self, hidden: bool) -> Self {
         self.manually_hidden = hidden;
         self
     }
 
+    /// The ID of the scissoring rectangle this element belongs to.
+    ///
+    /// If this method is not used, then the current scissoring rectangle ID from the
+    /// window context will be used.
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
         self.scissor_rect_id = Some(scissor_rect_id);
         self
@@ -119,7 +154,6 @@ impl SeparatorBuilder {
 
 /// A simple separator element.
 pub struct SeparatorElement {
-    shared_state: Rc<RefCell<SharedState>>,
     vertical: bool,
 }
 
@@ -129,7 +163,7 @@ impl SeparatorElement {
         cx: &mut WindowContext<'_, A>,
     ) -> Separator {
         let SeparatorBuilder {
-            style,
+            class,
             vertical,
             z_index,
             bounding_rect,
@@ -137,26 +171,22 @@ impl SeparatorElement {
             scissor_rect_id,
         } = builder;
 
-        let (z_index, scissor_rect_id) = cx.z_index_and_scissor_rect_id(z_index, scissor_rect_id);
-
-        let shared_state = Rc::new(RefCell::new(SharedState { style }));
+        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
 
         let element_builder = ElementBuilder {
-            element: Box::new(Self {
-                shared_state: Rc::clone(&shared_state),
-                vertical,
-            }),
+            element: Box::new(Self { vertical }),
             z_index,
             bounding_rect,
             manually_hidden,
             scissor_rect_id,
+            class,
         };
 
         let el = cx
             .view
             .add_element(element_builder, &mut cx.res, cx.clipboard);
 
-        Separator { el, shared_state }
+        Separator { el }
     }
 }
 
@@ -178,12 +208,12 @@ impl<A: Clone + 'static> Element<A> for SeparatorElement {
     }
 
     fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
-        let shared_state = RefCell::borrow(&self.shared_state);
+        let style = cx.res.style_system.get::<SeparatorStyle>(cx.class);
 
         let rect = if self.vertical {
-            let span = shared_state.style.size.points(cx.bounds_size.height);
+            let span = style.size.points(cx.bounds_size.height);
 
-            let y = match shared_state.style.align {
+            let y = match style.align {
                 Align::Start => 0.0,
                 Align::Center => (cx.bounds_size.height - span) * 0.5,
                 Align::End => cx.bounds_size.height - span,
@@ -191,9 +221,9 @@ impl<A: Clone + 'static> Element<A> for SeparatorElement {
 
             Rect::new(Point::new(0.0, y), Size::new(cx.bounds_size.width, span))
         } else {
-            let span = shared_state.style.size.points(cx.bounds_size.width);
+            let span = style.size.points(cx.bounds_size.width);
 
-            let x = match shared_state.style.align {
+            let x = match style.align {
                 Align::Start => 0.0,
                 Align::Center => (cx.bounds_size.width - span) * 0.5,
                 Align::End => cx.bounds_size.width - span,
@@ -202,35 +232,23 @@ impl<A: Clone + 'static> Element<A> for SeparatorElement {
             Rect::new(Point::new(x, 0.0), Size::new(span, cx.bounds_size.height))
         };
 
-        primitives.add(shared_state.style.quad_style.create_primitive(rect));
+        primitives.add(style.quad_style.create_primitive(rect));
     }
 }
 
 /// A simple separator element.
 pub struct Separator {
     pub el: ElementHandle,
-    shared_state: Rc<RefCell<SharedState>>,
 }
 
 impl Separator {
-    pub fn builder(style: &Rc<SeparatorStyle>) -> SeparatorBuilder {
-        SeparatorBuilder::new(style)
+    pub fn builder() -> SeparatorBuilder {
+        SeparatorBuilder::new()
     }
 
-    pub fn set_style(&mut self, style: &Rc<SeparatorStyle>) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
-        if !Rc::ptr_eq(&shared_state.style, style) {
-            shared_state.style = Rc::clone(style);
-            self.el.notify_custom_state_change();
+    pub fn set_class(&mut self, class: &'static str) {
+        if self.el.class() != class {
+            self.el._notify_class_change(class);
         }
     }
-
-    pub fn style(&self) -> Rc<SeparatorStyle> {
-        Rc::clone(&RefCell::borrow(&self.shared_state).style)
-    }
-}
-
-struct SharedState {
-    style: Rc<SeparatorStyle>,
 }

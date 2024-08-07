@@ -25,6 +25,7 @@ pub struct ElementHandle {
     rect: Rect,
     z_index: ZIndex,
     manually_hidden: bool,
+    class: &'static str,
 }
 
 impl ElementHandle {
@@ -34,6 +35,7 @@ impl ElementHandle {
         rect: Rect,
         z_index: ZIndex,
         manually_hidden: bool,
+        class: &'static str,
     ) -> Self {
         Self {
             element_id,
@@ -41,6 +43,7 @@ impl ElementHandle {
             rect,
             z_index,
             manually_hidden,
+            class,
         }
     }
 
@@ -214,16 +217,6 @@ impl ElementHandle {
         }
     }
 
-    /// Notify the element that its custom state has changed.
-    ///
-    /// This is meant to be used by element implementations, not by the end-user.
-    pub fn notify_custom_state_change(&mut self) {
-        self.mod_queue_sender.send(ElementModification {
-            element_id: self.element_id,
-            type_: ElementModificationType::CustomStateChanged,
-        });
-    }
-
     pub fn show_tooltip(&mut self, message: String, align: Align2, auto_hide: bool) {
         self.mod_queue_sender.send(ElementModification {
             element_id: self.element_id,
@@ -232,6 +225,33 @@ impl ElementHandle {
                 align,
                 auto_hide,
             },
+        })
+    }
+
+    pub fn class(&self) -> &'static str {
+        self.class
+    }
+
+    /// Notify the element that its custom state has changed.
+    ///
+    /// This is meant to be used by element implementations, not by the end-user.
+    pub fn _notify_custom_state_change(&mut self) {
+        self.mod_queue_sender.send(ElementModification {
+            element_id: self.element_id,
+            type_: ElementModificationType::CustomStateChanged,
+        });
+    }
+
+    /// Notify the element that its class name has changed.
+    ///
+    /// This is meant to be used by element implementations, not by the end-user.
+    /// Using this method directly instead of the element's provided `set_class`
+    /// method may lead to de-synced state and unexpected results.
+    pub fn _notify_class_change(&mut self, new_class: &'static str) {
+        self.class = new_class;
+        self.mod_queue_sender.send(ElementModification {
+            element_id: self.element_id,
+            type_: ElementModificationType::ClassChanged(new_class),
         })
     }
 

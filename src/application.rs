@@ -4,6 +4,7 @@ use std::{error::Error, time::Duration};
 
 use crate::{
     event::{AppWindowEvent, KeyboardEvent},
+    style::StyleSystem,
     window::{
         LinuxBackendType, ScaleFactorConfig, WindowCloseRequest, WindowConfig, WindowContext,
         WindowID, WindowState,
@@ -75,6 +76,7 @@ pub struct AppConfig {
     pub tick_timer_interval: TimerInterval,
     pub pointer_debounce_interval: TimerInterval,
     pub pointer_locking_enabled: bool,
+    pub use_dark_theme: bool,
 }
 
 impl Default for AppConfig {
@@ -83,12 +85,14 @@ impl Default for AppConfig {
             tick_timer_interval: TimerInterval::PercentageOfFrameRate(1.0),
             pointer_debounce_interval: TimerInterval::PercentageOfFrameRate(2.0),
             pointer_locking_enabled: true,
+            use_dark_theme: true,
         }
     }
 }
 
 /// A context for globally-shared resources
 pub struct ResourceCtx {
+    pub style_system: StyleSystem,
     pub font_system: FontSystem,
     pub svg_icon_system: rootvg::text::svg::SvgIconSystem,
 }
@@ -158,15 +162,29 @@ impl<A: Clone + 'static> AppContext<A> {
     pub fn linux_backend_type(&self) -> Option<LinuxBackendType> {
         self.linux_backend_type
     }
+
+    pub fn use_dark_theme(&mut self, use_dark_theme: bool) {
+        if self.res.style_system.use_dark_theme != use_dark_theme {
+            self.res.style_system.use_dark_theme = use_dark_theme;
+
+            for window_id in self.window_map.keys() {
+                self.window_requests
+                    .push((*window_id, WindowRequest::NotifyThemeChange));
+            }
+        }
+    }
 }
 
 impl<A: Clone + 'static> AppContext<A> {
     pub fn new(config: AppConfig) -> Self {
+        let use_dark_theme = config.use_dark_theme;
+
         Self {
             config,
             window_requests: Vec::new(),
             window_map: FxHashMap::default(),
             res: ResourceCtx {
+                style_system: StyleSystem::new(use_dark_theme),
                 font_system: FontSystem::new(),
                 svg_icon_system: Default::default(),
             },
@@ -184,4 +202,5 @@ pub(crate) enum WindowRequest {
     SetTitle(String),
     SetScaleFactor(ScaleFactorConfig),
     Create(WindowConfig),
+    NotifyThemeChange,
 }

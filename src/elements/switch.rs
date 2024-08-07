@@ -2,12 +2,13 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use rootvg::math::Point;
-use rootvg::PrimitiveGroup;
+use rootvg::{color, PrimitiveGroup};
 
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
 use crate::layout::{self, Align2};
 use crate::math::{Rect, Size, ZIndex};
-use crate::style::{Background, BorderStyle, QuadStyle, DEFAULT_ACCENT_COLOR};
+use crate::prelude::{ElementStyle, ResourceCtx};
+use crate::style::{Background, BorderStyle, QuadStyle, DEFAULT_DISABLED_ALPHA_MULTIPLIER};
 use crate::vg::color::RGBA8;
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
@@ -18,6 +19,32 @@ use crate::CursorIcon;
 
 // TODO: Sliding animation for switch
 
+/// A descriptor for how to style a disabled [`Switch`] element.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SwitchDisabledStyle {
+    /// Use a multipler on the alpha channel for all colors.
+    AlphaMultiplier(f32),
+    /// Use a custom-defined style.
+    Custom {
+        outer_border_color_off: RGBA8,
+        outer_border_color_on: RGBA8,
+
+        off_bg: Background,
+        on_bg: Background,
+
+        slider_bg_off: Background,
+        slider_bg_on: Background,
+        slider_border_color_off: RGBA8,
+        slider_border_color_on: RGBA8,
+    },
+}
+
+impl Default for SwitchDisabledStyle {
+    fn default() -> Self {
+        Self::AlphaMultiplier(DEFAULT_DISABLED_ALPHA_MULTIPLIER)
+    }
+}
+
 /// The style of a [`Switch`] element
 #[derive(Debug, Clone, PartialEq)]
 pub struct SwitchStyle {
@@ -25,28 +52,36 @@ pub struct SwitchStyle {
     pub rounding: f32,
 
     pub outer_border_width: f32,
-    pub outer_border_color_idle: RGBA8,
-    pub outer_border_color_hover: RGBA8,
-    pub outer_border_color_disabled: RGBA8,
+
+    pub outer_border_color_off: RGBA8,
+    pub outer_border_color_off_hover: Option<RGBA8>,
+    pub outer_border_color_on: Option<RGBA8>,
+    pub outer_border_color_on_hover: Option<RGBA8>,
 
     pub off_bg: Background,
-    pub on_bg: Background,
-
-    pub off_bg_disabled: Background,
-    pub on_bg_disabled: Background,
+    pub on_bg: Option<Background>,
+    pub off_bg_hover: Option<Background>,
+    pub on_bg_hover: Option<Background>,
 
     pub slider_padding: f32,
 
-    pub slider_bg_idle: Background,
-    pub slider_bg_hover: Background,
-    pub slider_bg_disabled: Background,
+    pub slider_bg_off: Background,
+    pub slider_bg_on: Option<Background>,
+    pub slider_bg_off_hover: Option<Background>,
+    pub slider_bg_on_hover: Option<Background>,
 
-    pub slider_border_width_idle: f32,
-    pub slider_border_width_hover: f32,
+    pub slider_border_width: f32,
+    pub slider_border_width_hover: Option<f32>,
 
-    pub slider_border_color_idle: RGBA8,
-    pub slider_border_color_hover: RGBA8,
-    pub slider_border_color_disabled: RGBA8,
+    pub slider_border_color_off: RGBA8,
+    pub slider_border_color_off_hover: Option<RGBA8>,
+    pub slider_border_color_on: Option<RGBA8>,
+    pub slider_border_color_on_hover: Option<RGBA8>,
+
+    /// A descriptor for how to style a disabled [`Switch`] element.
+    ///
+    /// By default this is set to `SwitchDisabledStyle::AlphaMultiplier(0.5)`.
+    pub disabled_style: SwitchDisabledStyle,
 }
 
 impl Default for SwitchStyle {
@@ -54,32 +89,40 @@ impl Default for SwitchStyle {
         Self {
             size: 20.0,
             rounding: 20.0,
-
-            outer_border_width: 1.0,
-
-            outer_border_color_idle: RGBA8::new(105, 105, 105, 255),
-            outer_border_color_hover: RGBA8::new(135, 135, 135, 255),
-            outer_border_color_disabled: RGBA8::new(105, 105, 105, 150),
-
-            off_bg: Background::Solid(RGBA8::new(40, 40, 40, 255)),
-            on_bg: Background::Solid(DEFAULT_ACCENT_COLOR),
-
-            off_bg_disabled: Background::Solid(RGBA8::new(40, 40, 40, 150)),
-            on_bg_disabled: Background::Solid(RGBA8::new(150, 150, 150, 150)),
-
+            outer_border_width: 0.0,
+            outer_border_color_off: color::TRANSPARENT,
+            outer_border_color_off_hover: None,
+            outer_border_color_on: None,
+            outer_border_color_on_hover: None,
+            off_bg: Background::TRANSPARENT,
+            on_bg: None,
+            off_bg_hover: None,
+            on_bg_hover: None,
             slider_padding: 2.0,
-
-            slider_bg_idle: Background::Solid(RGBA8::new(255, 255, 255, 180)),
-            slider_bg_hover: Background::Solid(RGBA8::new(255, 255, 255, 225)),
-            slider_bg_disabled: Background::Solid(RGBA8::new(255, 255, 255, 100)),
-
-            slider_border_width_idle: 1.0,
-            slider_border_width_hover: 1.0,
-
-            slider_border_color_idle: RGBA8::new(255, 255, 255, 220),
-            slider_border_color_hover: RGBA8::new(255, 255, 255, 255),
-            slider_border_color_disabled: RGBA8::new(255, 255, 255, 150),
+            slider_bg_off: Background::TRANSPARENT,
+            slider_bg_on: None,
+            slider_bg_off_hover: None,
+            slider_bg_on_hover: None,
+            slider_border_width: 0.0,
+            slider_border_width_hover: None,
+            slider_border_color_off: color::TRANSPARENT,
+            slider_border_color_on: None,
+            slider_border_color_off_hover: None,
+            slider_border_color_on_hover: None,
+            disabled_style: SwitchDisabledStyle::default(),
         }
+    }
+}
+
+impl ElementStyle for SwitchStyle {
+    const ID: &'static str = "switch";
+
+    fn default_dark_style() -> Self {
+        Self::default()
+    }
+
+    fn default_light_style() -> Self {
+        Self::default()
     }
 }
 
@@ -88,7 +131,7 @@ pub struct SwitchBuilder<A: Clone + 'static> {
     pub tooltip_message: Option<String>,
     pub tooltip_align: Align2,
     pub toggled: bool,
-    pub style: Rc<SwitchStyle>,
+    pub class: Option<&'static str>,
     pub z_index: Option<ZIndex>,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
@@ -97,13 +140,13 @@ pub struct SwitchBuilder<A: Clone + 'static> {
 }
 
 impl<A: Clone + 'static> SwitchBuilder<A> {
-    pub fn new(style: &Rc<SwitchStyle>) -> Self {
+    pub fn new() -> Self {
         Self {
             action: None,
             tooltip_message: None,
             tooltip_align: Align2::TOP_CENTER,
             toggled: false,
-            style: Rc::clone(style),
+            class: None,
             z_index: None,
             bounding_rect: Rect::default(),
             manually_hidden: false,
@@ -132,26 +175,53 @@ impl<A: Clone + 'static> SwitchBuilder<A> {
         self
     }
 
+    /// The style class name
+    ///
+    /// If this method is not used, then the current class from the window context will
+    /// be used.
+    pub const fn class(mut self, class: &'static str) -> Self {
+        self.class = Some(class);
+        self
+    }
+
+    /// The z index of the element
+    ///
+    /// If this method is not used, then the current z index from the window context will
+    /// be used.
     pub const fn z_index(mut self, z_index: ZIndex) -> Self {
         self.z_index = Some(z_index);
         self
     }
 
+    /// The bounding rectangle of the element
+    ///
+    /// If this method is not used, then the element will have a size and position of
+    /// zero and will not be visible until its bounding rectangle is set.
     pub const fn bounding_rect(mut self, rect: Rect) -> Self {
         self.bounding_rect = rect;
         self
     }
 
+    /// Whether or not this element is manually hidden
+    ///
+    /// By default this is set to `false`.
     pub const fn hidden(mut self, hidden: bool) -> Self {
         self.manually_hidden = hidden;
         self
     }
 
+    /// Whether or not this element is in the disabled state
+    ///
+    /// By default this is set to `false`.
     pub const fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
         self
     }
 
+    /// The ID of the scissoring rectangle this element belongs to.
+    ///
+    /// If this method is not used, then the current scissoring rectangle ID from the
+    /// window context will be used.
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
         self.scissor_rect_id = Some(scissor_rect_id);
         self
@@ -174,20 +244,16 @@ impl<A: Clone + 'static> SwitchElement<A> {
             tooltip_align,
             toggled,
             disabled,
-            style,
+            class,
             z_index,
             bounding_rect,
             manually_hidden,
             scissor_rect_id,
         } = builder;
 
-        let (z_index, scissor_rect_id) = cx.z_index_and_scissor_rect_id(z_index, scissor_rect_id);
+        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
 
-        let shared_state = Rc::new(RefCell::new(SharedState {
-            toggled,
-            style,
-            disabled,
-        }));
+        let shared_state = Rc::new(RefCell::new(SharedState { toggled, disabled }));
 
         let element_builder = ElementBuilder {
             element: Box::new(Self {
@@ -201,6 +267,7 @@ impl<A: Clone + 'static> SwitchElement<A> {
             bounding_rect,
             manually_hidden,
             scissor_rect_id,
+            class,
         };
 
         let el = cx
@@ -287,71 +354,209 @@ impl<A: Clone + 'static> Element<A> for SwitchElement<A> {
     fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
         let shared_state = RefCell::borrow(&self.shared_state);
 
-        let bg_quad_style = if shared_state.disabled {
-            QuadStyle {
-                bg: if shared_state.toggled {
-                    shared_state.style.on_bg_disabled.clone()
+        let style = cx.res.style_system.get::<SwitchStyle>(cx.class);
+
+        let get_colors = || -> (Background, Background, RGBA8, RGBA8) {
+            let bg_quad_bg = if shared_state.toggled {
+                if self.hovered {
+                    style.on_bg_hover.unwrap_or(
+                        style
+                            .on_bg
+                            .unwrap_or(style.off_bg_hover.unwrap_or(style.off_bg)),
+                    )
                 } else {
-                    shared_state.style.off_bg_disabled.clone()
-                },
-                border: BorderStyle {
-                    color: shared_state.style.outer_border_color_disabled,
-                    width: shared_state.style.outer_border_width,
-                    radius: shared_state.style.rounding.into(),
-                },
-            }
-        } else {
-            QuadStyle {
-                bg: if shared_state.toggled {
-                    shared_state.style.on_bg.clone()
+                    style.on_bg.clone().unwrap_or_else(|| style.off_bg.clone())
+                }
+            } else {
+                if self.hovered {
+                    style.off_bg_hover.unwrap_or(style.off_bg)
                 } else {
-                    shared_state.style.off_bg.clone()
-                },
-                border: BorderStyle {
-                    color: if self.hovered {
-                        shared_state.style.outer_border_color_hover
-                    } else {
-                        shared_state.style.outer_border_color_idle
-                    },
-                    width: shared_state.style.outer_border_width,
-                    radius: shared_state.style.rounding.into(),
-                },
-            }
+                    style.off_bg.clone()
+                }
+            };
+
+            let slider_quad_bg = if shared_state.toggled {
+                if self.hovered {
+                    style.slider_bg_on_hover.unwrap_or(
+                        style
+                            .slider_bg_on
+                            .unwrap_or(style.slider_bg_off_hover.unwrap_or(style.slider_bg_off)),
+                    )
+                } else {
+                    style
+                        .slider_bg_on
+                        .clone()
+                        .unwrap_or_else(|| style.slider_bg_off.clone())
+                }
+            } else {
+                if self.hovered {
+                    style.slider_bg_off_hover.unwrap_or(style.slider_bg_off)
+                } else {
+                    style.slider_bg_off.clone()
+                }
+            };
+
+            let bg_border_color = if self.hovered {
+                if shared_state.toggled {
+                    style.outer_border_color_on_hover.unwrap_or(
+                        style.outer_border_color_on.unwrap_or(
+                            style
+                                .outer_border_color_off_hover
+                                .unwrap_or(style.outer_border_color_off),
+                        ),
+                    )
+                } else {
+                    style
+                        .outer_border_color_off_hover
+                        .unwrap_or(style.outer_border_color_off)
+                }
+            } else {
+                if shared_state.toggled {
+                    style
+                        .outer_border_color_on
+                        .unwrap_or(style.outer_border_color_off)
+                } else {
+                    style.outer_border_color_off
+                }
+            };
+
+            let slider_border_color = if self.hovered {
+                if shared_state.toggled {
+                    style.slider_border_color_on_hover.unwrap_or(
+                        style.slider_border_color_on.unwrap_or(
+                            style
+                                .slider_border_color_off_hover
+                                .unwrap_or(style.slider_border_color_off),
+                        ),
+                    )
+                } else {
+                    style
+                        .slider_border_color_off_hover
+                        .unwrap_or(style.slider_border_color_off)
+                }
+            } else {
+                if shared_state.toggled {
+                    style
+                        .slider_border_color_on
+                        .unwrap_or(style.slider_border_color_off)
+                } else {
+                    style.slider_border_color_off
+                }
+            };
+
+            (
+                bg_quad_bg,
+                slider_quad_bg,
+                bg_border_color,
+                slider_border_color,
+            )
         };
 
-        let slider_quad_style = if shared_state.disabled {
-            QuadStyle {
-                bg: shared_state.style.slider_bg_disabled.clone(),
-                border: BorderStyle {
-                    color: shared_state.style.slider_border_color_disabled,
-                    width: shared_state.style.slider_border_width_idle,
-                    radius: shared_state.style.rounding.into(),
-                },
-            }
-        } else if self.hovered {
-            QuadStyle {
-                bg: shared_state.style.slider_bg_hover.clone(),
-                border: BorderStyle {
-                    color: shared_state.style.slider_border_color_hover,
-                    width: shared_state.style.slider_border_width_hover,
-                    radius: shared_state.style.rounding.into(),
-                },
+        let (bg_quad_style, slider_quad_style) = if shared_state.disabled {
+            match &style.disabled_style {
+                SwitchDisabledStyle::AlphaMultiplier(multiplier) => {
+                    let (mut bg_quad_bg, mut slider_quad_bg, bg_border_color, slider_border_color) =
+                        get_colors();
+
+                    bg_quad_bg.multiply_alpha(*multiplier);
+                    slider_quad_bg.multiply_alpha(*multiplier);
+
+                    (
+                        QuadStyle {
+                            bg: bg_quad_bg,
+                            border: BorderStyle {
+                                color: color::multiply_alpha(bg_border_color, *multiplier),
+                                width: style.outer_border_width,
+                                radius: style.rounding.into(),
+                            },
+                        },
+                        QuadStyle {
+                            bg: slider_quad_bg,
+                            border: BorderStyle {
+                                color: color::multiply_alpha(slider_border_color, *multiplier),
+                                width: style.slider_border_width,
+                                radius: style.rounding.into(),
+                            },
+                        },
+                    )
+                }
+                SwitchDisabledStyle::Custom {
+                    outer_border_color_off,
+                    outer_border_color_on,
+                    off_bg,
+                    on_bg,
+                    slider_bg_off,
+                    slider_bg_on,
+                    slider_border_color_off,
+                    slider_border_color_on,
+                } => (
+                    QuadStyle {
+                        bg: if shared_state.toggled {
+                            on_bg.clone()
+                        } else {
+                            off_bg.clone()
+                        },
+                        border: BorderStyle {
+                            color: if shared_state.toggled {
+                                *outer_border_color_on
+                            } else {
+                                *outer_border_color_off
+                            },
+                            width: style.outer_border_width,
+                            radius: style.rounding.into(),
+                        },
+                    },
+                    QuadStyle {
+                        bg: if shared_state.toggled {
+                            *slider_bg_on
+                        } else {
+                            *slider_bg_off
+                        },
+                        border: BorderStyle {
+                            color: if shared_state.toggled {
+                                *slider_border_color_on
+                            } else {
+                                *slider_border_color_off
+                            },
+                            width: style.slider_border_width,
+                            radius: style.rounding.into(),
+                        },
+                    },
+                ),
             }
         } else {
-            QuadStyle {
-                bg: shared_state.style.slider_bg_idle.clone(),
-                border: BorderStyle {
-                    color: shared_state.style.slider_border_color_idle,
-                    width: shared_state.style.slider_border_width_idle,
-                    radius: shared_state.style.rounding.into(),
+            let (bg_quad_bg, slider_quad_bg, bg_border_color, slider_border_color) = get_colors();
+
+            (
+                QuadStyle {
+                    bg: bg_quad_bg,
+                    border: BorderStyle {
+                        color: bg_border_color,
+                        width: style.outer_border_width,
+                        radius: style.rounding.into(),
+                    },
                 },
-            }
+                QuadStyle {
+                    bg: slider_quad_bg,
+                    border: BorderStyle {
+                        color: slider_border_color,
+                        width: if self.hovered {
+                            style
+                                .slider_border_width_hover
+                                .unwrap_or(style.slider_border_width)
+                        } else {
+                            style.slider_border_width
+                        },
+                        radius: style.rounding.into(),
+                    },
+                },
+            )
         };
 
         let bounds_rect = Rect::from_size(cx.bounds_size);
 
-        let padding = shared_state.style.slider_padding;
-        let size = shared_state.style.size;
+        let padding = style.slider_padding;
+        let size = style.size;
 
         let bg_bounds = layout::centered_rect(bounds_rect.center(), Size::new(size * 2.0, size));
 
@@ -382,31 +587,23 @@ pub struct Switch {
 
 struct SharedState {
     toggled: bool,
-    style: Rc<SwitchStyle>,
     disabled: bool,
 }
 
 impl Switch {
-    pub fn builder<A: Clone + 'static>(style: &Rc<SwitchStyle>) -> SwitchBuilder<A> {
-        SwitchBuilder::new(style)
+    pub fn builder<A: Clone + 'static>() -> SwitchBuilder<A> {
+        SwitchBuilder::new()
     }
 
-    pub fn min_size(&self) -> Size {
-        let size = RefCell::borrow(&self.shared_state).style.size;
+    pub fn min_size(&self, res: &mut ResourceCtx) -> Size {
+        let size = res.style_system.get::<SwitchStyle>(self.el.class()).size;
         Size::new(size * 2.0, size)
     }
 
-    pub fn set_style(&mut self, style: &Rc<SwitchStyle>) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
-        if !Rc::ptr_eq(&shared_state.style, style) {
-            shared_state.style = Rc::clone(style);
-            self.el.notify_custom_state_change();
+    pub fn set_class(&mut self, class: &'static str) {
+        if self.el.class() != class {
+            self.el._notify_class_change(class);
         }
-    }
-
-    pub fn style(&self) -> Rc<SwitchStyle> {
-        Rc::clone(&RefCell::borrow(&self.shared_state).style)
     }
 
     pub fn set_toggled(&mut self, toggled: bool) {
@@ -414,7 +611,7 @@ impl Switch {
 
         if shared_state.toggled != toggled {
             shared_state.toggled = toggled;
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
         }
     }
 
@@ -427,17 +624,17 @@ impl Switch {
 
         if shared_state.disabled != disabled {
             shared_state.disabled = disabled;
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
         }
     }
 
-    pub fn layout(&mut self, origin: Point) {
-        let size = self.min_size();
+    pub fn layout(&mut self, origin: Point, res: &mut ResourceCtx) {
+        let size = self.min_size(res);
         self.el.set_rect(Rect::new(origin, size));
     }
 
-    pub fn layout_aligned(&mut self, point: Point, align: Align2) {
-        let size = self.min_size();
+    pub fn layout_aligned(&mut self, point: Point, align: Align2, res: &mut ResourceCtx) {
+        let size = self.min_size(res);
         self.el.set_rect(align.align_rect_to_point(point, size));
     }
 }

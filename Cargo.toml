@@ -29,6 +29,7 @@ serde = ["dep:serde", "rootvg/serde"]
 bitflags = "2.3.3"
 log = "0.4.20"
 rustc-hash = "2.0.0"
+ahash = "0.8.11"
 smallvec = "1.13.1"
 thunderdome = "0.6.1"
 unicode-segmentation = "1.11.0"
@@ -39,7 +40,8 @@ wgpu = { version = "22", default-features = false, features = ["wgsl"] }
 window_clipboard = "0.4.1"
 thiserror = "1.0.61"
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
-rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "7c732d2023feef901be53e2a6a798780f6438a7f" }
+#rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "82a817944cb0f6936743029876f85454aac7e9f0" }
+rootvg = { path = "../rootvg" }
 
 [dev-dependencies]
 wgpu = { version = "22", default-features = true }

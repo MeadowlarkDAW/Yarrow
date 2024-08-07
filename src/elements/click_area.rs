@@ -127,7 +127,8 @@ impl<A: Clone + 'static> ClickAreaElement<A> {
             scissor_rect_id,
         } = builder;
 
-        let (z_index, scissor_rect_id) = cx.z_index_and_scissor_rect_id(z_index, scissor_rect_id);
+        let z_index = z_index.unwrap_or_else(|| cx.z_index());
+        let scissor_rect_id = scissor_rect_id.unwrap_or_else(|| cx.scissor_rect_id());
 
         let element_builder = ElementBuilder {
             element: Box::new(Self {
@@ -143,6 +144,7 @@ impl<A: Clone + 'static> ClickAreaElement<A> {
             bounding_rect,
             manually_hidden: disabled,
             scissor_rect_id,
+            class: "",
         };
 
         let el = cx

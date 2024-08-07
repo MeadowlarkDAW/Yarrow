@@ -3,14 +3,14 @@ use std::rc::Rc;
 
 use rootvg::math::Point;
 use rootvg::quad::{SolidQuadBuilder, SolidQuadPrimitive};
-use rootvg::text::{CustomGlyphID, TextPrimitive, TextProperties};
+use rootvg::text::{CustomGlyphID, FontSystem, TextPrimitive, TextProperties};
 use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
 use crate::layout::Padding;
 use crate::math::{Rect, Size, ZIndex};
-use crate::prelude::ResourceCtx;
-use crate::style::{Background, BorderStyle, QuadStyle, DEFAULT_TEXT_ATTRIBUTES};
+use crate::prelude::ElementStyle;
+use crate::style::{QuadStyle, DEFAULT_ICON_SIZE};
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
@@ -19,8 +19,7 @@ use crate::view::ScissorRectID;
 use crate::window::WindowContext;
 use crate::CursorIcon;
 
-use super::icon_label::{IconLabelInner, IconLabelLayout, IconLabelStyle};
-use super::label::{LabelInner, LabelStyle};
+use super::label::{LabelInner, LabelPaddingInfo, LabelStyle};
 
 // TODO: list of todos:
 // * handle cases when the menu is too large to fit in the window, with
@@ -87,7 +86,7 @@ impl MenuEntry {
 
 enum MenuEntryInner {
     Option {
-        left_label: IconLabelInner,
+        left_label: LabelInner,
         right_label: Option<LabelInner>,
         start_y: f32,
         end_y: f32,
@@ -102,27 +101,76 @@ enum MenuEntryInner {
 /// The style of a [`DropDownMenu`] element
 #[derive(Debug, Clone, PartialEq)]
 pub struct DropDownMenuStyle {
-    pub left_text_properties: TextProperties,
-    pub right_text_properties: TextProperties,
+    pub text_properties: TextProperties,
+    /// The properties of the right text.
+    ///
+    /// If this is `None`, then `text_properties` will be used.
+    ///
+    /// By default this is set to `None`.
+    pub right_text_properties: Option<TextProperties>,
 
     /// The size of the icon in points.
     ///
     /// By default this is set to `20.0`.
     pub icon_size: f32,
 
-    pub left_icon_color_idle: RGBA8,
-    pub left_text_color_idle: RGBA8,
-    pub right_text_color_idle: RGBA8,
-    pub left_icon_color_hover: RGBA8,
-    pub left_text_color_hover: RGBA8,
-    pub right_text_color_hover: RGBA8,
+    /// The color of the text
+    ///
+    /// By default this is set to `color::WHITE`.
+    pub text_color: RGBA8,
+    /// The color of the text when the entry is hovered.
+    ///
+    /// If this is `None`, then `text_color` will be used.
+    ///
+    /// By default this is set to `None`.
+    pub text_color_hover: Option<RGBA8>,
+
+    /// The color of the icon.
+    ///
+    /// If this is `None`, then `text_color` will be used.
+    ///
+    /// By default this is set to `None`.
+    pub icon_color: Option<RGBA8>,
+    /// The color of the icon when the entry is hovered.
+    ///
+    /// If this is `None`, then `icon_color` will be used.
+    ///
+    /// By default this is set to `None`.
+    pub icon_color_hover: Option<RGBA8>,
+
+    /// The color of the right text.
+    ///
+    /// If this is `None`, then `text_color` will be used.
+    ///
+    /// By default this is set to `None`.
+    pub right_text_color: Option<RGBA8>,
+    /// The color of the right text when the entry is hovered.
+    ///
+    /// If this is `None`, then `text_color_hover` will be used.
+    ///
+    /// By default this is set to `None`.
+    pub right_text_color_hover: Option<RGBA8>,
 
     pub back_quad: QuadStyle,
-    pub text_bg_quad_hover: QuadStyle,
+    pub entry_bg_quad_hover: QuadStyle,
 
     pub outer_padding: f32,
-    pub left_icon_padding: Padding,
+
+    /// The padding around the left text.
+    ///
+    /// By default this has all values set to `0.0`.
     pub left_text_padding: Padding,
+    /// The padding around the left icon.
+    ///
+    /// By default this has all values set to `0.0`.
+    pub left_icon_padding: Padding,
+    /// Extra spacing between the left text and icon. (This can be negative to
+    /// move them closer together).
+    ///
+    /// By default this set to `0.0`.
+    pub left_text_icon_spacing: f32,
+
+    /// The padding of the right text.
     pub right_text_padding: Padding,
 
     pub divider_color: RGBA8,
@@ -133,98 +181,96 @@ pub struct DropDownMenuStyle {
 impl Default for DropDownMenuStyle {
     fn default() -> Self {
         Self {
-            left_text_properties: TextProperties {
-                attrs: DEFAULT_TEXT_ATTRIBUTES,
-                ..Default::default()
-            },
-            right_text_properties: TextProperties {
-                attrs: DEFAULT_TEXT_ATTRIBUTES,
-                ..Default::default()
-            },
-
-            icon_size: 20.0,
-
-            left_icon_color_idle: color::WHITE,
-            left_text_color_idle: color::WHITE,
-            right_text_color_idle: color::WHITE,
-            left_icon_color_hover: color::WHITE,
-            left_text_color_hover: color::WHITE,
-            right_text_color_hover: color::WHITE,
-
-            back_quad: QuadStyle {
-                bg: Background::Solid(RGBA8::new(40, 40, 40, 255)),
-                border: BorderStyle {
-                    radius: 4.0.into(),
-                    color: RGBA8::new(105, 105, 105, 255),
-                    width: 1.0,
-                    ..Default::default()
-                },
-            },
-            text_bg_quad_hover: QuadStyle {
-                bg: Background::Solid(RGBA8::new(65, 65, 65, 255)),
-                border: BorderStyle {
-                    radius: 4.0.into(),
-                    color: RGBA8::new(105, 105, 105, 255),
-                    width: 1.0,
-                    ..Default::default()
-                },
-            },
-
-            outer_padding: 4.0,
-            left_icon_padding: Padding::new(0.0, 0.0, 0.0, 4.0),
-            left_text_padding: Padding::new(5.0, 10.0, 5.0, 10.0),
-            right_text_padding: Padding::new(5.0, 10.0, 5.0, 30.0),
-
-            divider_color: RGBA8::new(105, 105, 105, 150),
+            text_properties: Default::default(),
+            right_text_properties: None,
+            icon_size: DEFAULT_ICON_SIZE,
+            text_color: color::WHITE,
+            text_color_hover: None,
+            icon_color: None,
+            icon_color_hover: None,
+            right_text_color: None,
+            right_text_color_hover: None,
+            back_quad: QuadStyle::TRANSPARENT,
+            entry_bg_quad_hover: QuadStyle::TRANSPARENT,
+            outer_padding: 0.0,
+            left_icon_padding: Padding::default(),
+            left_text_padding: Padding::default(),
+            left_text_icon_spacing: 0.0,
+            right_text_padding: Padding::default(),
+            divider_color: color::TRANSPARENT,
             divider_width: 1.0,
-            divider_padding: 2.0,
+            divider_padding: 0.0,
         }
     }
 }
 
 impl DropDownMenuStyle {
-    fn label_styles(&self, hovered: bool) -> (IconLabelStyle, LabelStyle) {
+    fn label_styles(&self, hovered: bool) -> (LabelStyle, LabelStyle) {
         (
-            IconLabelStyle {
-                text_properties: self.left_text_properties,
+            LabelStyle {
+                text_properties: self.text_properties,
                 icon_size: self.icon_size,
                 text_color: if hovered {
-                    self.left_text_color_hover
+                    self.text_color_hover.unwrap_or(self.text_color)
                 } else {
-                    self.left_text_color_idle
+                    self.text_color
                 },
                 icon_color: if hovered {
-                    self.left_icon_color_hover
+                    Some(
+                        self.icon_color_hover.unwrap_or(
+                            self.icon_color
+                                .unwrap_or(self.text_color_hover.unwrap_or(self.text_color)),
+                        ),
+                    )
                 } else {
-                    self.left_icon_color_idle
+                    Some(self.icon_color.unwrap_or(self.text_color))
                 },
-                layout: IconLabelLayout::LeftAlignIconThenText,
                 icon_padding: self.left_icon_padding,
                 text_padding: self.left_text_padding,
+                text_icon_spacing: self.left_text_icon_spacing,
                 ..Default::default()
             },
             LabelStyle {
-                properties: self.right_text_properties,
-                font_color: if hovered {
-                    self.right_text_color_hover
+                text_properties: self.right_text_properties.unwrap_or(self.text_properties),
+                icon_size: self.icon_size,
+                text_color: if hovered {
+                    self.right_text_color_hover.unwrap_or(
+                        self.right_text_color
+                            .unwrap_or(self.text_color_hover.unwrap_or(self.text_color)),
+                    )
                 } else {
-                    self.right_text_color_idle
+                    self.right_text_color.unwrap_or(self.text_color)
                 },
-                padding: self.right_text_padding,
+                icon_color: None,
+                icon_padding: Padding::zero(),
+                text_padding: self.right_text_padding,
                 ..Default::default()
             },
         )
     }
 
     fn text_row_height(&self) -> f32 {
-        (self.left_text_properties.metrics.line_height
+        self.text_properties.metrics.line_height
             + self.left_text_padding.top
-            + self.left_text_padding.bottom)
-            .max(
-                self.right_text_properties.metrics.line_height
-                    + self.right_text_padding.top
-                    + self.right_text_padding.bottom,
-            )
+            + self.left_text_padding.bottom
+    }
+
+    fn left_padding_info(&self) -> LabelPaddingInfo {
+        LabelPaddingInfo {
+            icon_size: self.icon_size,
+            text_padding: self.left_text_padding,
+            icon_padding: self.left_icon_padding,
+            text_icon_spacing: self.left_text_icon_spacing,
+        }
+    }
+
+    fn right_padding_info(&self) -> LabelPaddingInfo {
+        LabelPaddingInfo {
+            icon_size: 0.0,
+            text_padding: self.right_text_padding,
+            icon_padding: Padding::zero(),
+            text_icon_spacing: 0.0,
+        }
     }
 
     fn measure(&self, entries: &mut [MenuEntryInner]) -> Size {
@@ -233,7 +279,6 @@ impl DropDownMenuStyle {
         }
 
         let text_row_height = self.text_row_height();
-        let (left_style, right_style) = self.label_styles(false);
 
         let mut max_width: f32 = 0.0;
         let mut total_height: f32 = self.outer_padding;
@@ -246,10 +291,10 @@ impl DropDownMenuStyle {
                     end_y,
                     ..
                 } => {
-                    let left_size = left_label.desired_padded_size(&left_style);
+                    let left_size = left_label.desired_size(|| self.left_padding_info());
                     let right_size = right_label
                         .as_mut()
-                        .map(|l| l.desired_padded_size(&right_style))
+                        .map(|l| l.desired_size(|| self.right_padding_info()))
                         .unwrap_or(Size::zero());
 
                     let total_width = left_size.width + right_size.width;
@@ -276,21 +321,36 @@ impl DropDownMenuStyle {
     }
 }
 
+impl ElementStyle for DropDownMenuStyle {
+    const ID: &'static str = "ddmenu";
+
+    fn default_dark_style() -> Self {
+        Self::default()
+    }
+
+    fn default_light_style() -> Self {
+        Self {
+            text_color: color::BLACK,
+            ..Default::default()
+        }
+    }
+}
+
 pub struct DropDownMenuBuilder<A: Clone + 'static> {
     pub action: Option<Box<dyn FnMut(usize) -> A>>,
     pub entries: Vec<MenuEntry>,
-    pub style: Rc<DropDownMenuStyle>,
+    pub class: Option<&'static str>,
     pub z_index: Option<ZIndex>,
     pub position: Point,
     pub scissor_rect_id: Option<ScissorRectID>,
 }
 
 impl<A: Clone + 'static> DropDownMenuBuilder<A> {
-    pub fn new(style: &Rc<DropDownMenuStyle>) -> Self {
+    pub fn new() -> Self {
         Self {
             action: None,
             entries: Vec::new(),
-            style: Rc::clone(style),
+            class: None,
             z_index: None,
             position: Point::default(),
             scissor_rect_id: None,
@@ -307,20 +367,32 @@ impl<A: Clone + 'static> DropDownMenuBuilder<A> {
     }
 
     pub fn entries(mut self, entries: Vec<MenuEntry>) -> Self {
-        self.entries = entries;
+        self.entries = entries.into();
         self
     }
 
+    /// The style class name
+    ///
+    /// If this method is not used, then the current class from the window context will
+    /// be used.
+    pub const fn class(mut self, class: &'static str) -> Self {
+        self.class = Some(class);
+        self
+    }
+
+    /// The z index of the element
+    ///
+    /// If this method is not used, then the current z index from the window context will
+    /// be used.
     pub const fn z_index(mut self, z_index: ZIndex) -> Self {
         self.z_index = Some(z_index);
         self
     }
 
-    pub const fn position(mut self, position: Point) -> Self {
-        self.position = position;
-        self
-    }
-
+    /// The ID of the scissoring rectangle this element belongs to.
+    ///
+    /// If this method is not used, then the current scissoring rectangle ID from the
+    /// window context will be used.
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
         self.scissor_rect_id = Some(scissor_rect_id);
         self
@@ -341,22 +413,22 @@ impl<A: Clone + 'static> DropDownMenuElement<A> {
         let DropDownMenuBuilder {
             action,
             entries,
-            style,
+            class,
             z_index,
             position,
             scissor_rect_id,
         } = builder;
 
-        let (z_index, scissor_rect_id) = cx.z_index_and_scissor_rect_id(z_index, scissor_rect_id);
+        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
 
         let shared_state = Rc::new(RefCell::new(SharedState {
-            style: Rc::clone(&style),
             new_entries: None,
             open_requested: false,
-            style_changed: false,
         }));
 
-        let mut entries = build_entries(entries, &style, &mut cx.res);
+        let style = cx.res.style_system.get(class);
+
+        let mut entries = build_entries(entries, &style, &mut cx.res.font_system);
 
         let size = style.measure(&mut entries);
 
@@ -373,6 +445,7 @@ impl<A: Clone + 'static> DropDownMenuElement<A> {
             bounding_rect: Rect::new(position, Size::zero()),
             manually_hidden: false,
             scissor_rect_id,
+            class,
         };
 
         let el = cx
@@ -410,44 +483,12 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
                 }
                 shared_state.open_requested = false;
 
-                let mut do_restyle = shared_state.style_changed;
-                shared_state.style_changed = false;
-
-                let mut measure = false;
-
                 if let Some(new_entries) = shared_state.new_entries.take() {
-                    self.entries = build_entries(new_entries, &shared_state.style, &mut cx.res);
+                    let style = cx.res.style_system.get(cx.class());
 
-                    measure = true;
-                    do_restyle = false;
-                }
+                    self.entries = build_entries(new_entries, style, &mut cx.res.font_system);
 
-                if do_restyle {
-                    let (left_style, right_style) = shared_state.style.label_styles(false);
-
-                    for entry in self.entries.iter_mut() {
-                        match entry {
-                            MenuEntryInner::Option {
-                                left_label,
-                                right_label,
-                                ..
-                            } => {
-                                left_label.set_style(&left_style, &mut cx.res);
-                                if let Some(right_label) = right_label {
-                                    right_label.set_style(&right_style, &mut cx.res);
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    measure = true;
-                }
-
-                if measure {
-                    show = false;
-
-                    self.size = shared_state.style.measure(&mut self.entries);
+                    self.size = style.measure(&mut self.entries);
 
                     if self.active {
                         let rect = Rect::new(cx.rect().origin, self.size);
@@ -461,6 +502,8 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
                     } else {
                         cx.set_bounding_rect(Rect::new(cx.rect().origin, Size::zero()));
                     }
+
+                    show = false;
                 }
 
                 if show {
@@ -588,7 +631,7 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
     }
 
     fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
-        let style = &RefCell::borrow(&self.shared_state).style;
+        let style: &DropDownMenuStyle = cx.res.style_system.get(cx.class);
 
         let (left_style_idle, right_style_idle) = style.label_styles(false);
         let (left_style_hover, right_style_hover) = style.label_styles(true);
@@ -624,7 +667,7 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
 
                     if hovered {
                         primitives.set_z_index(1);
-                        primitives.add(style.text_bg_quad_hover.create_primitive(Rect::new(
+                        primitives.add(style.entry_bg_quad_hover.create_primitive(Rect::new(
                             Point::new(style.outer_padding, *start_y),
                             label_size,
                         )));
@@ -632,12 +675,13 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
 
                     let left_primitives = left_label.render_primitives(
                         Rect::new(Point::new(style.outer_padding, *start_y), label_size),
+                        false,
                         if hovered {
                             &left_style_hover
                         } else {
                             &left_style_idle
                         },
-                        cx.res,
+                        &mut cx.res.font_system,
                     );
 
                     if let Some(p) = left_primitives.icon {
@@ -656,12 +700,15 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
 
                         let right_x = cx.bounds_size.width
                             - style.outer_padding
-                            - right_label.desired_padded_size(right_style).width;
+                            - right_label
+                                .desired_size(|| style.right_padding_info())
+                                .width;
 
                         let right_primitives = right_label.render_primitives(
                             Rect::new(Point::new(right_x, *start_y), label_size),
+                            false,
                             right_style,
-                            cx.res,
+                            &mut cx.res.font_system,
                         );
 
                         if let Some(p) = right_primitives.text {
@@ -687,10 +734,8 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
 }
 
 struct SharedState {
-    style: Rc<DropDownMenuStyle>,
     new_entries: Option<Vec<MenuEntry>>,
     open_requested: bool,
-    style_changed: bool,
 }
 
 /// A handle to a [`DropDownMenuElement`].
@@ -700,22 +745,14 @@ pub struct DropDownMenu {
 }
 
 impl DropDownMenu {
-    pub fn builder<A: Clone + 'static>(style: &Rc<DropDownMenuStyle>) -> DropDownMenuBuilder<A> {
-        DropDownMenuBuilder::new(style)
+    pub fn builder<A: Clone + 'static>() -> DropDownMenuBuilder<A> {
+        DropDownMenuBuilder::new()
     }
 
-    pub fn set_style(&mut self, style: &Rc<DropDownMenuStyle>) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
-        if !Rc::ptr_eq(&shared_state.style, style) {
-            shared_state.style = Rc::clone(style);
-            shared_state.style_changed = true;
-            self.el.notify_custom_state_change();
+    pub fn set_class(&mut self, class: &'static str) {
+        if self.el.class() != class {
+            self.el._notify_class_change(class);
         }
-    }
-
-    pub fn style(&self) -> Rc<DropDownMenuStyle> {
-        Rc::clone(&RefCell::borrow(&self.shared_state).style)
     }
 
     pub fn set_position(&mut self, pos: Point) {
@@ -724,7 +761,7 @@ impl DropDownMenu {
 
     pub fn set_entries(&mut self, entries: Vec<MenuEntry>) {
         RefCell::borrow_mut(&self.shared_state).new_entries = Some(entries);
-        self.el.notify_custom_state_change();
+        self.el._notify_custom_state_change();
     }
 
     pub fn open(&mut self, position: Option<Point>) {
@@ -733,14 +770,14 @@ impl DropDownMenu {
         }
 
         RefCell::borrow_mut(&self.shared_state).open_requested = true;
-        self.el.notify_custom_state_change();
+        self.el._notify_custom_state_change();
     }
 }
 
 fn build_entries(
     entries: Vec<MenuEntry>,
     style: &DropDownMenuStyle,
-    res: &mut ResourceCtx,
+    font_system: &mut FontSystem,
 ) -> Vec<MenuEntryInner> {
     let (left_style, right_style) = style.label_styles(false);
 
@@ -754,17 +791,28 @@ fn build_entries(
                 right_text,
                 unique_id,
             } => MenuEntryInner::Option {
-                left_label: IconLabelInner::new(
+                left_label: LabelInner::new(
                     Some(left_text),
                     left_icon,
                     Point::default(),
                     Point::default(),
                     icon_scale,
+                    Default::default(),
                     &left_style,
-                    res,
+                    font_system,
                 ),
-                right_label: right_text
-                    .map(|text| LabelInner::new(text, &right_style, Point::default(), res)),
+                right_label: right_text.map(|text| {
+                    LabelInner::new(
+                        Some(text),
+                        None,
+                        Point::default(),
+                        Point::default(),
+                        1.0,
+                        Default::default(),
+                        &right_style,
+                        font_system,
+                    )
+                }),
                 start_y: 0.0,
                 end_y: 0.0,
                 unique_id,

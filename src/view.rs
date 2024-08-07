@@ -292,6 +292,7 @@ impl<A: Clone + 'static> View<A> {
             bounding_rect,
             manually_hidden,
             scissor_rect_id,
+            class,
         } = element_builder;
 
         let flags = element.flags();
@@ -313,6 +314,7 @@ impl<A: Clone + 'static> View<A> {
             z_index,
             flags,
             manually_hidden,
+            class,
             animating: false,
             index_in_painted_list: 0,
             index_in_pointer_event_list: 0,
@@ -398,6 +400,7 @@ impl<A: Clone + 'static> View<A> {
             bounding_rect,
             z_index,
             manually_hidden,
+            class,
         )
     }
 
@@ -439,6 +442,28 @@ impl<A: Clone + 'static> View<A> {
         );
 
         self.view_needs_repaint = true;
+    }
+
+    pub(crate) fn on_theme_changed(&mut self, res: &mut ResourceCtx, clipboard: &mut Clipboard) {
+        let mut element_ids = Vec::new();
+        for (element_id, element_entry) in self.element_arena.iter_mut() {
+            let element_id = ElementID(element_id);
+
+            send_event_to_element(
+                ElementEvent::StyleChanged,
+                element_entry,
+                element_id,
+                &mut self.context,
+                res,
+                clipboard,
+            );
+
+            element_ids.push(element_id);
+        }
+
+        for element_id in element_ids.iter().copied() {
+            self.mark_element_dirty(element_id);
+        }
     }
 
     pub(crate) fn handle_event(
@@ -1083,6 +1108,14 @@ impl<A: Clone + 'static> View<A> {
                         clipboard,
                     );
                 }
+                ElementModificationType::ClassChanged(new_class) => {
+                    self.handle_element_class_changed(
+                        modification.element_id,
+                        new_class,
+                        res,
+                        clipboard,
+                    );
+                }
                 ElementModificationType::SetAnimating(animating) => {
                     self.set_element_animating(modification.element_id, animating);
                 }
@@ -1193,6 +1226,32 @@ impl<A: Clone + 'static> View<A> {
 
             self.context.action_sender.send((action)(info)).unwrap();
         }
+    }
+
+    fn handle_element_class_changed(
+        &mut self,
+        element_id: ElementID,
+        new_class: &'static str,
+        res: &mut ResourceCtx,
+        clipboard: &mut Clipboard,
+    ) {
+        let Some(element_entry) = self.element_arena.get_mut(element_id.0) else {
+            // Element has been dropped. Do nothing and return.
+            return;
+        };
+
+        element_entry.stack_data.class = new_class;
+
+        send_event_to_element(
+            ElementEvent::StyleChanged,
+            element_entry,
+            element_id,
+            &mut self.context,
+            res,
+            clipboard,
+        );
+
+        self.mark_element_dirty(element_id);
     }
 
     fn handle_element_custom_state_changed(
@@ -1839,6 +1898,7 @@ impl<A: Clone + 'static> View<A> {
                             scale: self.context.scale_factor,
                             window_size: self.context.logical_size,
                             render_cache,
+                            class: element_entry.stack_data.class,
                         },
                         &mut cache.primitives,
                     );
@@ -1907,6 +1967,8 @@ struct EntryStackData {
 
     scissor_rect_id: ScissorRectID,
     z_index: ZIndex,
+
+    class: &'static str,
 
     flags: ElementFlags,
     manually_hidden: bool,
@@ -1995,6 +2057,7 @@ fn send_event_to_element<A: Clone + 'static>(
         view_cx.cursor_icon,
         view_cx.window_id,
         view_cx.pointer_locked,
+        element_entry.stack_data.class,
         &mut view_cx.action_sender,
         res,
         clipboard,

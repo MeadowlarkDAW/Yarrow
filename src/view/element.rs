@@ -83,6 +83,7 @@ pub struct ElementBuilder<A: Clone + 'static> {
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
     pub scissor_rect_id: ScissorRectID,
+    pub class: &'static str,
 }
 
 impl<A: Clone + 'static> ElementBuilder<A> {
@@ -93,7 +94,13 @@ impl<A: Clone + 'static> ElementBuilder<A> {
             bounding_rect: Rect::new(Point::new(0.0, 0.0), Size::new(0.0, 0.0)),
             manually_hidden: false,
             scissor_rect_id: MAIN_SCISSOR_RECT,
+            class: "",
         }
+    }
+
+    pub const fn class(mut self, class: &'static str) -> Self {
+        self.class = class;
+        self
     }
 
     pub const fn z_index(mut self, z_index: ZIndex) -> Self {
@@ -117,6 +124,18 @@ impl<A: Clone + 'static> ElementBuilder<A> {
     }
 }
 
+pub trait ElementStyle: Default + Any {
+    const ID: &'static str;
+
+    fn default_dark_style() -> Self {
+        Self::default()
+    }
+
+    fn default_light_style() -> Self {
+        Self::default()
+    }
+}
+
 pub(super) struct ElementModification {
     pub element_id: ElementID,
     pub type_: ElementModificationType,
@@ -129,6 +148,7 @@ pub(super) enum ElementModificationType {
     ScissorRectChanged,
     ZIndexChanged(ZIndex),
     ExplicitlyHiddenChanged(bool),
+    ClassChanged(&'static str),
     SetAnimating(bool),
     ChangeFocus(ChangeFocusRequest),
     HandleDropped,
@@ -150,6 +170,14 @@ pub(super) fn new_element_handle(
     rect: Rect,
     z_index: ZIndex,
     manually_hidden: bool,
+    class: &'static str,
 ) -> ElementHandle {
-    ElementHandle::new(element_id, mod_queue_sender, rect, z_index, manually_hidden)
+    ElementHandle::new(
+        element_id,
+        mod_queue_sender,
+        rect,
+        z_index,
+        manually_hidden,
+        class,
+    )
 }

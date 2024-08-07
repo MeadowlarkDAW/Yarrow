@@ -60,7 +60,7 @@ impl PointerLockState {
 pub(crate) struct WindowState<A: Clone + 'static> {
     view: View<A>,
     renderer: rootvg::Canvas,
-    surface: Option<DefaultSurface>,
+    surface: Option<DefaultSurface<'static>>,
     logical_size: Size,
     physical_size: PhysicalSizeI32,
     scale_factor: ScaleFactor,
@@ -434,6 +434,7 @@ impl<A: Clone + 'static> WindowState<A> {
             clipboard: &mut self.clipboard,
             z_index_stack: Vec::new(),
             scissor_rect_id_stack: Vec::new(),
+            class_name_stack: Vec::new(),
             logical_size: self.logical_size,
             physical_size: self.physical_size,
             scale_factor: self.scale_factor,
@@ -453,6 +454,10 @@ impl<A: Clone + 'static> WindowState<A> {
 
     pub fn new_pointer_lock_request(&mut self) -> Option<bool> {
         self.view.pointer_lock_request()
+    }
+
+    pub fn on_theme_changed(&mut self, res: &mut ResourceCtx) {
+        self.view.on_theme_changed(res, &mut self.clipboard);
     }
 }
 
@@ -519,6 +524,7 @@ pub struct WindowContext<'a, A: Clone + 'static> {
     pub clipboard: &'a mut Clipboard,
     z_index_stack: Vec<ZIndex>,
     scissor_rect_id_stack: Vec<ScissorRectID>,
+    class_name_stack: Vec<&'static str>,
     logical_size: Size,
     physical_size: PhysicalSizeI32,
     scale_factor: ScaleFactor,
@@ -560,6 +566,11 @@ impl<'a, A: Clone + 'static> WindowContext<'a, A> {
             .unwrap_or(MAIN_SCISSOR_RECT)
     }
 
+    /// Get the current style class name from the stack (peek)
+    pub fn class(&self) -> &'static str {
+        self.class_name_stack.last().map(|s| *s).unwrap_or("")
+    }
+
     /// Push a z index onto the stack
     pub fn push_z_index(&mut self, z_index: ZIndex) {
         self.z_index_stack.push(z_index)
@@ -575,6 +586,11 @@ impl<'a, A: Clone + 'static> WindowContext<'a, A> {
         self.scissor_rect_id_stack.push(scissor_rect_id);
     }
 
+    /// Push a style class name onto the stack
+    pub fn push_class(&mut self, class: &'static str) {
+        self.class_name_stack.push(class);
+    }
+
     /// Pop a z index from the stack
     pub fn pop_z_index(&mut self) -> Option<ZIndex> {
         self.z_index_stack.pop()
@@ -583,6 +599,11 @@ impl<'a, A: Clone + 'static> WindowContext<'a, A> {
     /// Pop a scissor rect ID from the stack
     pub fn pop_scissor_rect(&mut self) -> Option<ScissorRectID> {
         self.scissor_rect_id_stack.pop()
+    }
+
+    /// Pop a style class name from the stack
+    pub fn pop_class(&mut self) -> Option<&'static str> {
+        self.class_name_stack.pop()
     }
 
     /// Reset the z index stack.
@@ -595,15 +616,17 @@ impl<'a, A: Clone + 'static> WindowContext<'a, A> {
         self.scissor_rect_id_stack.clear();
     }
 
-    /// Returns the z index and scissor rect ID from the given builder values.
-    pub fn z_index_and_scissor_rect_id(
+    /// Returns the z index, scissor rect ID, and class name from the given builder values.
+    pub fn builder_values(
         &self,
         z_index: Option<ZIndex>,
         scissor_rect_id: Option<ScissorRectID>,
-    ) -> (ZIndex, ScissorRectID) {
+        class: Option<&'static str>,
+    ) -> (ZIndex, ScissorRectID, &'static str) {
         (
             z_index.unwrap_or_else(|| self.z_index()),
             scissor_rect_id.unwrap_or_else(|| self.scissor_rect_id()),
+            class.unwrap_or_else(|| self.class()),
         )
     }
 

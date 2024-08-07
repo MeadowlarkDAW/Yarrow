@@ -71,6 +71,7 @@ pub struct ElementContext<'a, A: Clone + 'static> {
     pub(crate) window_id: WindowID,
     pub(crate) pointer_lock_request: Option<bool>,
     pointer_locked: bool,
+    class: &'static str,
 }
 
 impl<'a, A: Clone + 'static> ElementContext<'a, A> {
@@ -86,6 +87,7 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
         cursor_icon: CursorIcon,
         window_id: WindowID,
         pointer_locked: bool,
+        class: &'static str,
         action_sender: &'a mut ActionSender<A>,
         res: &'a mut ResourceCtx,
         clipboard: &'a mut Clipboard,
@@ -112,6 +114,7 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
             requested_rect: None,
             requested_show_tooltip: None,
             change_focus_request: None,
+            class,
             clipboard,
         }
     }
@@ -286,6 +289,11 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
     pub fn is_pointer_locked(&self) -> bool {
         self.pointer_locked
     }
+
+    /// The current class name.
+    pub fn class(&self) -> &'static str {
+        self.class
+    }
 }
 
 /// A context for this element instance for use in rendering primitives.
@@ -302,6 +310,8 @@ pub struct RenderContext<'a> {
     pub visible_bounds: Rect,
     /// The scale factor.
     pub scale: ScaleFactor,
+    /// The current class name.
+    pub class: &'static str,
     /// The size of the window. This can be useful to reposition/resize elements
     /// like drop-down menus to fit within the window.
     pub window_size: Size,

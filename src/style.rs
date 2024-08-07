@@ -1,24 +1,20 @@
+use rootvg::color;
 use rootvg::math::Rect;
 use rootvg::quad::{GradientQuad, QuadPrimitive, SolidQuad};
-use rootvg::text::glyphon::cosmic_text::CacheKeyFlags;
-use rootvg::text::{Attrs, Family, Weight};
 
+use crate::prelude::ElementStyle;
 use crate::vg::color::RGBA8;
 use crate::vg::gradient::Gradient;
 use crate::vg::quad::{Border, Radius};
 
+mod style_system;
+
+pub use style_system::StyleSystem;
+
 pub const DEFAULT_ACCENT_COLOR: RGBA8 = RGBA8::new(179, 123, 95, 255);
 pub const DEFAULT_ACCENT_HOVER_COLOR: RGBA8 = RGBA8::new(200, 137, 106, 255);
-pub const DEFAULT_TEXT_ATTRIBUTES: Attrs<'static> = Attrs {
-    color_opt: None,
-    family: Family::SansSerif,
-    stretch: rootvg::text::Stretch::Normal,
-    style: rootvg::text::Style::Normal,
-    weight: Weight::NORMAL,
-    metadata: 0,
-    cache_key_flags: CacheKeyFlags::empty(),
-    metrics_opt: None,
-};
+pub const DEFAULT_DISABLED_ALPHA_MULTIPLIER: f32 = 0.5;
+pub const DEFAULT_ICON_SIZE: f32 = 20.0;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -59,7 +55,7 @@ pub struct ShadowStyle {
 }
 */
 
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QuadStyle {
     /// The background of the quad
@@ -100,20 +96,33 @@ impl QuadStyle {
             Background::Gradient(bg_gradient) => QuadPrimitive::Gradient(
                 GradientQuad {
                     bounds,
-                    bg_gradient: **bg_gradient,
+                    bg_gradient: *bg_gradient,
                     border: self.border.into(),
                 }
                 .into(),
             ),
         }
     }
+
+    pub fn multiply_alpha(&mut self, multiplier: f32) {
+        match &mut self.bg {
+            Background::Solid(c) => *c = color::multiply_alpha(*c, multiplier),
+            Background::Gradient(g) => g.multiply_alpha(multiplier),
+        }
+
+        self.border.color = color::multiply_alpha(self.border.color, multiplier);
+    }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+impl ElementStyle for QuadStyle {
+    const ID: &'static str = "qd";
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Background {
     Solid(RGBA8),
-    Gradient(Box<Gradient>),
+    Gradient(Gradient),
 }
 
 impl Background {
@@ -124,6 +133,13 @@ impl Background {
             *color == rootvg::color::TRANSPARENT
         } else {
             false
+        }
+    }
+
+    pub fn multiply_alpha(&mut self, multiplier: f32) {
+        match self {
+            Self::Solid(c) => *c = color::multiply_alpha(*c, multiplier),
+            Self::Gradient(g) => g.multiply_alpha(multiplier),
         }
     }
 }

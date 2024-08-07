@@ -1,18 +1,18 @@
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
-use rootvg::color::RGBA8;
+use rootvg::color::{self, RGBA8};
 use rootvg::math::Size;
 use rootvg::text::CustomGlyphID;
 use rootvg::PrimitiveGroup;
 
-use crate::elements::icon::IconInner;
+use crate::elements::icon::{IconInner, IconStyle};
 use crate::elements::text_input::TextInputUpdateResult;
 use crate::event::{ElementEvent, EventCaptureStatus, PointerEvent};
 use crate::layout::{Align2, Padding, StartEndAlign};
 use crate::math::{Point, Rect, ZIndex};
-use crate::prelude::{IconStyle, ResourceCtx};
-use crate::style::QuadStyle;
+use crate::prelude::{ElementStyle, ResourceCtx};
+use crate::style::{QuadStyle, DEFAULT_ICON_SIZE};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
 };
@@ -20,7 +20,7 @@ use crate::view::ScissorRectID;
 use crate::window::WindowContext;
 use crate::CursorIcon;
 
-use super::{TextInputAction, TextInputInner, TextInputStyle};
+use super::{TextInputAction, TextInputDisabledStyle, TextInputInner, TextInputStyle};
 
 /// The style of an [`IconTextInput`] element
 #[derive(Debug, Clone, PartialEq)]
@@ -28,23 +28,95 @@ pub struct IconTextInputStyle {
     pub text_input: TextInputStyle,
 
     pub icon_size: f32,
-    pub icon_color_idle: RGBA8,
-    pub icon_color_focused: RGBA8,
-    pub icon_color_disabled: RGBA8,
+    pub icon_color: Option<RGBA8>,
+    pub icon_color_hover: Option<RGBA8>,
+    pub icon_color_focused: Option<RGBA8>,
+    pub icon_color_disabled: Option<RGBA8>,
     pub icon_padding: Padding,
     pub icon_align: StartEndAlign,
+}
+
+impl IconTextInputStyle {
+    fn icon_style(&self, hovered: bool, focused: bool, disabled: bool) -> IconStyle {
+        let color = if disabled {
+            match &self.text_input.disabled_style {
+                TextInputDisabledStyle::AlphaMultiplier(multiplier) => color::multiply_alpha(
+                    self.icon_color.unwrap_or(
+                        self.text_input
+                            .text_color_placeholder
+                            .unwrap_or(self.text_input.text_color),
+                    ),
+                    *multiplier,
+                ),
+                TextInputDisabledStyle::Custom { text_color, .. } => {
+                    self.icon_color_disabled.unwrap_or(*text_color)
+                }
+            }
+        } else if focused {
+            self.icon_color_focused.unwrap_or(
+                self.text_input.text_color_placeholder_focused.unwrap_or(
+                    self.text_input
+                        .text_color_focused
+                        .unwrap_or(self.text_input.text_color),
+                ),
+            )
+        } else if hovered {
+            self.icon_color_hover.unwrap_or(
+                self.text_input.text_color_placeholder_hover.unwrap_or(
+                    self.text_input.text_color_placeholder.unwrap_or(
+                        self.text_input
+                            .text_color_hover
+                            .unwrap_or(self.text_input.text_color),
+                    ),
+                ),
+            )
+        } else {
+            self.icon_color.unwrap_or(
+                self.text_input
+                    .text_color_placeholder
+                    .unwrap_or(self.text_input.text_color),
+            )
+        };
+
+        IconStyle {
+            size: self.icon_size,
+            color,
+            back_quad: QuadStyle::TRANSPARENT,
+            padding: self.icon_padding,
+            disabled_style: Default::default(),
+        }
+    }
 }
 
 impl Default for IconTextInputStyle {
     fn default() -> Self {
         Self {
             text_input: TextInputStyle::default(),
-            icon_size: 20.0,
-            icon_color_idle: RGBA8::new(255, 255, 255, 150),
-            icon_color_focused: RGBA8::new(255, 255, 255, 255),
-            icon_color_disabled: RGBA8::new(255, 255, 255, 100),
-            icon_padding: Padding::new(0.0, 0.0, 0.0, 5.0),
+            icon_size: DEFAULT_ICON_SIZE,
+            icon_color: None,
+            icon_color_hover: None,
+            icon_color_focused: None,
+            icon_color_disabled: None,
+            icon_padding: Padding::default(),
             icon_align: StartEndAlign::Start,
+        }
+    }
+}
+
+impl ElementStyle for IconTextInputStyle {
+    const ID: &'static str = "icntxtinpt";
+
+    fn default_dark_style() -> Self {
+        Self::default()
+    }
+
+    fn default_light_style() -> Self {
+        Self {
+            text_input: TextInputStyle {
+                text_color: color::BLACK,
+                ..Default::default()
+            },
+            ..Default::default()
         }
     }
 }
@@ -64,7 +136,7 @@ pub struct IconTextInputBuilder<A: Clone + 'static> {
     pub password_mode: bool,
     pub max_characters: usize,
     pub disabled: bool,
-    pub style: Rc<IconTextInputStyle>,
+    pub class: Option<&'static str>,
     pub z_index: Option<ZIndex>,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
@@ -72,7 +144,7 @@ pub struct IconTextInputBuilder<A: Clone + 'static> {
 }
 
 impl<A: Clone + 'static> IconTextInputBuilder<A> {
-    pub fn new(style: &Rc<IconTextInputStyle>) -> Self {
+    pub fn new() -> Self {
         Self {
             action: None,
             right_click_action: None,
@@ -88,7 +160,7 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
             password_mode: false,
             max_characters: 256,
             disabled: false,
-            style: Rc::clone(style),
+            class: None,
             z_index: None,
             bounding_rect: Rect::default(),
             manually_hidden: false,
@@ -164,11 +236,6 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
         self
     }
 
-    pub const fn disabled(mut self, disabled: bool) -> Self {
-        self.disabled = disabled;
-        self
-    }
-
     /// The maximum characters that can be in this text input.
     ///
     /// By default this is set to `256`.
@@ -177,21 +244,53 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
         self
     }
 
+    /// The style class name
+    ///
+    /// If this method is not used, then the current class from the window context will
+    /// be used.
+    pub const fn class(mut self, class: &'static str) -> Self {
+        self.class = Some(class);
+        self
+    }
+
+    /// The z index of the element
+    ///
+    /// If this method is not used, then the current z index from the window context will
+    /// be used.
     pub const fn z_index(mut self, z_index: ZIndex) -> Self {
         self.z_index = Some(z_index);
         self
     }
 
+    /// The bounding rectangle of the element
+    ///
+    /// If this method is not used, then the element will have a size and position of
+    /// zero and will not be visible until its bounding rectangle is set.
     pub const fn bounding_rect(mut self, rect: Rect) -> Self {
         self.bounding_rect = rect;
         self
     }
 
+    /// Whether or not this element is manually hidden
+    ///
+    /// By default this is set to `false`.
     pub const fn hidden(mut self, hidden: bool) -> Self {
         self.manually_hidden = hidden;
         self
     }
 
+    /// Whether or not this element is in the disabled state
+    ///
+    /// By default this is set to `false`.
+    pub const fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
+    /// The ID of the scissoring rectangle this element belongs to.
+    ///
+    /// If this method is not used, then the current scissoring rectangle ID from the
+    /// window context will be used.
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
         self.scissor_rect_id = Some(scissor_rect_id);
         self
@@ -207,6 +306,7 @@ pub struct IconTextInputElement<A: Clone + 'static> {
     icon: IconInner,
     icon_rect: Rect,
     text_input_style: TextInputStyle,
+    hovered: bool,
 }
 
 impl<A: Clone + 'static> IconTextInputElement<A> {
@@ -229,14 +329,15 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
             password_mode,
             max_characters,
             disabled,
-            style,
+            class,
             z_index,
             bounding_rect,
             manually_hidden,
             scissor_rect_id,
         } = builder;
 
-        let (z_index, scissor_rect_id) = cx.z_index_and_scissor_rect_id(z_index, scissor_rect_id);
+        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
+        let style = cx.res.style_system.get::<IconTextInputStyle>(cx.class());
 
         let icon = IconInner::new(icon, icon_scale, icon_offset);
 
@@ -253,11 +354,9 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
                 tooltip_message.is_some(),
                 select_all_when_focused,
                 &layout_res.text_input_style,
-                &mut cx.res,
+                &mut cx.res.font_system,
             ),
-            style,
             text_offset,
-            style_changed: false,
         }));
 
         let element_builder = ElementBuilder {
@@ -270,11 +369,13 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
                 icon,
                 icon_rect: layout_res.icon_rect,
                 text_input_style: layout_res.text_input_style,
+                hovered: false,
             }),
             z_index,
             bounding_rect,
             manually_hidden,
             scissor_rect_id,
+            class,
         };
 
         let el = cx
@@ -302,75 +403,66 @@ impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
         cx: &mut ElementContext<'_, A>,
     ) -> EventCaptureStatus {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-        let SharedState {
-            inner,
-            style,
-            text_offset: _,
-            style_changed,
-        } = &mut *shared_state;
 
         let res = match event {
-            ElementEvent::Animation { .. } => inner.on_animation(&self.text_input_style),
-            ElementEvent::CustomStateChanged => {
-                let needs_repaint = *style_changed;
-                if *style_changed {
-                    *style_changed = false;
-
-                    let layout_res = layout(cx.rect().size, style);
-
-                    self.icon_rect = layout_res.icon_rect;
-                    self.text_input_style = layout_res.text_input_style;
-
-                    inner.set_style(&self.text_input_style, &mut cx.res);
-                    inner.on_size_changed(cx.rect().size, &self.text_input_style, &mut cx.res);
-                }
-
-                let mut res = inner.on_custom_state_changed(cx.clipboard, &mut cx.res);
-                res.needs_repaint |= needs_repaint;
-                res
-            }
+            ElementEvent::Animation { .. } => shared_state.inner.on_animation(),
+            ElementEvent::CustomStateChanged => shared_state
+                .inner
+                .on_custom_state_changed(cx.clipboard, &mut cx.res.font_system),
             ElementEvent::SizeChanged => {
-                let layout_res = layout(cx.rect().size, style);
+                let bounds_size = cx.rect().size;
+                let style: &IconTextInputStyle = cx.res.style_system.get(cx.class());
+
+                let layout_res = layout(bounds_size, &style);
+
+                shared_state.inner.on_size_changed(
+                    bounds_size,
+                    &layout_res.text_input_style,
+                    &mut cx.res.font_system,
+                );
 
                 self.icon_rect = layout_res.icon_rect;
                 self.text_input_style = layout_res.text_input_style;
 
-                inner.on_size_changed(cx.rect().size, &self.text_input_style, &mut cx.res);
-
                 TextInputUpdateResult::default()
             }
-            ElementEvent::Pointer(PointerEvent::Moved { position, .. }) => {
-                inner.on_pointer_moved(position, cx.rect(), &mut cx.res)
-            }
+            ElementEvent::Pointer(PointerEvent::Moved { position, .. }) => shared_state
+                .inner
+                .on_pointer_moved(position, cx.rect(), &mut cx.res.font_system),
             ElementEvent::Pointer(PointerEvent::ButtonJustPressed {
                 position,
                 button,
                 click_count,
                 ..
-            }) => inner.on_pointer_button_just_pressed(
+            }) => shared_state.inner.on_pointer_button_just_pressed(
                 position,
                 button,
                 click_count,
                 cx.rect(),
-                &mut cx.res,
+                &mut cx.res.font_system,
             ),
             ElementEvent::Pointer(PointerEvent::ButtonJustReleased {
                 button, position, ..
-            }) => inner.on_pointer_button_just_released(position, button, cx.rect()),
+            }) => shared_state
+                .inner
+                .on_pointer_button_just_released(position, button, cx.rect()),
             ElementEvent::Pointer(PointerEvent::PointerLeft) => {
-                inner.on_pointer_left();
-                TextInputUpdateResult::default()
+                shared_state.inner.on_pointer_left()
             }
-            ElementEvent::Keyboard(key_event) => {
-                inner.on_keyboard_event(&key_event, cx.clipboard, &mut cx.res)
-            }
-            ElementEvent::TextComposition(comp_event) => {
-                inner.on_text_composition_event(&comp_event, &mut cx.res)
-            }
-            ElementEvent::Focus(has_focus) => {
-                inner.on_focus_changed(has_focus, cx.clipboard, &mut cx.res)
-            }
-            ElementEvent::ClickedOff => inner.on_clicked_off(),
+            ElementEvent::Keyboard(key_event) => shared_state.inner.on_keyboard_event(
+                &key_event,
+                cx.clipboard,
+                &mut cx.res.font_system,
+            ),
+            ElementEvent::TextComposition(comp_event) => shared_state
+                .inner
+                .on_text_composition_event(&comp_event, &mut cx.res.font_system),
+            ElementEvent::Focus(has_focus) => shared_state.inner.on_focus_changed(
+                has_focus,
+                cx.clipboard,
+                &mut cx.res.font_system,
+            ),
+            ElementEvent::ClickedOff => shared_state.inner.on_clicked_off(),
             ElementEvent::Pointer(PointerEvent::HoverTimeout { .. }) => {
                 if let Some(message) = &self.tooltip_message {
                     cx.show_tooltip(message.clone(), self.tooltip_align, true);
@@ -386,7 +478,7 @@ impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
         }
         if res.send_action {
             if let Some(action) = self.action.as_mut() {
-                cx.send_action((action)(String::from(inner.text())))
+                cx.send_action((action)(String::from(shared_state.inner.text())))
                     .unwrap();
             }
         }
@@ -402,8 +494,11 @@ impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
                 cx.release_focus();
             }
         }
-        if res.set_cursor_icon {
+        if res.hovered {
+            self.hovered = true;
             cx.cursor_icon = CursorIcon::Text;
+        } else {
+            self.hovered = false;
         }
         if res.start_hover_timeout {
             cx.start_hover_timeout();
@@ -420,11 +515,14 @@ impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
 
     fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
         let shared_state = RefCell::borrow(&self.shared_state);
+        let style: &IconTextInputStyle = cx.res.style_system.get(cx.class);
+        let disabled = shared_state.inner.disabled;
 
         let mut p = shared_state.inner.create_primitives(
             &self.text_input_style,
             Rect::from_size(cx.bounds_size),
             shared_state.text_offset,
+            self.hovered,
         );
 
         if let Some(back_quad) = p.back_quad.take() {
@@ -440,29 +538,13 @@ impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
             primitives.add_text(text);
         }
 
-        let icon_color = if shared_state.inner.disabled() {
-            shared_state.style.icon_color_disabled
-        } else if shared_state.inner.focused() {
-            shared_state.style.icon_color_focused
-        } else {
-            shared_state.style.icon_color_idle
-        };
-
-        if icon_color.a != 0 {
-            primitives.set_z_index(2);
-            let icon_primtivies = self.icon.render_primitives(
-                self.icon_rect,
-                &IconStyle {
-                    size: shared_state.style.icon_size,
-                    color: icon_color,
-                    back_quad: QuadStyle::TRANSPARENT,
-                    padding: shared_state.style.icon_padding,
-                },
-            );
-            if let Some(p) = icon_primtivies.text {
-                primitives.add_text(p);
-            }
-        }
+        let icon_primitives = self.icon.render_primitives(
+            self.icon_rect,
+            disabled,
+            &style.icon_style(self.hovered, shared_state.inner.focused(), disabled),
+        );
+        primitives.set_z_index(2);
+        primitives.add_text(icon_primitives.icon);
 
         if let Some(cursor) = p.cursor.take() {
             primitives.set_z_index(3);
@@ -473,9 +555,7 @@ impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
 
 struct SharedState {
     inner: TextInputInner,
-    style: Rc<IconTextInputStyle>,
     text_offset: Point,
-    style_changed: bool,
 }
 
 /// A handle to a [`IconTextInputElement`]
@@ -485,16 +565,18 @@ pub struct IconTextInput {
 }
 
 impl IconTextInput {
-    pub fn builder<A: Clone + 'static>(style: &Rc<IconTextInputStyle>) -> IconTextInputBuilder<A> {
-        IconTextInputBuilder::new(style)
+    pub fn builder<A: Clone + 'static>() -> IconTextInputBuilder<A> {
+        IconTextInputBuilder::new()
     }
 
     pub fn set_text(&mut self, text: &str, res: &mut ResourceCtx, select_all: bool) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
-        let res = shared_state.inner.set_text(text, res, select_all);
-        if res.needs_repaint {
-            self.el.notify_custom_state_change();
+        let result = shared_state
+            .inner
+            .set_text(text, &mut res.font_system, select_all);
+        if result.needs_repaint {
+            self.el._notify_custom_state_change();
         }
     }
 
@@ -504,11 +586,17 @@ impl IconTextInput {
 
     pub fn set_placeholder_text(&mut self, text: &str, res: &mut ResourceCtx) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-        let SharedState { inner, style, .. } = &mut *shared_state;
 
-        let res = inner.set_placeholder_text(text, res, &style.text_input);
-        if res.needs_repaint {
-            self.el.notify_custom_state_change();
+        let result = shared_state
+            .inner
+            .set_placeholder_text(text, &mut res.font_system, || {
+                res.style_system
+                    .get::<IconTextInputStyle>(self.el.class())
+                    .text_input
+                    .clone()
+            });
+        if result.needs_repaint {
+            self.el._notify_custom_state_change();
         }
     }
 
@@ -518,25 +606,10 @@ impl IconTextInput {
         })
     }
 
-    pub fn set_style(&mut self, style: &Rc<IconTextInputStyle>) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-        let SharedState {
-            style: old_style,
-            style_changed,
-            ..
-        } = &mut *shared_state;
-
-        if !Rc::ptr_eq(old_style, style) {
-            *old_style = Rc::clone(style);
-            *style_changed = true;
-            //inner.set_style(&style.text_input, font_system);
-
-            self.el.notify_custom_state_change();
+    pub fn set_class(&mut self, class: &'static str) {
+        if self.el.class() != class {
+            self.el._notify_class_change(class);
         }
-    }
-
-    pub fn style(&self) -> Rc<IconTextInputStyle> {
-        Rc::clone(&RefCell::borrow(&self.shared_state).style)
     }
 
     pub fn set_disabled(&mut self, disabled: bool) {
@@ -544,7 +617,7 @@ impl IconTextInput {
 
         if shared_state.inner.disabled != disabled {
             shared_state.inner.disabled = true;
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
         }
     }
 
@@ -555,7 +628,7 @@ impl IconTextInput {
 
         if shared_state.text_offset != offset {
             shared_state.text_offset = offset;
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
         }
     }
 
@@ -568,7 +641,18 @@ impl IconTextInput {
 
         if !shared_state.inner.disabled {
             shared_state.inner.queue_action(action);
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
+        }
+    }
+
+    /// Show/hide the password. This has no effect if the element wasn't created
+    /// with password mode enabled.
+    pub fn show_password(&mut self, show: bool) {
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+
+        if shared_state.inner.show_password != show {
+            shared_state.inner.show_password = show;
+            self.el._notify_custom_state_change();
         }
     }
 }

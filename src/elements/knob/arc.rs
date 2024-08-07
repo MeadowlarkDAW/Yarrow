@@ -1,4 +1,4 @@
-use std::{f32::consts::PI, rc::Rc};
+use std::f32::consts::PI;
 
 use rootvg::{
     color::RGBA8,
@@ -335,7 +335,7 @@ impl KnobMarkersArcStyle {
 #[derive(Default)]
 pub(super) struct CachedKnobMarkerArcFrontMesh {
     mesh: Option<MeshPrimitive>,
-    style: Option<Rc<KnobStyle>>,
+    class: &'static str,
     back_bounds: Rect,
     normal_val: f32,
     state: VirtualSliderState,
@@ -345,7 +345,8 @@ pub(super) struct CachedKnobMarkerArcFrontMesh {
 impl CachedKnobMarkerArcFrontMesh {
     pub fn create_primitive(
         &mut self,
-        style: &Rc<KnobStyle>,
+        class: &'static str,
+        style: &KnobStyle,
         back_bounds: Rect,
         normal_val: f32,
         state: VirtualSliderState,
@@ -360,9 +361,8 @@ impl CachedKnobMarkerArcFrontMesh {
             self.normal_val != normal_val || self.state != state || self.mesh.is_none();
 
         if !changed {
-            changed = !Rc::ptr_eq(self.style.as_ref().unwrap(), style)
-                || self.back_bounds != back_bounds
-                || self.bipolar != bipolar;
+            changed =
+                self.class != class || self.back_bounds != back_bounds || self.bipolar != bipolar;
         }
 
         if changed {
@@ -374,7 +374,7 @@ impl CachedKnobMarkerArcFrontMesh {
                 bipolar,
             );
 
-            self.style = Some(Rc::clone(style));
+            self.class = class;
             self.back_bounds = back_bounds;
             self.normal_val = normal_val;
             self.state = state;
