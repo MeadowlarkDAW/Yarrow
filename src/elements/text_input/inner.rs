@@ -442,8 +442,6 @@ impl TextInputInner {
                 placeholder_properties,
                 Some(self.text_bounds_rect.width()),
                 None,
-                Some(self.text_bounds_rect.width()),
-                None,
                 false,
                 font_system,
             ));
@@ -1399,10 +1397,8 @@ impl TextInputInner {
                     + bounds.origin.to_vector(),
                 color,
                 clipping_bounds: Some(Rect::new(
-                clipping_bounds: Some(Rect::new(
                     Point::new(scroll_x, 0.0) + bounds.origin.to_vector(),
                     self.text_bounds_rect.size,
-                )),
                 )),
                 icons: SmallVec::new(),
             });
