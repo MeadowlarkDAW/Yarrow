@@ -37,7 +37,7 @@ impl Elements {
 
         let window_size = cx.view.size();
 
-        let mut close_btn = Button::builder(&style.button_style)
+        let mut close_btn = Button::builder()
             .text("Close")
             .on_select(Action::CloseAboutWindow.into())
             .build(cx);
@@ -48,9 +48,10 @@ impl Elements {
                 window_size.height - style.content_padding,
             ),
             Align2::BOTTOM_CENTER,
+            cx.res,
         );
 
-        let separator = Separator::builder(&style.separator_style)
+        let separator = Separator::builder()
             .bounding_rect(Rect::new(
                 Point::new(
                     style.content_padding,
@@ -63,7 +64,7 @@ impl Elements {
             ))
             .build(cx);
 
-        let paragraph = Paragraph::builder(&style.paragraph_style)
+        let paragraph = Paragraph::builder()
             .text(ABOUT_TEXT)
             .bounding_rect(Rect::new(
                 Point::new(style.content_padding, style.content_padding),

@@ -29,6 +29,7 @@ serde = ["dep:serde", "rootvg/serde"]
 bitflags = "2.3.3"
 log = "0.4.20"
 rustc-hash = "2.0.0"
+ahash = "0.8.11"
 smallvec = "1.13.1"
 thunderdome = "0.6.1"
 unicode-segmentation = "1.11.0"
@@ -39,12 +40,12 @@ wgpu = { version = "22", default-features = false, features = ["wgsl"] }
 window_clipboard = "0.4.1"
 thiserror = "1.0.61"
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
-rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "e03849d54e1c805490e7e44a928910dd0d6270d4" }
+rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "75bae0b43a1f8c4d52519ee7c5dd0aeac8a93f55" }
 
 [dev-dependencies]
 wgpu = { version = "22", default-features = true }
 env_logger = { version = "0.11.3", default-features = false }
-derive_more = "0.99.17"
+derive_more = { version = "1.0", features = ["display"] }
 
 [profile.dev]
 opt-level = 1 # Laying out text can be really slow without optimizations.

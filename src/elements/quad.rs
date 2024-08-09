@@ -1,6 +1,3 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-
 use rootvg::PrimitiveGroup;
 
 pub use crate::style::QuadStyle;
@@ -14,7 +11,7 @@ use crate::view::ScissorRectID;
 use crate::window::WindowContext;
 
 pub struct QuadElementBuilder {
-    pub style: Rc<QuadStyle>,
+    pub class: Option<&'static str>,
     pub z_index: Option<ZIndex>,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
@@ -22,9 +19,9 @@ pub struct QuadElementBuilder {
 }
 
 impl QuadElementBuilder {
-    pub fn new(style: &Rc<QuadStyle>) -> Self {
+    pub fn new() -> Self {
         Self {
-            style: Rc::clone(style),
+            class: None,
             z_index: None,
             bounding_rect: Rect::default(),
             manually_hidden: false,
@@ -36,21 +33,45 @@ impl QuadElementBuilder {
         QuadElementInternal::create(self, cx)
     }
 
+    /// The style class name
+    ///
+    /// If this method is not used, then the current class from the window context will
+    /// be used.
+    pub const fn class(mut self, class: &'static str) -> Self {
+        self.class = Some(class);
+        self
+    }
+
+    /// The z index of the element
+    ///
+    /// If this method is not used, then the current z index from the window context will
+    /// be used.
     pub const fn z_index(mut self, z_index: ZIndex) -> Self {
         self.z_index = Some(z_index);
         self
     }
 
+    /// The bounding rectangle of the element
+    ///
+    /// If this method is not used, then the element will have a size and position of
+    /// zero and will not be visible until its bounding rectangle is set.
     pub const fn bounding_rect(mut self, rect: Rect) -> Self {
         self.bounding_rect = rect;
         self
     }
 
+    /// Whether or not this element is manually hidden
+    ///
+    /// By default this is set to `false`.
     pub const fn hidden(mut self, hidden: bool) -> Self {
         self.manually_hidden = hidden;
         self
     }
 
+    /// The ID of the scissoring rectangle this element belongs to.
+    ///
+    /// If this method is not used, then the current scissoring rectangle ID from the
+    /// window context will be used.
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
         self.scissor_rect_id = Some(scissor_rect_id);
         self
@@ -58,9 +79,7 @@ impl QuadElementBuilder {
 }
 
 /// A simple element with a quad background.
-pub struct QuadElementInternal {
-    shared_state: Rc<RefCell<SharedState>>,
-}
+pub struct QuadElementInternal;
 
 impl QuadElementInternal {
     pub fn create<A: Clone + 'static>(
@@ -68,32 +87,29 @@ impl QuadElementInternal {
         cx: &mut WindowContext<'_, A>,
     ) -> QuadElement {
         let QuadElementBuilder {
-            style,
+            class,
             z_index,
             bounding_rect,
             manually_hidden,
             scissor_rect_id,
         } = builder;
 
-        let (z_index, scissor_rect_id) = cx.z_index_and_scissor_rect_id(z_index, scissor_rect_id);
-
-        let shared_state = Rc::new(RefCell::new(SharedState { style }));
+        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
 
         let element_builder = ElementBuilder {
-            element: Box::new(Self {
-                shared_state: Rc::clone(&shared_state),
-            }),
+            element: Box::new(Self),
             z_index,
             bounding_rect,
             manually_hidden,
             scissor_rect_id,
+            class,
         };
 
         let el = cx
             .view
             .add_element(element_builder, &mut cx.res, cx.clipboard);
 
-        QuadElement { el, shared_state }
+        QuadElement { el }
     }
 }
 
@@ -116,8 +132,9 @@ impl<A: Clone + 'static> Element<A> for QuadElementInternal {
 
     fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
         primitives.add(
-            RefCell::borrow(&self.shared_state)
-                .style
+            cx.res
+                .style_system
+                .get::<QuadStyle>(cx.class)
                 .create_primitive(Rect::from_size(cx.bounds_size)),
         );
     }
@@ -126,28 +143,16 @@ impl<A: Clone + 'static> Element<A> for QuadElementInternal {
 /// A simple element with a quad background.
 pub struct QuadElement {
     pub el: ElementHandle,
-    shared_state: Rc<RefCell<SharedState>>,
 }
 
 impl QuadElement {
-    pub fn builder(style: &Rc<QuadStyle>) -> QuadElementBuilder {
-        QuadElementBuilder::new(style)
+    pub fn builder() -> QuadElementBuilder {
+        QuadElementBuilder::new()
     }
 
-    pub fn set_style(&mut self, style: &Rc<QuadStyle>) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
-        if !Rc::ptr_eq(&shared_state.style, style) {
-            shared_state.style = Rc::clone(style);
-            self.el.notify_custom_state_change();
+    pub fn set_class(&mut self, class: &'static str) {
+        if self.el.class() != class {
+            self.el._notify_class_change(class);
         }
     }
-
-    pub fn style(&self) -> Rc<QuadStyle> {
-        Rc::clone(&RefCell::borrow(&self.shared_state).style)
-    }
-}
-
-struct SharedState {
-    style: Rc<QuadStyle>,
 }

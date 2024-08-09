@@ -2,14 +2,15 @@ use rootvg::{
     math::{Rect, Size},
     PrimitiveGroup,
 };
-use std::rc::Rc;
+use std::{any::Any, rc::Rc};
 
 use crate::{
     layout::SizeType,
+    prelude::ElementStyle,
     view::element::{ElementRenderCache, RenderContext},
 };
 
-use super::virtual_slider::{
+use super::{
     UpdateResult, VirtualSlider, VirtualSliderRenderInfo, VirtualSliderRenderer, VirtualSliderState,
 };
 
@@ -38,14 +39,20 @@ pub struct KnobStyle {
 }
 
 impl KnobStyle {
-    pub fn states_differ(&self, a: VirtualSliderState, b: VirtualSliderState) -> bool {
-        self.back.states_differ(a, b)
-            || self.notch.states_differ(a, b)
-            || self.markers.states_differ(a, b)
-    }
-
     pub fn back_bounds(&self, element_size: Size) -> Rect {
         self.back.back_bounds(element_size)
+    }
+}
+
+impl ElementStyle for KnobStyle {
+    const ID: &'static str = "vs-knob";
+
+    fn default_dark_style() -> Self {
+        Self::default()
+    }
+
+    fn default_light_style() -> Self {
+        todo!()
     }
 }
 
@@ -56,13 +63,6 @@ pub enum KnobBackStyle {
 }
 
 impl KnobBackStyle {
-    pub fn states_differ(&self, a: VirtualSliderState, b: VirtualSliderState) -> bool {
-        match self {
-            Self::Quad(s) => s.states_differ(a, b),
-            Self::None => false,
-        }
-    }
-
     pub fn size(&self) -> SizeType {
         match self {
             Self::Quad(s) => s.size,
@@ -91,16 +91,6 @@ pub enum KnobNotchStyle {
     None,
 }
 
-impl KnobNotchStyle {
-    pub fn states_differ(&self, a: VirtualSliderState, b: VirtualSliderState) -> bool {
-        match self {
-            Self::Quad(s) => s.states_differ(a, b),
-            Self::Line(s) => s.states_differ(a, b),
-            Self::None => false,
-        }
-    }
-}
-
 impl Default for KnobNotchStyle {
     fn default() -> Self {
         Self::Quad(KnobNotchStyleQuad::default())
@@ -114,51 +104,60 @@ pub enum KnobMarkersStyle {
     None,
 }
 
-impl KnobMarkersStyle {
-    pub fn states_differ(&self, a: VirtualSliderState, b: VirtualSliderState) -> bool {
-        match self {
-            Self::Dots(_) => false,
-            Self::Arc(s) => s.states_differ(a, b),
-            Self::None => false,
-        }
-    }
-}
-
 impl Default for KnobMarkersStyle {
     fn default() -> Self {
-        //Self::Dots(KnobMarkersDotStyle::default())
         Self::Arc(KnobMarkersArcStyle::default())
     }
 }
 
-#[derive(Default)]
 pub struct KnobRenderer {
     cached_arc_marker_front_mesh: CachedKnobMarkerArcFrontMesh,
+    style: Rc<dyn Any>,
 }
 
 impl VirtualSliderRenderer for KnobRenderer {
     type Style = KnobStyle;
 
+    fn new(style: Rc<dyn Any>) -> Self {
+        Self {
+            cached_arc_marker_front_mesh: Default::default(),
+            style,
+        }
+    }
+
+    fn style_changed(&mut self, new_style: Rc<dyn Any>) {
+        self.style = new_style;
+    }
+
+    fn desired_size(&self) -> Option<Size> {
+        let style = self.style.downcast_ref::<KnobStyle>().unwrap();
+
+        match style.back.size() {
+            SizeType::FixedPoints(size) => Some(Size::new(size, size)),
+            SizeType::Scale(_) => None,
+        }
+    }
+
     fn on_state_changed(
         &mut self,
-        prev_state: VirtualSliderState,
-        new_state: VirtualSliderState,
-        style: &Rc<Self::Style>,
+        _prev_state: VirtualSliderState,
+        _new_state: VirtualSliderState,
     ) -> UpdateResult {
-        // Only repaint if the appearance is different.
+        // TODO: only repaint if the appearance is different.
         UpdateResult {
-            repaint: style.states_differ(prev_state, new_state),
+            repaint: true,
             animating: false,
         }
     }
 
     fn render_primitives(
         &mut self,
-        style: &Rc<Self::Style>,
         info: VirtualSliderRenderInfo<'_>,
         mut cx: RenderContext<'_>,
         primitives: &mut PrimitiveGroup,
     ) {
+        let style = self.style.downcast_ref::<KnobStyle>().unwrap();
+
         let back_bounds = style.back_bounds(cx.bounds_size);
 
         match &style.back {
@@ -190,7 +189,12 @@ impl VirtualSliderRenderer for KnobRenderer {
 
                 primitives.add(
                     render_cache
-                        .marker_arc_back_mesh(style, back_bounds)
+                        .marker_arc_back_mesh(
+                            cx.class,
+                            style,
+                            back_bounds,
+                            info.state == VirtualSliderState::Disabled,
+                        )
                         .unwrap(),
                 );
 
@@ -200,6 +204,7 @@ impl VirtualSliderRenderer for KnobRenderer {
                     .unwrap_or(info.normal_value) as f32;
 
                 if let Some(front_mesh) = self.cached_arc_marker_front_mesh.create_primitive(
+                    cx.class,
                     style,
                     back_bounds,
                     normal_val,
@@ -243,7 +248,7 @@ impl VirtualSliderRenderer for KnobRenderer {
                     .unwrap();
 
                 let meshes = render_cache
-                    .notch_line_mesh(style, back_bounds.width())
+                    .notch_line_mesh(cx.class, style, back_bounds.width())
                     .unwrap();
 
                 primitives.set_z_index(1);

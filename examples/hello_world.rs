@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use yarrow::prelude::*;
 
 pub fn main() {
@@ -51,8 +50,8 @@ impl Application for MyApp {
             }
             AppWindowEvent::WindowResized => {
                 if window_id == MAIN_WINDOW {
-                    let window_size = cx.window_context(MAIN_WINDOW).unwrap().logical_size();
-                    self.layout_main_window(window_size);
+                    let mut main_window_cx = cx.window_context(MAIN_WINDOW).unwrap();
+                    self.layout_main_window(&mut main_window_cx);
                 }
             }
             _ => {}
@@ -63,23 +62,27 @@ impl Application for MyApp {
 impl MyApp {
     fn build_main_window(&mut self, cx: &mut AppContext<()>) {
         // Each element has its own custom style struct.
-        // Styles are wrapped in an `Rc` pointer for cheap cloning and diffing.
-        let label_style = Rc::new(LabelStyle {
-            back_quad: QuadStyle {
-                bg: Background::Solid(RGBA8::new(100, 30, 80, 255)),
-                border: BorderStyle {
-                    color: RGBA8::new(200, 60, 160, 255),
-                    width: 2.0,
-                    radius: 10.0.into(),
+        // An empty class name `""`` means the default class.
+        cx.res.style_system.add(
+            "",   // class
+            true, // is_dark_theme
+            LabelStyle {
+                back_quad: QuadStyle {
+                    bg: Background::Solid(RGBA8::new(100, 30, 80, 255)),
+                    border: BorderStyle {
+                        color: RGBA8::new(200, 60, 160, 255),
+                        width: 2.0,
+                        radius: 10.0.into(),
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
+                text_padding: Padding::new(10.0, 10.0, 10.0, 10.0),
                 ..Default::default()
             },
-            padding: Padding::new(10.0, 10.0, 10.0, 10.0),
-            ..Default::default()
-        });
+        );
 
-        // Elements are added the the view of a window context.
+        // Elements are added to the view of a window context.
         let mut main_window_cx = cx.window_context(MAIN_WINDOW).unwrap();
 
         // The clear color of the window can be set at any time.
@@ -90,16 +93,16 @@ impl MyApp {
         // If no bounding rectangle is given, then by default the element has
         // a size of `0` meaning it is invisible. This allows us to layout out
         // the element later in a dedicated layout function.
-        let hello_label = Label::builder(&label_style)
+        let hello_label = Label::builder()
             .text("Hello World!")
             .build(&mut main_window_cx);
 
         self.main_window_elements = Some(MainWindowElements { hello_label });
 
-        self.layout_main_window(main_window_cx.logical_size());
+        self.layout_main_window(&mut main_window_cx);
     }
 
-    fn layout_main_window(&mut self, window_size: Size) {
+    fn layout_main_window(&mut self, cx: &mut WindowContext<'_, ()>) {
         let Some(elements) = &mut self.main_window_elements else {
             return;
         };
@@ -116,10 +119,10 @@ impl MyApp {
         //
         // This calculated size is automatically cached, so don't worry about
         // it being too expensive to use in an immediate-mode fasion.
-        let label_size = elements.hello_label.desired_padded_size();
+        let label_size = elements.hello_label.desired_size(cx.res);
 
         // Center the label on the screen.
-        let window_rect = Rect::from_size(window_size);
+        let window_rect = Rect::from_size(cx.logical_size());
         let label_rect = centered_rect(window_rect.center(), label_size);
 
         // Element handles have a generic part with common methods.

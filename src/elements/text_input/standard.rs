@@ -29,7 +29,7 @@ pub struct TextInputBuilder<A: Clone + 'static> {
     pub password_mode: bool,
     pub max_characters: usize,
     pub disabled: bool,
-    pub style: Rc<TextInputStyle>,
+    pub class: Option<&'static str>,
     pub z_index: Option<ZIndex>,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
@@ -37,7 +37,7 @@ pub struct TextInputBuilder<A: Clone + 'static> {
 }
 
 impl<A: Clone + 'static> TextInputBuilder<A> {
-    pub fn new(style: &Rc<TextInputStyle>) -> Self {
+    pub fn new() -> Self {
         Self {
             action: None,
             right_click_action: None,
@@ -50,7 +50,7 @@ impl<A: Clone + 'static> TextInputBuilder<A> {
             password_mode: false,
             max_characters: 256,
             disabled: false,
-            style: Rc::clone(style),
+            class: None,
             z_index: None,
             bounding_rect: Rect::default(),
             manually_hidden: false,
@@ -108,11 +108,6 @@ impl<A: Clone + 'static> TextInputBuilder<A> {
         self
     }
 
-    pub const fn disabled(mut self, disabled: bool) -> Self {
-        self.disabled = disabled;
-        self
-    }
-
     /// The maximum characters that can be in this text input.
     ///
     /// By default this is set to `256`.
@@ -121,21 +116,53 @@ impl<A: Clone + 'static> TextInputBuilder<A> {
         self
     }
 
+    /// The style class name
+    ///
+    /// If this method is not used, then the current class from the window context will
+    /// be used.
+    pub const fn class(mut self, class: &'static str) -> Self {
+        self.class = Some(class);
+        self
+    }
+
+    /// The z index of the element
+    ///
+    /// If this method is not used, then the current z index from the window context will
+    /// be used.
     pub const fn z_index(mut self, z_index: ZIndex) -> Self {
         self.z_index = Some(z_index);
         self
     }
 
+    /// The bounding rectangle of the element
+    ///
+    /// If this method is not used, then the element will have a size and position of
+    /// zero and will not be visible until its bounding rectangle is set.
     pub const fn bounding_rect(mut self, rect: Rect) -> Self {
         self.bounding_rect = rect;
         self
     }
 
+    /// Whether or not this element is manually hidden
+    ///
+    /// By default this is set to `false`.
     pub const fn hidden(mut self, hidden: bool) -> Self {
         self.manually_hidden = hidden;
         self
     }
 
+    /// Whether or not this element is in the disabled state
+    ///
+    /// By default this is set to `false`.
+    pub const fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
+    /// The ID of the scissoring rectangle this element belongs to.
+    ///
+    /// If this method is not used, then the current scissoring rectangle ID from the
+    /// window context will be used.
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
         self.scissor_rect_id = Some(scissor_rect_id);
         self
@@ -148,6 +175,7 @@ pub struct TextInputElement<A: Clone + 'static> {
     right_click_action: Option<Box<dyn FnMut(Point) -> A>>,
     tooltip_message: Option<String>,
     tooltip_align: Align2,
+    hovered: bool,
 }
 
 impl<A: Clone + 'static> TextInputElement<A> {
@@ -164,14 +192,15 @@ impl<A: Clone + 'static> TextInputElement<A> {
             password_mode,
             max_characters,
             disabled,
-            style,
+            class,
             z_index,
             bounding_rect,
             manually_hidden,
             scissor_rect_id,
         } = builder;
 
-        let (z_index, scissor_rect_id) = cx.z_index_and_scissor_rect_id(z_index, scissor_rect_id);
+        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
+        let style = cx.res.style_system.get(cx.class());
 
         let shared_state = Rc::new(RefCell::new(SharedState {
             inner: TextInputInner::new(
@@ -184,9 +213,8 @@ impl<A: Clone + 'static> TextInputElement<A> {
                 tooltip_message.is_some(),
                 select_all_when_focused,
                 &style,
-                &mut cx.res,
+                &mut cx.res.font_system,
             ),
-            style,
             text_offset,
         }));
 
@@ -197,11 +225,13 @@ impl<A: Clone + 'static> TextInputElement<A> {
                 tooltip_align,
                 action,
                 right_click_action,
+                hovered: false,
             }),
             z_index,
             bounding_rect,
             manually_hidden,
             scissor_rect_id,
+            class,
         };
 
         let el = cx
@@ -229,53 +259,57 @@ impl<A: Clone + 'static> Element<A> for TextInputElement<A> {
         cx: &mut ElementContext<'_, A>,
     ) -> EventCaptureStatus {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-        let SharedState {
-            inner,
-            style,
-            text_offset: _,
-        } = &mut *shared_state;
 
         let res = match event {
-            ElementEvent::Animation { .. } => inner.on_animation(style),
-            ElementEvent::CustomStateChanged => {
-                inner.on_custom_state_changed(cx.clipboard, &mut cx.res)
-            }
+            ElementEvent::Animation { .. } => shared_state.inner.on_animation(),
+            ElementEvent::CustomStateChanged => shared_state
+                .inner
+                .on_custom_state_changed(cx.clipboard, &mut cx.res.font_system),
             ElementEvent::SizeChanged => {
-                inner.on_size_changed(cx.rect().size, style, &mut cx.res);
+                let bounds_size = cx.rect().size;
+                let style = cx.res.style_system.get(cx.class());
+                shared_state
+                    .inner
+                    .on_size_changed(bounds_size, style, &mut cx.res.font_system);
                 TextInputUpdateResult::default()
             }
-            ElementEvent::Pointer(PointerEvent::Moved { position, .. }) => {
-                inner.on_pointer_moved(position, cx.rect(), &mut cx.res)
-            }
+            ElementEvent::Pointer(PointerEvent::Moved { position, .. }) => shared_state
+                .inner
+                .on_pointer_moved(position, cx.rect(), &mut cx.res.font_system),
             ElementEvent::Pointer(PointerEvent::ButtonJustPressed {
                 position,
                 button,
                 click_count,
                 ..
-            }) => inner.on_pointer_button_just_pressed(
+            }) => shared_state.inner.on_pointer_button_just_pressed(
                 position,
                 button,
                 click_count,
                 cx.rect(),
-                &mut cx.res,
+                &mut cx.res.font_system,
             ),
             ElementEvent::Pointer(PointerEvent::ButtonJustReleased {
                 button, position, ..
-            }) => inner.on_pointer_button_just_released(position, button, cx.rect()),
+            }) => shared_state
+                .inner
+                .on_pointer_button_just_released(position, button, cx.rect()),
             ElementEvent::Pointer(PointerEvent::PointerLeft) => {
-                inner.on_pointer_left();
-                TextInputUpdateResult::default()
+                shared_state.inner.on_pointer_left()
             }
-            ElementEvent::Keyboard(key_event) => {
-                inner.on_keyboard_event(&key_event, cx.clipboard, &mut cx.res)
-            }
-            ElementEvent::TextComposition(comp_event) => {
-                inner.on_text_composition_event(&comp_event, &mut cx.res)
-            }
-            ElementEvent::Focus(has_focus) => {
-                inner.on_focus_changed(has_focus, cx.clipboard, &mut cx.res)
-            }
-            ElementEvent::ClickedOff => inner.on_clicked_off(),
+            ElementEvent::Keyboard(key_event) => shared_state.inner.on_keyboard_event(
+                &key_event,
+                cx.clipboard,
+                &mut cx.res.font_system,
+            ),
+            ElementEvent::TextComposition(comp_event) => shared_state
+                .inner
+                .on_text_composition_event(&comp_event, &mut cx.res.font_system),
+            ElementEvent::Focus(has_focus) => shared_state.inner.on_focus_changed(
+                has_focus,
+                cx.clipboard,
+                &mut cx.res.font_system,
+            ),
+            ElementEvent::ClickedOff => shared_state.inner.on_clicked_off(),
             ElementEvent::Pointer(PointerEvent::HoverTimeout { .. }) => {
                 if let Some(message) = &self.tooltip_message {
                     cx.show_tooltip(message.clone(), self.tooltip_align, true);
@@ -291,7 +325,7 @@ impl<A: Clone + 'static> Element<A> for TextInputElement<A> {
         }
         if res.send_action {
             if let Some(action) = self.action.as_mut() {
-                cx.send_action((action)(String::from(inner.text())))
+                cx.send_action((action)(String::from(shared_state.inner.text())))
                     .unwrap();
             }
         }
@@ -307,8 +341,11 @@ impl<A: Clone + 'static> Element<A> for TextInputElement<A> {
                 cx.release_focus();
             }
         }
-        if res.set_cursor_icon {
+        if res.hovered {
+            self.hovered = true;
             cx.cursor_icon = CursorIcon::Text;
+        } else {
+            self.hovered = false;
         }
         if res.start_hover_timeout {
             cx.start_hover_timeout();
@@ -325,11 +362,13 @@ impl<A: Clone + 'static> Element<A> for TextInputElement<A> {
 
     fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
         let shared_state = RefCell::borrow(&self.shared_state);
+        let style: &TextInputStyle = cx.res.style_system.get(cx.class);
 
         let mut p = shared_state.inner.create_primitives(
-            &shared_state.style,
+            style,
             Rect::from_size(cx.bounds_size),
             shared_state.text_offset,
+            self.hovered,
         );
 
         if let Some(back_quad) = p.back_quad.take() {
@@ -352,7 +391,6 @@ impl<A: Clone + 'static> Element<A> for TextInputElement<A> {
 
 struct SharedState {
     inner: TextInputInner,
-    style: Rc<TextInputStyle>,
     text_offset: Point,
 }
 
@@ -363,16 +401,18 @@ pub struct TextInput {
 }
 
 impl TextInput {
-    pub fn builder<A: Clone + 'static>(style: &Rc<TextInputStyle>) -> TextInputBuilder<A> {
-        TextInputBuilder::new(style)
+    pub fn builder<A: Clone + 'static>() -> TextInputBuilder<A> {
+        TextInputBuilder::new()
     }
 
     pub fn set_text(&mut self, text: &str, res: &mut ResourceCtx, select_all: bool) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
-        let result = shared_state.inner.set_text(text, res, select_all);
+        let result = shared_state
+            .inner
+            .set_text(text, &mut res.font_system, select_all);
         if result.needs_repaint {
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
         }
     }
 
@@ -382,11 +422,16 @@ impl TextInput {
 
     pub fn set_placeholder_text(&mut self, text: &str, res: &mut ResourceCtx) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-        let SharedState { inner, style, .. } = &mut *shared_state;
 
-        let result = inner.set_placeholder_text(text, res, style);
+        let result = shared_state
+            .inner
+            .set_placeholder_text(text, &mut res.font_system, || {
+                res.style_system
+                    .get::<TextInputStyle>(self.el.class())
+                    .clone()
+            });
         if result.needs_repaint {
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
         }
     }
 
@@ -396,24 +441,14 @@ impl TextInput {
         })
     }
 
-    pub fn set_style(&mut self, style: &Rc<TextInputStyle>, res: &mut ResourceCtx) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-        let SharedState {
-            inner,
-            style: old_style,
-            ..
-        } = &mut *shared_state;
+    pub fn set_class(&mut self, class: &'static str, res: &mut ResourceCtx) {
+        if self.el.class() != class {
+            RefCell::borrow_mut(&self.shared_state)
+                .inner
+                .sync_new_style(res.style_system.get(class), &mut res.font_system);
 
-        if !Rc::ptr_eq(old_style, style) {
-            *old_style = Rc::clone(style);
-            inner.set_style(style, res);
-
-            self.el.notify_custom_state_change();
+            self.el._notify_class_change(class);
         }
-    }
-
-    pub fn style(&self) -> Rc<TextInputStyle> {
-        Rc::clone(&RefCell::borrow(&self.shared_state).style)
     }
 
     pub fn set_disabled(&mut self, disabled: bool) {
@@ -421,7 +456,7 @@ impl TextInput {
 
         if shared_state.inner.disabled != disabled {
             shared_state.inner.disabled = true;
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
         }
     }
 
@@ -432,7 +467,7 @@ impl TextInput {
 
         if shared_state.text_offset != offset {
             shared_state.text_offset = offset;
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
         }
     }
 
@@ -445,7 +480,7 @@ impl TextInput {
 
         if !shared_state.inner.disabled {
             shared_state.inner.queue_action(action);
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
         }
     }
 
@@ -456,7 +491,7 @@ impl TextInput {
 
         if shared_state.inner.show_password != show {
             shared_state.inner.show_password = show;
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
         }
     }
 }

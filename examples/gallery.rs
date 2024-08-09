@@ -14,9 +14,9 @@ use yarrow::prelude::*;
 #[repr(usize)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, derive_more::Display)]
 enum MyTab {
-    #[display(fmt = "Basic Elements")]
+    #[display("Basic Elements")]
     BasicElements,
-    #[display(fmt = "Knobs & Sliders")]
+    #[display("Knobs & Sliders")]
     KnobsAndSliders,
     More,
 }
@@ -100,7 +100,7 @@ struct MainWindowElements {
     basic_elements: basic_elements::Elements,
     knobs_and_sliders: knobs_and_sliders::Elements,
     menu: DropDownMenu,
-    menu_btn: IconButton,
+    menu_btn: Button,
     top_panel_bg: QuadElement,
     top_panel_border: QuadElement,
     left_panel_bg: QuadElement,
@@ -147,13 +147,13 @@ impl MyApp {
         // Push the main Z index onto the stack to make it the default.
         cx.push_z_index(MAIN_Z_INDEX);
 
-        let top_panel_bg = QuadElement::builder(&self.style.panel_bg_style).build(cx);
-        let top_panel_border = QuadElement::builder(&self.style.panel_border_style).build(cx);
+        let top_panel_bg = QuadElement::builder().class("panel").build(cx);
+        let top_panel_border = QuadElement::builder().class("panel_border").build(cx);
 
-        let left_panel_bg = QuadElement::builder(&self.style.panel_bg_style).build(cx);
-        let left_panel_border = QuadElement::builder(&self.style.panel_border_style).build(cx);
+        let left_panel_bg = QuadElement::builder().class("panel").build(cx);
+        let left_panel_border = QuadElement::builder().class("panel_border").build(cx);
 
-        let left_panel_resize_handle = ResizeHandle::builder(&self.style.resize_handle_style)
+        let left_panel_resize_handle = ResizeHandle::builder()
             .on_resized(|new_span| MyAction::LeftPanelResized(new_span))
             .on_resize_finished(|new_span| MyAction::LeftPanelResizeFinished(new_span))
             .min_span(100.0)
@@ -162,30 +162,29 @@ impl MyApp {
             .z_index(OVERLAY_Z_INDEX)
             .build(cx);
 
-        let menu_btn = IconButton::builder(&self.style.menu_btn_style)
+        let menu_btn = Button::builder()
+            .class("menu")
             .icon(MyIcon::Menu)
             .on_select(MyAction::OpenMenu)
             .build(cx);
-        let menu = DropDownMenu::builder(&self.style.menu_style)
+        let menu = DropDownMenu::builder()
             .entries(vec![
                 MenuEntry::option_with_right_text("Hello", MenuOption::Hello.right_text(), 0),
                 MenuEntry::option_with_right_text("World", MenuOption::World.right_text(), 1),
+                MenuEntry::Divider,
                 MenuEntry::option_with_right_text("About", MenuOption::About.right_text(), 2),
             ])
             .on_entry_selected(|id| MyAction::MenuItemSelected(MenuOption::ALL[id]))
             .z_index(OVERLAY_Z_INDEX)
             .build(cx);
 
-        let tooltip = Tooltip::builder(&self.style.tooltip_style)
-            .z_index(OVERLAY_Z_INDEX)
-            .build(cx);
+        let tooltip = Tooltip::builder().z_index(OVERLAY_Z_INDEX).build(cx);
 
         let tab_group = TabGroup::new(
-            MyTab::ALL
-                .map(|t| TabGroupOption::new(format!("{t}"), format!("{t}"), Point::default())),
+            MyTab::ALL.map(|t| TabGroupOption::new(Some(format!("{t}")), None, format!("{t}"))),
             self.current_tab as usize,
             |i| MyAction::TabSelected(MyTab::ALL[i]),
-            &self.style.tab_style,
+            None,
             IndicatorLinePlacement::Left,
             Align2::CENTER_RIGHT,
             None,
@@ -193,7 +192,7 @@ impl MyApp {
             cx,
         );
 
-        let mut basic_elements = basic_elements::Elements::new(&self.style, cx);
+        let mut basic_elements = basic_elements::Elements::new(cx);
         let mut knobs_and_sliders = knobs_and_sliders::Elements::new(&self.style, cx);
 
         basic_elements.set_hidden(self.current_tab != MyTab::BasicElements);
@@ -275,9 +274,7 @@ impl MyApp {
             }
             MyAction::TabSelected(tab) => {
                 self.current_tab = tab;
-                elements
-                    .tab_group
-                    .updated_selected(tab as usize, &mut cx.res);
+                elements.tab_group.updated_selected(tab as usize);
                 elements
                     .basic_elements
                     .set_hidden(tab != MyTab::BasicElements);
@@ -347,6 +344,7 @@ impl MyApp {
                 self.style.top_panel_height * 0.5,
             ),
             Align2::CENTER_LEFT,
+            cx.res,
         );
 
         elements.menu.set_position(Point::new(
@@ -362,6 +360,7 @@ impl MyApp {
             self.style.tag_group_spacing,
             LayoutDirection::Vertical,
             Some(left_panel_width - self.style.panel_border_width),
+            cx.res,
         );
 
         let content_rect = Rect::new(
@@ -421,7 +420,7 @@ impl Application for MyApp {
                 if window_id == MAIN_WINDOW {
                     if !self.did_load_resources {
                         self.did_load_resources = true;
-                        self.style.load_resources(&mut cx.res);
+                        self.style.load(&mut cx.res);
                     }
 
                     let mut main_window_cx = cx.window_context(MAIN_WINDOW).unwrap();

@@ -1,8 +1,11 @@
-use std::rc::Rc;
+use std::{any::Any, rc::Rc};
 
-use rootvg::PrimitiveGroup;
+use rootvg::{math::Size, PrimitiveGroup};
 
-use crate::view::element::{ElementRenderCache, RenderContext};
+use crate::{
+    prelude::ElementStyle,
+    view::element::{ElementRenderCache, RenderContext},
+};
 
 use super::{AutomationInfo, ParamMarkersConfig, SteppedValue};
 
@@ -42,11 +45,19 @@ pub struct VirtualSliderRenderInfo<'a> {
     pub horizontal: bool,
 }
 
-pub trait VirtualSliderRenderer: Default + 'static {
-    type Style;
+pub trait VirtualSliderRenderer: 'static {
+    type Style: ElementStyle;
+
+    fn new(style: Rc<dyn Any>) -> Self;
 
     fn does_paint(&self) -> bool {
         true
+    }
+
+    fn style_changed(&mut self, new_style: Rc<dyn Any>);
+
+    fn desired_size(&self) -> Option<Size> {
+        None
     }
 
     #[allow(unused)]
@@ -54,18 +65,13 @@ pub trait VirtualSliderRenderer: Default + 'static {
         &mut self,
         prev_state: VirtualSliderState,
         new_state: VirtualSliderState,
-        style: &Rc<Self::Style>,
     ) -> UpdateResult {
         UpdateResult::default()
     }
 
     #[allow(unused)]
     /// Return `true` if the element should be repainted.
-    fn on_automation_info_update(
-        &mut self,
-        info: &AutomationInfo,
-        style: &Rc<Self::Style>,
-    ) -> bool {
+    fn on_automation_info_update(&mut self, info: &AutomationInfo) -> bool {
         false
     }
 
@@ -73,7 +79,6 @@ pub trait VirtualSliderRenderer: Default + 'static {
     fn on_animation(
         &mut self,
         delta_seconds: f64,
-        style: &Rc<Self::Style>,
         info: VirtualSliderRenderInfo<'_>,
     ) -> UpdateResult {
         UpdateResult::default()
@@ -82,7 +87,6 @@ pub trait VirtualSliderRenderer: Default + 'static {
     #[allow(unused)]
     fn render_primitives(
         &mut self,
-        style: &Rc<Self::Style>,
         info: VirtualSliderRenderInfo<'_>,
         cx: RenderContext<'_>,
         primitives: &mut PrimitiveGroup,

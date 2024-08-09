@@ -22,6 +22,7 @@ pub mod layout;
 pub mod prelude;
 pub(crate) mod stmpsc_queue;
 pub mod style;
+pub mod theme;
 pub(crate) mod view;
 pub mod window;
 

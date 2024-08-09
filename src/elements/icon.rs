@@ -1,12 +1,14 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use rootvg::quad::QuadPrimitive;
 use rootvg::text::{CustomGlyphDesc, CustomGlyphID, TextPrimitive};
 use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::{Align2, Padding};
 use crate::math::{Point, Rect, Size, ZIndex};
+use crate::prelude::{ElementStyle, ResourceCtx};
 use crate::style::QuadStyle;
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
@@ -15,14 +17,12 @@ use crate::view::element::{
 use crate::view::ScissorRectID;
 use crate::window::WindowContext;
 
-use super::label::LabelPrimitives;
-
 /// The style of an [`Icon`] element
 #[derive(Debug, Clone, PartialEq)]
 pub struct IconStyle {
     /// The size of the icon in points.
     ///
-    /// By default this is set to `20.0`.
+    /// By default this is set to `24.0`.
     pub size: f32,
 
     /// The color of the icon
@@ -43,15 +43,52 @@ pub struct IconStyle {
     pub padding: Padding,
 }
 
+impl IconStyle {
+    pub fn padding_info(&self) -> IconPaddingInfo {
+        IconPaddingInfo {
+            icon_size: self.size,
+            padding: self.padding,
+        }
+    }
+}
+
 impl Default for IconStyle {
     fn default() -> Self {
         Self {
-            size: 20.0,
+            size: 24.0,
             color: color::WHITE,
             back_quad: QuadStyle::TRANSPARENT,
             padding: Padding::zero(),
         }
     }
+}
+
+impl ElementStyle for IconStyle {
+    const ID: &'static str = "icn";
+
+    fn default_dark_style() -> Self {
+        Self::default()
+    }
+
+    fn default_light_style() -> Self {
+        Self {
+            color: color::WHITE,
+            ..Default::default()
+        }
+    }
+}
+
+// Information used to calculate icon padding.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct IconPaddingInfo {
+    pub icon_size: f32,
+    pub padding: Padding,
+}
+
+#[derive(Debug, Clone)]
+pub struct IconPrimitives {
+    pub icon: TextPrimitive,
+    pub bg_quad: Option<QuadPrimitive>,
 }
 
 /// A reusable icon struct that can be used by other elements.
@@ -63,6 +100,8 @@ pub struct IconInner {
     pub offset: Point,
     pub icon_id: CustomGlyphID,
     pub scale: f32,
+    desired_size: Size,
+    size_needs_calculated: bool,
 }
 
 impl IconInner {
@@ -71,16 +110,26 @@ impl IconInner {
             offset,
             icon_id,
             scale,
+            desired_size: Size::default(),
+            size_needs_calculated: true,
         }
     }
 
     /// Returns the size of the padded background rectangle if it were to
     /// cover the icon.
-    pub fn desired_padded_size(&self, style: &IconStyle) -> Size {
-        Size::new(
-            style.size + style.padding.left + style.padding.right,
-            style.size + style.padding.top + style.padding.bottom,
-        )
+    pub fn desired_size<F: FnOnce() -> IconPaddingInfo>(&mut self, get_padding_info: F) -> Size {
+        if self.size_needs_calculated {
+            self.size_needs_calculated = false;
+
+            let info = (get_padding_info)();
+
+            self.desired_size = Size::new(
+                info.icon_size + info.padding.left + info.padding.right,
+                info.icon_size + info.padding.top + info.padding.bottom,
+            );
+        }
+
+        self.desired_size
     }
 
     /// Returns the rectangular area of the icon from the given bounds size
@@ -89,7 +138,11 @@ impl IconInner {
         layout(style.size, &style.padding, bounds_size)
     }
 
-    pub fn render_primitives(&mut self, bounds: Rect, style: &IconStyle) -> LabelPrimitives {
+    pub fn notify_style_change(&mut self) {
+        self.size_needs_calculated = true;
+    }
+
+    pub fn render_primitives(&mut self, bounds: Rect, style: &IconStyle) -> IconPrimitives {
         let icon_rect = self.icon_rect(style, bounds.size);
 
         let (size, offset) = if self.scale != 1.0 {
@@ -101,15 +154,12 @@ impl IconInner {
             (style.size, 0.0)
         };
 
-        LabelPrimitives {
-            text: Some(TextPrimitive::new_with_icons(
+        IconPrimitives {
+            icon: TextPrimitive::new_with_icons(
                 None,
                 bounds.origin + icon_rect.origin.to_vector() + self.offset.to_vector(),
                 style.color,
-                Some(Rect::new(
-                    Point::new(-1.0, -1.0),
-                    Size::new(icon_rect.size.width + 2.0, icon_rect.size.height + 2.0),
-                )),
+                None,
                 smallvec::smallvec![CustomGlyphDesc {
                     id: self.icon_id,
                     left: offset,
@@ -118,7 +168,7 @@ impl IconInner {
                     color: None,
                     metadata: 0,
                 }],
-            )),
+            ),
             bg_quad: if !style.back_quad.is_transparent() {
                 Some(style.back_quad.create_primitive(bounds))
             } else {
@@ -132,7 +182,7 @@ pub struct IconBuilder {
     pub icon: CustomGlyphID,
     pub scale: f32,
     pub offset: Point,
-    pub style: Rc<IconStyle>,
+    pub class: Option<&'static str>,
     pub z_index: Option<ZIndex>,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
@@ -140,12 +190,12 @@ pub struct IconBuilder {
 }
 
 impl IconBuilder {
-    pub fn new(style: &Rc<IconStyle>) -> Self {
+    pub fn new() -> Self {
         Self {
             icon: CustomGlyphID::MAX,
             scale: 1.0,
             offset: Point::default(),
-            style: Rc::clone(style),
+            class: None,
             z_index: None,
             bounding_rect: Rect::default(),
             manually_hidden: false,
@@ -175,21 +225,45 @@ impl IconBuilder {
         self
     }
 
+    /// The style class name
+    ///
+    /// If this method is not used, then the current class from the window context will
+    /// be used.
+    pub const fn class(mut self, class: &'static str) -> Self {
+        self.class = Some(class);
+        self
+    }
+
+    /// The z index of the element
+    ///
+    /// If this method is not used, then the current z index from the window context will
+    /// be used.
     pub const fn z_index(mut self, z_index: ZIndex) -> Self {
         self.z_index = Some(z_index);
         self
     }
 
+    /// The bounding rectangle of the element
+    ///
+    /// If this method is not used, then the element will have a size and position of
+    /// zero and will not be visible until its bounding rectangle is set.
     pub const fn bounding_rect(mut self, rect: Rect) -> Self {
         self.bounding_rect = rect;
         self
     }
 
+    /// Whether or not this element is manually hidden
+    ///
+    /// By default this is set to `false`.
     pub const fn hidden(mut self, hidden: bool) -> Self {
         self.manually_hidden = hidden;
         self
     }
 
+    /// The ID of the scissoring rectangle this element belongs to.
+    ///
+    /// If this method is not used, then the current scissoring rectangle ID from the
+    /// window context will be used.
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
         self.scissor_rect_id = Some(scissor_rect_id);
         self
@@ -207,18 +281,17 @@ impl IconElement {
             icon,
             scale,
             offset,
-            style,
+            class,
             z_index,
             bounding_rect,
             manually_hidden,
             scissor_rect_id,
         } = builder;
 
-        let (z_index, scissor_rect_id) = cx.z_index_and_scissor_rect_id(z_index, scissor_rect_id);
+        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
 
         let shared_state = Rc::new(RefCell::new(SharedState {
             inner: IconInner::new(icon, scale, offset),
-            style,
         }));
 
         let element_builder = ElementBuilder {
@@ -229,6 +302,7 @@ impl IconElement {
             bounding_rect,
             manually_hidden,
             scissor_rect_id,
+            class,
         };
 
         let el = cx
@@ -258,24 +332,23 @@ impl<A: Clone + 'static> Element<A> for IconElement {
 
     fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-        let SharedState { inner, style } = &mut *shared_state;
 
-        let label_primitives = inner.render_primitives(Rect::from_size(cx.bounds_size), style);
+        let icon_primitives = shared_state.inner.render_primitives(
+            Rect::from_size(cx.bounds_size),
+            cx.res.style_system.get(cx.class),
+        );
 
-        if let Some(quad_primitive) = label_primitives.bg_quad {
+        if let Some(quad_primitive) = icon_primitives.bg_quad {
             primitives.add(quad_primitive);
         }
 
-        if let Some(text_primitive) = label_primitives.text {
-            primitives.set_z_index(1);
-            primitives.add_text(text_primitive);
-        }
+        primitives.set_z_index(1);
+        primitives.add_text(icon_primitives.icon);
     }
 }
 
 struct SharedState {
     inner: IconInner,
-    style: Rc<IconStyle>,
 }
 
 /// A handle to a [`IconElement`], an icon with an optional quad background.
@@ -285,18 +358,22 @@ pub struct Icon {
 }
 
 impl Icon {
-    pub fn builder(style: &Rc<IconStyle>) -> IconBuilder {
-        IconBuilder::new(style)
+    pub fn builder() -> IconBuilder {
+        IconBuilder::new()
     }
 
     /// Returns the size of the padded background rectangle if it were to
     /// cover the icon.
     ///
     /// This can be useful to lay out elements that depend on icon size.
-    pub fn desired_padded_size(&self) -> Size {
-        let shared_state = RefCell::borrow(&self.shared_state);
+    pub fn desired_size(&self, res: &mut ResourceCtx) -> Size {
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
-        shared_state.inner.desired_padded_size(&shared_state.style)
+        shared_state.inner.desired_size(|| {
+            res.style_system
+                .get::<IconStyle>(self.el.class())
+                .padding_info()
+        })
     }
 
     pub fn set_icon_id(&mut self, icon_id: impl Into<CustomGlyphID>) {
@@ -306,7 +383,7 @@ impl Icon {
 
         if shared_state.inner.icon_id != icon_id {
             shared_state.inner.icon_id = icon_id;
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
         }
     }
 
@@ -314,17 +391,13 @@ impl Icon {
         RefCell::borrow(&self.shared_state).inner.icon_id
     }
 
-    pub fn set_style(&mut self, style: &Rc<IconStyle>) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
-        if !Rc::ptr_eq(&shared_state.style, style) {
-            shared_state.style = Rc::clone(style);
-            self.el.notify_custom_state_change();
+    pub fn set_class(&mut self, class: &'static str) {
+        if self.el.class() != class {
+            RefCell::borrow_mut(&self.shared_state)
+                .inner
+                .notify_style_change();
+            self.el._notify_class_change(class);
         }
-    }
-
-    pub fn style(&self) -> Rc<IconStyle> {
-        Rc::clone(&RefCell::borrow(&self.shared_state).style)
     }
 
     /// An offset that can be used mainly to correct the position of icon glyphs.
@@ -334,7 +407,7 @@ impl Icon {
 
         if shared_state.inner.offset != offset {
             shared_state.inner.offset = offset;
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
         }
     }
 
@@ -344,22 +417,22 @@ impl Icon {
 
         if shared_state.inner.scale != scale {
             shared_state.inner.scale = scale;
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
         }
     }
 
-    pub fn layout(&mut self, origin: Point) {
-        let size = self.desired_padded_size();
+    pub fn layout(&mut self, origin: Point, res: &mut ResourceCtx) {
+        let size = self.desired_size(res);
         self.el.set_rect(Rect::new(origin, size));
     }
 
-    pub fn layout_aligned(&mut self, point: Point, align: Align2) {
-        let size = self.desired_padded_size();
+    pub fn layout_aligned(&mut self, point: Point, align: Align2, res: &mut ResourceCtx) {
+        let size = self.desired_size(res);
         self.el.set_rect(align.align_rect_to_point(point, size));
     }
 }
 
-pub(crate) fn layout(size: f32, padding: &Padding, bounds_size: Size) -> Rect {
+fn layout(size: f32, padding: &Padding, bounds_size: Size) -> Rect {
     let padded_size = Size::new(
         size + padding.left + padding.right,
         size + padding.top + padding.bottom,
