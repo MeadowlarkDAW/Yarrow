@@ -8,7 +8,7 @@
 [![Crates.io](https://img.shields.io/crates/v/yarrow.svg)](https://crates.io/crates/yarrow)
 [![License](https://img.shields.io/crates/l/yarrow.svg)](https://github.com/MeadowlarkDAW/Yarrow/blob/main/LICENSE)
 
-> **WORK IN PROGRESS. This library is currently in an unstable alpha state and is missing features. Check the [roadmap] for more details.**
+> **WORK IN PROGRESS. This project is currently in alpha and is missing some features. Check the [roadmap] for more details.**
 
 **A modern retained-mode GUI library in Rust with extreme performance and control, geared towards audio software.**
 
@@ -19,7 +19,7 @@
 
 # What to Expect
 
-The goal of Yarrow is different from most other modern GUI libraries. Instead of focusing on "elegance" and typical declarative styling and layout concepts, Yarrow instead provides a powerful and novel retained-mode API with lots of control over exactly how elements are styled, laid-out, interacted with, and rendered. State management is also somewhat inspired by the [Elm]/[Iced] architectures.
+The goal of Yarrow is different from most other modern GUI libraries. Instead of focusing on typical declarative, styling, and layout concepts, Yarrow instead provides a powerful and novel retained-mode API with lots of control over exactly how elements are styled, laid-out, interacted with, and rendered. State management is also somewhat inspired by the [Elm]/[Iced] architectures.
 
 The main focus is audio software. Only features that are needed for the [Meadowlark DAW Project](https://github.com/MeadowlarkDAW/Meadowlark) and its audio plugins are planned.
 
@@ -28,7 +28,7 @@ The main focus is audio software. Only features that are needed for the [Meadowl
 * Cross-platform (Linux, Mac, and Windows)
 * Native and lightweight
 * Hardware-accelerated rendering in [wgpu] with support for text, vector graphics, textures, and/or custom shaders
-* Extreme performance (you are in control of how your elements are updated)
+* Extreme performance (you are in control over exactly how your elements are updated)
 * Can be used for both standalone applications and audio plugins
 * Designed from the ground-up to support multi-windowed applications
 * Scaling support (with built-in support for hi-dpi texture assets)
@@ -46,7 +46,7 @@ Yarrow is not declarative. Elements are added and removed dynamically at runtime
 
 Yarrow uses an event-driven update system somewhat inspired by the [Elm]/[Iced] architectures. Elements cannot mutate application state, they can only send actions (events) to a global action queue. Actions are processed in a single monolithic user-defined action handler method. Inside this method, the user mutates their state and updates elements accordingly.
 
-There is no "cascading" styling system, instead each element just defines its own custom style struct.
+There is no "cascading" styling system, instead each element type just defines its own styling struct.
 
 Rendering is done in [wgpu] using the [RootVG](https://github.com/MeadowlarkDAW/rootvg) library. Elements can also be rendered using custom wgpu shaders.
 
