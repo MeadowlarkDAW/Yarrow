@@ -367,24 +367,54 @@ impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
                 }
             }
         } else if shared_state.toggled {
-            QuadStyle {
-                bg: style.on_bg.unwrap_or(style.off_bg),
-                border: BorderStyle {
-                    color: style
-                        .outer_border_color_on
-                        .unwrap_or(style.outer_border_color_off),
-                    width: style.outer_border_width,
-                    radius: style.radius,
-                },
+            if self.hovered {
+                QuadStyle {
+                    bg: style
+                        .on_bg_hover
+                        .unwrap_or(style.on_bg.unwrap_or(style.off_bg)),
+                    border: BorderStyle {
+                        color: style.outer_border_color_on_hover.unwrap_or(
+                            style
+                                .outer_border_color_on
+                                .unwrap_or(style.outer_border_color_off),
+                        ),
+                        width: style.outer_border_width,
+                        radius: style.radius,
+                    },
+                }
+            } else {
+                QuadStyle {
+                    bg: style.on_bg.unwrap_or(style.off_bg),
+                    border: BorderStyle {
+                        color: style
+                            .outer_border_color_on
+                            .unwrap_or(style.outer_border_color_off),
+                        width: style.outer_border_width,
+                        radius: style.radius,
+                    },
+                }
             }
         } else {
-            QuadStyle {
-                bg: style.off_bg,
-                border: BorderStyle {
-                    color: style.outer_border_color_off,
-                    width: style.outer_border_width,
-                    radius: style.radius,
-                },
+            if self.hovered {
+                QuadStyle {
+                    bg: style.off_bg_hover.unwrap_or(style.off_bg),
+                    border: BorderStyle {
+                        color: style
+                            .outer_border_color_off_hover
+                            .unwrap_or(style.outer_border_color_off),
+                        width: style.outer_border_width,
+                        radius: style.radius,
+                    },
+                }
+            } else {
+                QuadStyle {
+                    bg: style.off_bg,
+                    border: BorderStyle {
+                        color: style.outer_border_color_off,
+                        width: style.outer_border_width,
+                        radius: style.radius,
+                    },
+                }
             }
         };
 
