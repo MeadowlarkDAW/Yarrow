@@ -14,9 +14,9 @@ use yarrow::prelude::*;
 #[repr(usize)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, derive_more::Display)]
 enum MyTab {
-    #[display(fmt = "Basic Elements")]
+    #[display("Basic Elements")]
     BasicElements,
-    #[display(fmt = "Knobs & Sliders")]
+    #[display("Knobs & Sliders")]
     KnobsAndSliders,
     More,
 }

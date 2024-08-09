@@ -3,6 +3,7 @@ use rootvg::math::Rect;
 use rootvg::quad::{GradientQuad, QuadPrimitive, SolidQuad};
 
 use crate::prelude::ElementStyle;
+use crate::theme::DEFAULT_DISABLED_ALPHA_MULTIPLIER;
 use crate::vg::color::RGBA8;
 use crate::vg::gradient::Gradient;
 use crate::vg::quad::{Border, Radius};
@@ -10,11 +11,6 @@ use crate::vg::quad::{Border, Radius};
 mod style_system;
 
 pub use style_system::StyleSystem;
-
-pub const DEFAULT_ACCENT_COLOR: RGBA8 = RGBA8::new(179, 123, 95, 255);
-pub const DEFAULT_ACCENT_HOVER_COLOR: RGBA8 = RGBA8::new(200, 137, 106, 255);
-pub const DEFAULT_DISABLED_ALPHA_MULTIPLIER: f32 = 0.5;
-pub const DEFAULT_ICON_SIZE: f32 = 20.0;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -37,7 +33,7 @@ impl BorderStyle {
     pub const TRANSPARENT: Self = Self {
         color: rootvg::color::TRANSPARENT,
         width: 0.0,
-        radius: Radius::zero(),
+        radius: Radius::ZERO,
     };
 }
 
@@ -118,6 +114,20 @@ impl ElementStyle for QuadStyle {
     const ID: &'static str = "qd";
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum QuadStyleDisabled {
+    /// Use a multipler on the alpha channel for all colors.
+    AlphaMultiplier(f32),
+    /// Use a custom-defined style.
+    Custom { bg: Background, border_color: RGBA8 },
+}
+
+impl Default for QuadStyleDisabled {
+    fn default() -> Self {
+        QuadStyleDisabled::AlphaMultiplier(DEFAULT_DISABLED_ALPHA_MULTIPLIER)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Background {
@@ -157,6 +167,88 @@ impl Into<Border> for BorderStyle {
             width: self.width,
             radius: self.radius,
         }
+    }
+}
+
+/// How to style a color property when an element is disabled.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DisabledColor {
+    /// Use a multiplier on the alpha channel of the property color.
+    AlphaMultiplier(f32),
+    /// Override the poperty color with a custom color.
+    Custom(RGBA8),
+}
+
+impl DisabledColor {
+    pub fn get(&self, property_color: RGBA8) -> RGBA8 {
+        match self {
+            DisabledColor::AlphaMultiplier(multiplier) => {
+                color::multiply_alpha(property_color, *multiplier)
+            }
+            DisabledColor::Custom(color) => *color,
+        }
+    }
+}
+
+impl Default for DisabledColor {
+    fn default() -> Self {
+        Self::AlphaMultiplier(DEFAULT_DISABLED_ALPHA_MULTIPLIER)
+    }
+}
+
+/// How to style a gradient property when an element is disabled.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DisabledGradient {
+    /// Use a multiplier on the alpha channels of the property gradient.
+    AlphaMultiplier(f32),
+    /// Override the poperty gradient with a custom gradient.
+    Custom(Gradient),
+}
+
+impl DisabledGradient {
+    pub fn get(&self, property_gradient: Gradient) -> Gradient {
+        match self {
+            DisabledGradient::AlphaMultiplier(multiplier) => {
+                let mut g = property_gradient;
+                g.multiply_alpha(*multiplier);
+                g
+            }
+            DisabledGradient::Custom(g) => *g,
+        }
+    }
+}
+
+impl Default for DisabledGradient {
+    fn default() -> Self {
+        Self::AlphaMultiplier(DEFAULT_DISABLED_ALPHA_MULTIPLIER)
+    }
+}
+
+/// How to style a background property when an element is disabled.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DisabledBackground {
+    /// Use a multiplier on the alpha channels of the property background.
+    AlphaMultiplier(f32),
+    /// Override the poperty background with a custom background.
+    Custom(Background),
+}
+
+impl DisabledBackground {
+    pub fn get(&self, property_bg: Background) -> Background {
+        match self {
+            DisabledBackground::AlphaMultiplier(multiplier) => {
+                let mut bg = property_bg;
+                bg.multiply_alpha(*multiplier);
+                bg
+            }
+            DisabledBackground::Custom(bg) => *bg,
+        }
+    }
+}
+
+impl Default for DisabledBackground {
+    fn default() -> Self {
+        Self::AlphaMultiplier(DEFAULT_DISABLED_ALPHA_MULTIPLIER)
     }
 }
 

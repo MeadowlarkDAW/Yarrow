@@ -1,7 +1,7 @@
 use crate::{
     elements::tooltip::TooltipStyle,
     prelude::*,
-    style::{DEFAULT_ACCENT_COLOR, DEFAULT_ACCENT_HOVER_COLOR},
+    theme::{DEFAULT_ACCENT_COLOR, DEFAULT_ACCENT_HOVER_COLOR},
 };
 
 pub const TEXT_PADDING: Padding = Padding::new(6.0, 7.0, 6.0, 7.0);
@@ -16,6 +16,12 @@ pub const BUTTON_BG_COLOR: RGBA8 = RGBA8::new(42, 42, 42, 255);
 pub const BUTTON_BG_HOVER_COLOR: RGBA8 = RGBA8::new(52, 52, 52, 255);
 pub const BUTTON_BORDER_COLOR: RGBA8 = RGBA8::new(62, 62, 62, 255);
 pub const BUTTON_BORDER_COLOR_HOVER: RGBA8 = RGBA8::new(82, 82, 82, 255);
+
+pub const KNOB_BG_COLOR: RGBA8 = RGBA8::new(71, 71, 71, 255);
+pub const KNOB_BG_HOVER_COLOR: RGBA8 = RGBA8::new(81, 81, 81, 255);
+pub const KNOB_BORDER_COLOR: RGBA8 = RGBA8::new(91, 91, 91, 255);
+pub const KNOB_BORDER_HOVER_COLOR: RGBA8 = RGBA8::new(101, 101, 101, 255);
+pub const KNOB_ARC_TRACK_COLOR: RGBA8 = RGBA8::new(44, 44, 44, 255);
 
 pub const TOGGLE_OFF_BG_COLOR: RGBA8 = RGBA8::new(27, 27, 27, 255);
 pub const TOGGLE_OFF_BG_COLOR_HOVER: RGBA8 = RGBA8::new(40, 40, 40, 255);
@@ -98,7 +104,7 @@ pub fn toggle_button(
         back_border_color_on_hover: Some(BUTTON_BORDER_COLOR_HOVER),
         back_border_width: BORDER_WIDTH,
         back_border_radius: BORDER_RADIUS,
-        //cursor_icon: Some(CursorIcon::Pointer),
+        cursor_icon: Some(CursorIcon::Pointer),
         ..Default::default()
     }
 }
@@ -116,6 +122,7 @@ pub fn switch(accent_color: Option<RGBA8>, accent_color_hover: Option<RGBA8>) ->
         off_bg_hover: Some(Background::Solid(TOGGLE_OFF_BG_COLOR_HOVER)),
         on_bg_hover: Some(Background::Solid(accent_color_hover)),
         slider_bg_off: Background::Solid(RGBA8::new(255, 255, 255, 180)),
+        cursor_icon: Some(CursorIcon::Pointer),
         ..Default::default()
     }
 }
@@ -138,6 +145,7 @@ pub fn radio_btn(
         dot_padding: 6.0,
         dot_bg: Background::Solid(TEXT_COLOR),
         dot_bg_hover: Some(Background::Solid(TEXT_COLOR_BRIGHT)),
+        cursor_icon: Some(CursorIcon::Pointer),
         ..Default::default()
     }
 }
@@ -209,6 +217,7 @@ pub fn tab(accent_color: Option<RGBA8>) -> TabStyle {
             back_bg_on: Some(Background::Solid(TAB_TOGGLED_COLOR)),
             back_bg_off_hover: Some(Background::Solid(TAB_OFF_COLOR_HOVER)),
             back_bg_on_hover: Some(Background::Solid(TAB_TOGGLED_COLOR_HOVER)),
+            cursor_icon: Some(CursorIcon::Pointer),
             ..Default::default()
         },
         on_indicator_line_style: QuadStyle {
@@ -279,6 +288,7 @@ pub fn dropdown_menu() -> DropDownMenuStyle {
         divider_color: SEPERATOR_COLOR,
         divider_width: 1.0,
         divider_padding: 1.0,
+        cursor_icon: Some(CursorIcon::Pointer),
         ..Default::default()
     }
 }
@@ -294,6 +304,92 @@ pub fn panel() -> QuadStyle {
     QuadStyle {
         bg: Background::Solid(PANEL_BG_COLOR),
         border: Default::default(),
+    }
+}
+
+pub fn slider_style_modern(
+    accent_color: Option<RGBA8>,
+    accent_color_hover: Option<RGBA8>,
+) -> SliderStyleModern {
+    let accent_color = accent_color.unwrap_or(DEFAULT_ACCENT_COLOR);
+    let accent_color_hover = accent_color_hover.unwrap_or(DEFAULT_ACCENT_HOVER_COLOR);
+
+    SliderStyleModern {
+        back_bg: Background::Solid(TEXT_INPUT_BG_COLOR),
+        back_border_color: BUTTON_BORDER_COLOR,
+        back_border_color_hover: Some(BUTTON_BORDER_COLOR_HOVER),
+        back_border_width: 1.0,
+        back_border_radius: BORDER_RADIUS,
+        handle_bg: Background::Solid(TEXT_COLOR),
+        handle_bg_hover: Some(Background::Solid(TEXT_COLOR_BRIGHT)),
+        handle_border_radius: BORDER_RADIUS,
+        handle_border_color: TEXT_INPUT_BG_COLOR,
+        handle_border_width: 1.0,
+        fill_bg: Background::Solid(accent_color),
+        fill_bg_hover: Some(Background::Solid(accent_color_hover)),
+        handle_height: SizeType::FixedPoints(8.0),
+        handle_padding: Padding::new(2.0, 2.0, 2.0, 2.0),
+        fill_padding: Padding::new(3.0, 5.0, 3.0, 5.0),
+        ..Default::default()
+    }
+}
+
+pub fn knob_style(
+    accent_color: Option<RGBA8>,
+    accent_color_hover: Option<RGBA8>,
+    use_line_notch: bool,
+    use_dot_markers: bool,
+) -> KnobStyle {
+    KnobStyle {
+        back: KnobBackStyle::Quad(KnobBackStyleQuad {
+            bg: Background::Solid(KNOB_BG_COLOR),
+            bg_hover: Some(Background::Solid(KNOB_BG_HOVER_COLOR)),
+            border_color: KNOB_BORDER_COLOR,
+            border_color_hover: Some(KNOB_BORDER_HOVER_COLOR),
+            border_width: 1.0,
+            size: SizeType::Scale(0.7),
+            ..Default::default()
+        }),
+        notch: if use_line_notch {
+            KnobNotchStyle::Line(KnobNotchStyleLine {
+                bg: KnobNotchStyleLineBg::Solid {
+                    idle: TEXT_COLOR,
+                    hovered: Some(TEXT_COLOR_BRIGHT),
+                    gesturing: None,
+                    disabled: Default::default(),
+                },
+                ..Default::default()
+            })
+        } else {
+            KnobNotchStyle::Quad(KnobNotchStyleQuad {
+                bg: Background::Solid(TEXT_COLOR),
+                bg_hover: Some(Background::Solid(TEXT_COLOR_BRIGHT)),
+                ..Default::default()
+            })
+        },
+        markers: if use_dot_markers {
+            KnobMarkersStyle::Dots(KnobMarkersDotStyle {
+                primary_quad_style: QuadStyle {
+                    bg: Background::Solid(TEXT_COLOR_DIMMED),
+                    border: BorderStyle {
+                        radius: Radius::CIRCLE,
+                        ..Default::default()
+                    },
+                },
+                ..Default::default()
+            })
+        } else {
+            let accent_color = accent_color.unwrap_or(DEFAULT_ACCENT_COLOR);
+            let accent_color_hover = accent_color_hover.unwrap_or(DEFAULT_ACCENT_HOVER_COLOR);
+
+            KnobMarkersStyle::Arc(KnobMarkersArcStyle {
+                fill_bg: Background::Solid(accent_color),
+                fill_bg_hover: Some(Background::Solid(accent_color_hover)),
+                back_bg: Background::Solid(KNOB_ARC_TRACK_COLOR),
+                ..Default::default()
+            })
+        },
+        ..Default::default()
     }
 }
 
@@ -317,4 +413,14 @@ pub fn load(accent_color: Option<RGBA8>, accent_color_hover: Option<RGBA8>, res:
     res.style_system.add("", true, label());
     res.style_system.add("panel", true, panel());
     res.style_system.add("menu", true, menu_button());
+    res.style_system.add(
+        "",
+        true,
+        SliderStyle::Modern(slider_style_modern(accent_color, accent_color_hover)),
+    );
+    res.style_system.add(
+        "",
+        true,
+        knob_style(accent_color, accent_color_hover, false, false),
+    );
 }

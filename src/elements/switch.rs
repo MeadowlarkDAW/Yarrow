@@ -8,7 +8,7 @@ use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent
 use crate::layout::{self, Align2};
 use crate::math::{Rect, Size, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::{Background, BorderStyle, QuadStyle, DEFAULT_DISABLED_ALPHA_MULTIPLIER};
+use crate::style::{Background, BorderStyle, DisabledBackground, DisabledColor, QuadStyle};
 use crate::vg::color::RGBA8;
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
@@ -18,32 +18,6 @@ use crate::window::WindowContext;
 use crate::CursorIcon;
 
 // TODO: Sliding animation for switch
-
-/// A descriptor for how to style a disabled [`Switch`] element.
-#[derive(Debug, Clone, PartialEq)]
-pub enum SwitchDisabledStyle {
-    /// Use a multipler on the alpha channel for all colors.
-    AlphaMultiplier(f32),
-    /// Use a custom-defined style.
-    Custom {
-        outer_border_color_off: RGBA8,
-        outer_border_color_on: RGBA8,
-
-        off_bg: Background,
-        on_bg: Background,
-
-        slider_bg_off: Background,
-        slider_bg_on: Background,
-        slider_border_color_off: RGBA8,
-        slider_border_color_on: RGBA8,
-    },
-}
-
-impl Default for SwitchDisabledStyle {
-    fn default() -> Self {
-        Self::AlphaMultiplier(DEFAULT_DISABLED_ALPHA_MULTIPLIER)
-    }
-}
 
 /// The style of a [`Switch`] element
 #[derive(Debug, Clone, PartialEq)]
@@ -55,33 +29,43 @@ pub struct SwitchStyle {
 
     pub outer_border_color_off: RGBA8,
     pub outer_border_color_off_hover: Option<RGBA8>,
+    pub outer_border_color_off_disabled: DisabledColor,
     pub outer_border_color_on: Option<RGBA8>,
     pub outer_border_color_on_hover: Option<RGBA8>,
+    pub outer_border_color_on_disabled: DisabledColor,
 
     pub off_bg: Background,
-    pub on_bg: Option<Background>,
     pub off_bg_hover: Option<Background>,
+    pub off_bg_disabled: DisabledBackground,
+    pub on_bg: Option<Background>,
     pub on_bg_hover: Option<Background>,
+    pub on_bg_disabled: DisabledBackground,
 
     pub slider_padding: f32,
 
     pub slider_bg_off: Background,
-    pub slider_bg_on: Option<Background>,
     pub slider_bg_off_hover: Option<Background>,
+    pub slider_bg_off_disabled: DisabledBackground,
+    pub slider_bg_on: Option<Background>,
     pub slider_bg_on_hover: Option<Background>,
+    pub slider_bg_on_disabled: DisabledBackground,
 
     pub slider_border_width: f32,
     pub slider_border_width_hover: Option<f32>,
 
     pub slider_border_color_off: RGBA8,
     pub slider_border_color_off_hover: Option<RGBA8>,
+    pub slider_border_color_off_disabled: DisabledColor,
     pub slider_border_color_on: Option<RGBA8>,
     pub slider_border_color_on_hover: Option<RGBA8>,
+    pub slider_border_color_on_disabled: DisabledColor,
 
-    /// A descriptor for how to style a disabled [`Switch`] element.
+    /// The cursor icon to show when the user hovers over this element.
     ///
-    /// By default this is set to `SwitchDisabledStyle::AlphaMultiplier(0.5)`.
-    pub disabled_style: SwitchDisabledStyle,
+    /// If this is `None`, then the cursor icon will not be changed.
+    ///
+    /// By default this is set to `None`.
+    pub cursor_icon: Option<CursorIcon>,
 }
 
 impl Default for SwitchStyle {
@@ -92,24 +76,32 @@ impl Default for SwitchStyle {
             outer_border_width: 0.0,
             outer_border_color_off: color::TRANSPARENT,
             outer_border_color_off_hover: None,
+            outer_border_color_off_disabled: Default::default(),
             outer_border_color_on: None,
             outer_border_color_on_hover: None,
+            outer_border_color_on_disabled: Default::default(),
             off_bg: Background::TRANSPARENT,
-            on_bg: None,
             off_bg_hover: None,
+            off_bg_disabled: Default::default(),
+            on_bg: None,
             on_bg_hover: None,
+            on_bg_disabled: Default::default(),
             slider_padding: 2.0,
             slider_bg_off: Background::TRANSPARENT,
-            slider_bg_on: None,
             slider_bg_off_hover: None,
+            slider_bg_off_disabled: Default::default(),
+            slider_bg_on: None,
             slider_bg_on_hover: None,
+            slider_bg_on_disabled: Default::default(),
             slider_border_width: 0.0,
             slider_border_width_hover: None,
             slider_border_color_off: color::TRANSPARENT,
-            slider_border_color_on: None,
             slider_border_color_off_hover: None,
+            slider_border_color_off_disabled: Default::default(),
+            slider_border_color_on: None,
             slider_border_color_on_hover: None,
-            disabled_style: SwitchDisabledStyle::default(),
+            slider_border_color_on_disabled: Default::default(),
+            cursor_icon: None,
         }
     }
 }
@@ -234,6 +226,7 @@ pub struct SwitchElement<A: Clone + 'static> {
     tooltip_message: Option<String>,
     tooltip_align: Align2,
     hovered: bool,
+    cursor_icon: Option<CursorIcon>,
 }
 
 impl<A: Clone + 'static> SwitchElement<A> {
@@ -252,6 +245,8 @@ impl<A: Clone + 'static> SwitchElement<A> {
         } = builder;
 
         let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
+        let style = cx.res.style_system.get::<SwitchStyle>(class);
+        let cursor_icon = style.cursor_icon;
 
         let shared_state = Rc::new(RefCell::new(SharedState { toggled, disabled }));
 
@@ -262,6 +257,7 @@ impl<A: Clone + 'static> SwitchElement<A> {
                 tooltip_message,
                 tooltip_align,
                 hovered: false,
+                cursor_icon,
             }),
             z_index,
             bounding_rect,
@@ -292,12 +288,18 @@ impl<A: Clone + 'static> Element<A> for SwitchElement<A> {
             ElementEvent::CustomStateChanged => {
                 cx.request_repaint();
             }
+            ElementEvent::StyleChanged => {
+                let style = cx.res.style_system.get::<SwitchStyle>(cx.class());
+                self.cursor_icon = style.cursor_icon;
+            }
             ElementEvent::Pointer(PointerEvent::Moved { just_entered, .. }) => {
                 if RefCell::borrow(&self.shared_state).disabled {
                     return EventCaptureStatus::NotCaptured;
                 }
 
-                cx.cursor_icon = CursorIcon::Pointer;
+                if let Some(cursor_icon) = self.cursor_icon {
+                    cx.cursor_icon = cursor_icon;
+                }
 
                 if just_entered && self.tooltip_message.is_some() {
                     cx.start_hover_timeout();
@@ -453,77 +455,46 @@ impl<A: Clone + 'static> Element<A> for SwitchElement<A> {
         };
 
         let (bg_quad_style, slider_quad_style) = if shared_state.disabled {
-            match &style.disabled_style {
-                SwitchDisabledStyle::AlphaMultiplier(multiplier) => {
-                    let (mut bg_quad_bg, mut slider_quad_bg, bg_border_color, slider_border_color) =
-                        get_colors();
+            let (bg_quad_bg, slider_quad_bg, bg_border_color, slider_border_color) = get_colors();
 
-                    bg_quad_bg.multiply_alpha(*multiplier);
-                    slider_quad_bg.multiply_alpha(*multiplier);
-
-                    (
-                        QuadStyle {
-                            bg: bg_quad_bg,
-                            border: BorderStyle {
-                                color: color::multiply_alpha(bg_border_color, *multiplier),
-                                width: style.outer_border_width,
-                                radius: style.rounding.into(),
-                            },
-                        },
-                        QuadStyle {
-                            bg: slider_quad_bg,
-                            border: BorderStyle {
-                                color: color::multiply_alpha(slider_border_color, *multiplier),
-                                width: style.slider_border_width,
-                                radius: style.rounding.into(),
-                            },
-                        },
-                    )
-                }
-                SwitchDisabledStyle::Custom {
-                    outer_border_color_off,
-                    outer_border_color_on,
-                    off_bg,
-                    on_bg,
-                    slider_bg_off,
-                    slider_bg_on,
-                    slider_border_color_off,
-                    slider_border_color_on,
-                } => (
-                    QuadStyle {
-                        bg: if shared_state.toggled {
-                            on_bg.clone()
-                        } else {
-                            off_bg.clone()
-                        },
-                        border: BorderStyle {
-                            color: if shared_state.toggled {
-                                *outer_border_color_on
-                            } else {
-                                *outer_border_color_off
-                            },
-                            width: style.outer_border_width,
-                            radius: style.rounding.into(),
-                        },
+            (
+                QuadStyle {
+                    bg: if shared_state.toggled {
+                        style.on_bg_disabled.get(bg_quad_bg)
+                    } else {
+                        style.off_bg_disabled.get(bg_quad_bg)
                     },
-                    QuadStyle {
-                        bg: if shared_state.toggled {
-                            *slider_bg_on
+                    border: BorderStyle {
+                        color: if shared_state.toggled {
+                            style.outer_border_color_on_disabled.get(bg_border_color)
                         } else {
-                            *slider_bg_off
+                            style.outer_border_color_off_disabled.get(bg_border_color)
                         },
-                        border: BorderStyle {
-                            color: if shared_state.toggled {
-                                *slider_border_color_on
-                            } else {
-                                *slider_border_color_off
-                            },
-                            width: style.slider_border_width,
-                            radius: style.rounding.into(),
-                        },
+                        width: style.outer_border_width,
+                        radius: style.rounding.into(),
                     },
-                ),
-            }
+                },
+                QuadStyle {
+                    bg: if shared_state.toggled {
+                        style.slider_bg_on_disabled.get(slider_quad_bg)
+                    } else {
+                        style.slider_bg_off_disabled.get(slider_quad_bg)
+                    },
+                    border: BorderStyle {
+                        color: if shared_state.toggled {
+                            style
+                                .slider_border_color_on_disabled
+                                .get(slider_border_color)
+                        } else {
+                            style
+                                .slider_border_color_off_disabled
+                                .get(slider_border_color)
+                        },
+                        width: style.slider_border_width,
+                        radius: style.rounding.into(),
+                    },
+                },
+            )
         } else {
             let (bg_quad_bg, slider_quad_bg, bg_border_color, slider_border_color) = get_colors();
 

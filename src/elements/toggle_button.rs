@@ -10,9 +10,8 @@ use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent
 use crate::layout::{Align, Align2, Padding};
 use crate::math::{Rect, Size, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::{
-    Background, BorderStyle, QuadStyle, DEFAULT_DISABLED_ALPHA_MULTIPLIER, DEFAULT_ICON_SIZE,
-};
+use crate::style::{Background, BorderStyle, DisabledBackground, DisabledColor, QuadStyle};
+use crate::theme::DEFAULT_ICON_SIZE;
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
@@ -23,43 +22,6 @@ use crate::CursorIcon;
 
 use super::button::ButtonState;
 use super::label::{LabelInner, LabelPaddingInfo, LabelPrimitives, LabelStyle, TextIconLayout};
-
-/// A descriptor for how to style a disabled [`ToggleButton`] element.
-#[derive(Debug, Clone, PartialEq)]
-pub enum ToggleButtonDisabledStyle {
-    /// Use a multipler on the alpha channel for all colors.
-    AlphaMultiplier(f32),
-    /// Use a custom-defined style.
-    Custom {
-        /// The color of the text when the button is toggled on
-        text_color_on: RGBA8,
-        /// The color of the icon when the button is toggled on
-        icon_color_on: RGBA8,
-        /// The background of the background quad when the button is toggled on
-        back_bg_on: Background,
-        /// The color of the border on the background quad when the button is toggled on
-        back_border_color_on: RGBA8,
-        /// The width of the border on the background quad when the button is toggled on
-        back_border_width_on: f32,
-
-        /// The color of the text when the button is toggled off
-        text_color_off: RGBA8,
-        /// The color of the icon when the button is toggled off
-        icon_color_off: RGBA8,
-        /// The background of the background quad when the button is toggled off
-        back_bg_off: Background,
-        /// The color of the border on the background quad when the button is toggled off
-        back_border_color_off: RGBA8,
-        /// The width of the border on the background quad when the button is toggled off
-        back_border_width_off: f32,
-    },
-}
-
-impl Default for ToggleButtonDisabledStyle {
-    fn default() -> Self {
-        Self::AlphaMultiplier(DEFAULT_DISABLED_ALPHA_MULTIPLIER)
-    }
-}
 
 /// The style of a [`ToggleButton`] element
 #[derive(Debug, Clone, PartialEq)]
@@ -108,6 +70,7 @@ pub struct ToggleButtonStyle {
     ///
     /// By default this is set to `None`.
     pub text_color_on_down: Option<RGBA8>,
+    pub text_color_on_disabled: DisabledColor,
     /// The color of the text when the button is toggled off and hovered.
     ///
     /// If this is `None`, then `text_color` will be used.
@@ -120,6 +83,7 @@ pub struct ToggleButtonStyle {
     ///
     /// By default this is set to `None`.
     pub text_color_off_down: Option<RGBA8>,
+    pub text_color_off_disabled: DisabledColor,
 
     /// The color of the icon
     ///
@@ -145,6 +109,7 @@ pub struct ToggleButtonStyle {
     ///
     /// By default this is set to `None`.
     pub icon_color_on_down: Option<RGBA8>,
+    pub icon_color_on_disabled: DisabledColor,
     /// The color of the icon when the button is toggled off and hovered.
     ///
     /// If this is `None`, then `icon_color` will be used.
@@ -157,6 +122,7 @@ pub struct ToggleButtonStyle {
     ///
     /// By default this is set to `None`.
     pub icon_color_off_down: Option<RGBA8>,
+    pub icon_color_off_disabled: DisabledColor,
 
     /// The background of the background quad.
     pub back_bg: Background,
@@ -178,6 +144,7 @@ pub struct ToggleButtonStyle {
     ///
     /// By default this is set to `None`.
     pub back_bg_on_down: Option<Background>,
+    pub back_bg_on_disabled: DisabledBackground,
     /// The background of the background quad when the button is toggled off and hovered.
     ///
     /// If this is `None`, then `back_bg` will be used.
@@ -190,6 +157,7 @@ pub struct ToggleButtonStyle {
     ///
     /// By default this is set to `None`.
     pub back_bg_off_down: Option<Background>,
+    pub back_bg_off_disabled: DisabledBackground,
 
     /// The color of the border on the background quad.
     pub back_border_color: RGBA8,
@@ -211,6 +179,7 @@ pub struct ToggleButtonStyle {
     ///
     /// By default this is set to `None`.
     pub back_border_color_on_down: Option<RGBA8>,
+    pub back_border_color_on_disabled: DisabledColor,
     /// The color of the border on the background quad when the button is toggled off and hovered.
     ///
     /// If this is `None`, then `back_border_color` will be used.
@@ -223,6 +192,7 @@ pub struct ToggleButtonStyle {
     ///
     /// By default this is set to `None`.
     pub back_border_color_off_down: Option<RGBA8>,
+    pub back_border_color_off_disabled: DisabledColor,
 
     /// The width of the border on the background quad.
     pub back_border_width: f32,
@@ -260,7 +230,12 @@ pub struct ToggleButtonStyle {
     /// The border radius of the background quad.
     pub back_border_radius: Radius,
 
-    pub disabled_style: ToggleButtonDisabledStyle,
+    /// The cursor icon to show when the user hovers over this element.
+    ///
+    /// If this is `None`, then the cursor icon will not be changed.
+    ///
+    /// By default this is set to `None`.
+    pub cursor_icon: Option<CursorIcon>,
 }
 
 impl Default for ToggleButtonStyle {
@@ -275,26 +250,34 @@ impl Default for ToggleButtonStyle {
             text_color_on: None,
             text_color_on_hover: None,
             text_color_on_down: None,
+            text_color_on_disabled: Default::default(),
             text_color_off_hover: None,
             text_color_off_down: None,
+            text_color_off_disabled: Default::default(),
             icon_color: None,
             icon_color_on: None,
             icon_color_on_hover: None,
             icon_color_on_down: None,
+            icon_color_on_disabled: Default::default(),
             icon_color_off_hover: None,
             icon_color_off_down: None,
+            icon_color_off_disabled: Default::default(),
             back_bg: Background::TRANSPARENT,
             back_bg_on: None,
             back_bg_on_hover: None,
             back_bg_on_down: None,
+            back_bg_on_disabled: Default::default(),
             back_bg_off_hover: None,
             back_bg_off_down: None,
+            back_bg_off_disabled: Default::default(),
             back_border_color: color::TRANSPARENT,
             back_border_color_on: None,
             back_border_color_on_hover: None,
             back_border_color_on_down: None,
+            back_border_color_on_disabled: Default::default(),
             back_border_color_off_hover: None,
             back_border_color_off_down: None,
+            back_border_color_off_disabled: Default::default(),
             back_border_width: 0.0,
             back_border_width_on: None,
             back_border_width_on_hover: None,
@@ -302,7 +285,7 @@ impl Default for ToggleButtonStyle {
             back_border_width_off_hover: None,
             back_border_width_off_down: None,
             back_border_radius: Default::default(),
-            disabled_style: Default::default(),
+            cursor_icon: None,
         }
     }
 }
@@ -445,85 +428,47 @@ impl ToggleButtonStyle {
                     )
                 }
             }
-            ButtonState::Disabled => match &self.disabled_style {
-                ToggleButtonDisabledStyle::AlphaMultiplier(multiplier) => {
-                    let mut back_bg = if toggled {
-                        self.back_bg_on.unwrap_or(self.back_bg)
-                    } else {
-                        self.back_bg
-                    };
-                    back_bg.multiply_alpha(*multiplier);
-
-                    let text_color = if toggled {
-                        self.text_color_on.unwrap_or(self.text_color)
-                    } else {
-                        self.text_color
-                    };
-                    let icon_color = if toggled {
-                        self.icon_color_on
-                            .unwrap_or(self.icon_color.unwrap_or(text_color))
-                    } else {
-                        self.icon_color.unwrap_or(self.text_color)
-                    };
-                    let border_color = if toggled {
-                        self.back_border_color_on.unwrap_or(self.back_border_color)
-                    } else {
-                        self.back_border_color
-                    };
+            ButtonState::Disabled => {
+                if toggled {
+                    let text_color = self.text_color_on.unwrap_or(self.text_color);
 
                     (
-                        color::multiply_alpha(text_color, *multiplier),
-                        color::multiply_alpha(icon_color, *multiplier),
+                        self.text_color_on_disabled.get(text_color),
+                        self.icon_color_on_disabled.get(
+                            self.icon_color_on
+                                .unwrap_or(self.icon_color.unwrap_or(text_color)),
+                        ),
                         QuadStyle {
-                            bg: back_bg.clone(),
+                            bg: self
+                                .back_bg_on_disabled
+                                .get(self.back_bg_on.unwrap_or(self.back_bg)),
                             border: BorderStyle {
-                                color: color::multiply_alpha(border_color, *multiplier),
-                                width: self.back_border_width,
+                                color: self.back_border_color_on_disabled.get(
+                                    self.back_border_color_on.unwrap_or(self.back_border_color),
+                                ),
+                                width: self.back_border_width_on.unwrap_or(self.back_border_width),
+                                radius: self.back_border_radius,
+                            },
+                        },
+                    )
+                } else {
+                    (
+                        self.text_color_off_disabled.get(self.text_color),
+                        self.icon_color_off_disabled
+                            .get(self.icon_color.unwrap_or(self.text_color)),
+                        QuadStyle {
+                            bg: self.back_bg_off_disabled.get(self.back_bg),
+                            border: BorderStyle {
+                                color: self
+                                    .back_border_color_off_disabled
+                                    .get(self.back_border_color),
+                                width: self.back_border_width_on.unwrap_or(self.back_border_width),
                                 radius: self.back_border_radius,
                             },
                         },
                     )
                 }
-                ToggleButtonDisabledStyle::Custom {
-                    text_color_on,
-                    icon_color_on,
-                    back_bg_on,
-                    back_border_color_on,
-                    back_border_width_on,
-                    text_color_off,
-                    icon_color_off,
-                    back_bg_off,
-                    back_border_color_off,
-                    back_border_width_off,
-                } => (
-                    if toggled {
-                        *text_color_on
-                    } else {
-                        *text_color_off
-                    },
-                    if toggled {
-                        *icon_color_on
-                    } else {
-                        *icon_color_off
-                    },
-                    QuadStyle {
-                        bg: if toggled { *back_bg_on } else { *back_bg_off },
-                        border: BorderStyle {
-                            color: if toggled {
-                                *back_border_color_on
-                            } else {
-                                *back_border_color_off
-                            },
-                            width: if toggled {
-                                *back_border_width_on
-                            } else {
-                                *back_border_width_off
-                            },
-                            radius: self.back_border_radius,
-                        },
-                    },
-                ),
-            },
+            }
         };
 
         LabelStyle {
@@ -536,7 +481,6 @@ impl ToggleButtonStyle {
             icon_padding: self.icon_padding,
             text_icon_spacing: self.text_icon_spacing,
             vertical_align: Align::Center,
-            disabled_style: Default::default(),
         }
     }
 }
@@ -654,7 +598,6 @@ impl ToggleButtonInner {
     ) -> LabelPrimitives {
         self.label_inner.render_primitives(
             bounds,
-            false,
             &style.label_style(self.state, self.toggled),
             font_system,
         )
@@ -897,6 +840,7 @@ pub struct ToggleButtonElement<A: Clone + 'static> {
     action: Option<Box<dyn FnMut(bool) -> A>>,
     tooltip_message: Option<String>,
     tooltip_align: Align2,
+    cursor_icon: Option<CursorIcon>,
 }
 
 impl<A: Clone + 'static> ToggleButtonElement<A> {
@@ -921,7 +865,8 @@ impl<A: Clone + 'static> ToggleButtonElement<A> {
         } = builder;
 
         let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
-        let style = cx.res.style_system.get(class);
+        let style = cx.res.style_system.get::<ToggleButtonStyle>(class);
+        let cursor_icon = style.cursor_icon;
 
         let shared_state = Rc::new(RefCell::new(SharedState {
             inner: ToggleButtonInner::new(
@@ -944,6 +889,7 @@ impl<A: Clone + 'static> ToggleButtonElement<A> {
                 action,
                 tooltip_message,
                 tooltip_align,
+                cursor_icon,
             }),
             z_index,
             bounding_rect,
@@ -974,6 +920,10 @@ impl<A: Clone + 'static> Element<A> for ToggleButtonElement<A> {
             ElementEvent::CustomStateChanged => {
                 cx.request_repaint();
             }
+            ElementEvent::StyleChanged => {
+                let style = cx.res.style_system.get::<ToggleButtonStyle>(cx.class());
+                self.cursor_icon = style.cursor_icon;
+            }
             ElementEvent::Pointer(PointerEvent::Moved { just_entered, .. }) => {
                 let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -981,7 +931,9 @@ impl<A: Clone + 'static> Element<A> for ToggleButtonElement<A> {
                     return EventCaptureStatus::NotCaptured;
                 }
 
-                cx.cursor_icon = CursorIcon::Pointer;
+                if let Some(cursor_icon) = self.cursor_icon {
+                    cx.cursor_icon = cursor_icon;
+                }
 
                 if just_entered && self.tooltip_message.is_some() {
                     cx.start_hover_timeout();

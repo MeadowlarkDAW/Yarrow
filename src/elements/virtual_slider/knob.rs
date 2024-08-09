@@ -10,7 +10,7 @@ use crate::{
     view::element::{ElementRenderCache, RenderContext},
 };
 
-use super::virtual_slider::{
+use super::{
     UpdateResult, VirtualSlider, VirtualSliderRenderInfo, VirtualSliderRenderer, VirtualSliderState,
 };
 
@@ -39,12 +39,6 @@ pub struct KnobStyle {
 }
 
 impl KnobStyle {
-    pub fn states_differ(&self, a: VirtualSliderState, b: VirtualSliderState) -> bool {
-        self.back.states_differ(a, b)
-            || self.notch.states_differ(a, b)
-            || self.markers.states_differ(a, b)
-    }
-
     pub fn back_bounds(&self, element_size: Size) -> Rect {
         self.back.back_bounds(element_size)
     }
@@ -69,13 +63,6 @@ pub enum KnobBackStyle {
 }
 
 impl KnobBackStyle {
-    pub fn states_differ(&self, a: VirtualSliderState, b: VirtualSliderState) -> bool {
-        match self {
-            Self::Quad(s) => s.states_differ(a, b),
-            Self::None => false,
-        }
-    }
-
     pub fn size(&self) -> SizeType {
         match self {
             Self::Quad(s) => s.size,
@@ -104,16 +91,6 @@ pub enum KnobNotchStyle {
     None,
 }
 
-impl KnobNotchStyle {
-    pub fn states_differ(&self, a: VirtualSliderState, b: VirtualSliderState) -> bool {
-        match self {
-            Self::Quad(s) => s.states_differ(a, b),
-            Self::Line(s) => s.states_differ(a, b),
-            Self::None => false,
-        }
-    }
-}
-
 impl Default for KnobNotchStyle {
     fn default() -> Self {
         Self::Quad(KnobNotchStyleQuad::default())
@@ -127,19 +104,8 @@ pub enum KnobMarkersStyle {
     None,
 }
 
-impl KnobMarkersStyle {
-    pub fn states_differ(&self, a: VirtualSliderState, b: VirtualSliderState) -> bool {
-        match self {
-            Self::Dots(_) => false,
-            Self::Arc(s) => s.states_differ(a, b),
-            Self::None => false,
-        }
-    }
-}
-
 impl Default for KnobMarkersStyle {
     fn default() -> Self {
-        //Self::Dots(KnobMarkersDotStyle::default())
         Self::Arc(KnobMarkersArcStyle::default())
     }
 }
@@ -174,14 +140,12 @@ impl VirtualSliderRenderer for KnobRenderer {
 
     fn on_state_changed(
         &mut self,
-        prev_state: VirtualSliderState,
-        new_state: VirtualSliderState,
+        _prev_state: VirtualSliderState,
+        _new_state: VirtualSliderState,
     ) -> UpdateResult {
-        let style = self.style.downcast_ref::<KnobStyle>().unwrap();
-
-        // Only repaint if the appearance is different.
+        // TODO: only repaint if the appearance is different.
         UpdateResult {
-            repaint: style.states_differ(prev_state, new_state),
+            repaint: true,
             animating: false,
         }
     }
@@ -225,7 +189,12 @@ impl VirtualSliderRenderer for KnobRenderer {
 
                 primitives.add(
                     render_cache
-                        .marker_arc_back_mesh(cx.class, style, back_bounds)
+                        .marker_arc_back_mesh(
+                            cx.class,
+                            style,
+                            back_bounds,
+                            info.state == VirtualSliderState::Disabled,
+                        )
                         .unwrap(),
                 );
 

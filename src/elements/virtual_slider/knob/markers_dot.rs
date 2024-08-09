@@ -1,7 +1,6 @@
 use std::f32::consts::PI;
 
 use rootvg::{
-    color::RGBA8,
     math::{Angle, Rect, Size, Vector},
     quad::QuadPrimitive,
     PrimitiveGroup,
@@ -9,7 +8,7 @@ use rootvg::{
 
 use crate::{
     prelude::{ParamMarkersConfig, ParamerMarkerType},
-    style::{Background, BorderStyle, QuadStyle},
+    style::QuadStyle,
 };
 
 use super::KnobAngleRange;
@@ -17,8 +16,8 @@ use super::KnobAngleRange;
 #[derive(Debug, Clone, PartialEq)]
 pub struct KnobMarkersDotStyle {
     pub primary_quad_style: QuadStyle,
-    pub secondary_quad_style: QuadStyle,
-    pub third_quad_style: QuadStyle,
+    pub secondary_quad_style: Option<QuadStyle>,
+    pub third_quad_style: Option<QuadStyle>,
     pub primary_size: f32,
     pub secondary_size: f32,
     pub third_size: f32,
@@ -30,27 +29,9 @@ pub struct KnobMarkersDotStyle {
 impl Default for KnobMarkersDotStyle {
     fn default() -> Self {
         Self {
-            primary_quad_style: QuadStyle {
-                bg: Background::Solid(RGBA8::new(150, 150, 150, 150)),
-                border: BorderStyle {
-                    radius: 10000.0.into(),
-                    ..Default::default()
-                },
-            },
-            secondary_quad_style: QuadStyle {
-                bg: Background::Solid(RGBA8::new(150, 150, 150, 100)),
-                border: BorderStyle {
-                    radius: 10000.0.into(),
-                    ..Default::default()
-                },
-            },
-            third_quad_style: QuadStyle {
-                bg: Background::Solid(RGBA8::new(150, 150, 150, 50)),
-                border: BorderStyle {
-                    radius: 10000.0.into(),
-                    ..Default::default()
-                },
-            },
+            primary_quad_style: QuadStyle::TRANSPARENT,
+            secondary_quad_style: None,
+            third_quad_style: None,
             primary_size: 2.0,
             secondary_size: 1.0,
             third_size: 1.0,
@@ -93,11 +74,19 @@ impl KnobMarkersDotStyle {
                 ParamerMarkerType::Secondary => (
                     secondary_center_offset,
                     self.secondary_size,
-                    &self.secondary_quad_style,
+                    self.secondary_quad_style
+                        .as_ref()
+                        .unwrap_or(&self.primary_quad_style),
                 ),
-                ParamerMarkerType::Third => {
-                    (third_center_offset, self.third_size, &self.third_quad_style)
-                }
+                ParamerMarkerType::Third => (
+                    third_center_offset,
+                    self.third_size,
+                    self.third_quad_style.as_ref().unwrap_or(
+                        self.secondary_quad_style
+                            .as_ref()
+                            .unwrap_or(&self.primary_quad_style),
+                    ),
+                ),
             };
 
             x_offset *= center_offset;

@@ -12,7 +12,8 @@ use crate::event::{ElementEvent, EventCaptureStatus, PointerEvent};
 use crate::layout::{Align2, Padding, StartEndAlign};
 use crate::math::{Point, Rect, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::{QuadStyle, DEFAULT_ICON_SIZE};
+use crate::style::{DisabledColor, QuadStyle};
+use crate::theme::DEFAULT_ICON_SIZE;
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
 };
@@ -20,7 +21,7 @@ use crate::view::ScissorRectID;
 use crate::window::WindowContext;
 use crate::CursorIcon;
 
-use super::{TextInputAction, TextInputDisabledStyle, TextInputInner, TextInputStyle};
+use super::{TextInputAction, TextInputInner, TextInputStyle};
 
 /// The style of an [`IconTextInput`] element
 #[derive(Debug, Clone, PartialEq)]
@@ -31,7 +32,7 @@ pub struct IconTextInputStyle {
     pub icon_color: Option<RGBA8>,
     pub icon_color_hover: Option<RGBA8>,
     pub icon_color_focused: Option<RGBA8>,
-    pub icon_color_disabled: Option<RGBA8>,
+    pub icon_color_disabled: DisabledColor,
     pub icon_padding: Padding,
     pub icon_align: StartEndAlign,
 }
@@ -39,19 +40,13 @@ pub struct IconTextInputStyle {
 impl IconTextInputStyle {
     fn icon_style(&self, hovered: bool, focused: bool, disabled: bool) -> IconStyle {
         let color = if disabled {
-            match &self.text_input.disabled_style {
-                TextInputDisabledStyle::AlphaMultiplier(multiplier) => color::multiply_alpha(
-                    self.icon_color.unwrap_or(
-                        self.text_input
-                            .text_color_placeholder
-                            .unwrap_or(self.text_input.text_color),
-                    ),
-                    *multiplier,
+            self.icon_color_disabled.get(
+                self.icon_color.unwrap_or(
+                    self.text_input
+                        .text_color_placeholder
+                        .unwrap_or(self.text_input.text_color),
                 ),
-                TextInputDisabledStyle::Custom { text_color, .. } => {
-                    self.icon_color_disabled.unwrap_or(*text_color)
-                }
-            }
+            )
         } else if focused {
             self.icon_color_focused.unwrap_or(
                 self.text_input.text_color_placeholder_focused.unwrap_or(
@@ -83,7 +78,6 @@ impl IconTextInputStyle {
             color,
             back_quad: QuadStyle::TRANSPARENT,
             padding: self.icon_padding,
-            disabled_style: Default::default(),
         }
     }
 }
@@ -96,7 +90,7 @@ impl Default for IconTextInputStyle {
             icon_color: None,
             icon_color_hover: None,
             icon_color_focused: None,
-            icon_color_disabled: None,
+            icon_color_disabled: Default::default(),
             icon_padding: Padding::default(),
             icon_align: StartEndAlign::Start,
         }
@@ -540,7 +534,6 @@ impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
 
         let icon_primitives = self.icon.render_primitives(
             self.icon_rect,
-            disabled,
             &style.icon_style(self.hovered, shared_state.inner.focused(), disabled),
         );
         primitives.set_z_index(2);

@@ -11,35 +11,14 @@ use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::{Align, Align2, Padding};
 use crate::math::{Point, Rect, Size, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::{QuadStyle, DEFAULT_DISABLED_ALPHA_MULTIPLIER, DEFAULT_ICON_SIZE};
+use crate::style::QuadStyle;
+use crate::theme::DEFAULT_ICON_SIZE;
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
 };
 use crate::view::ScissorRectID;
 use crate::window::WindowContext;
-
-/// A descriptor for how to style a disabled [`Label`] element.
-#[derive(Debug, Clone, PartialEq)]
-pub enum LabelDisabledStyle {
-    /// Use a multipler on the alpha channel for all colors.
-    AlphaMultiplier(f32),
-    /// Use a custom-defined style.
-    Custom {
-        /// The color of the text
-        text_color: RGBA8,
-        /// The color of the icon.
-        icon_color: RGBA8,
-        /// The style of the padded background rectangle behind the text and icon.
-        back_quad: QuadStyle,
-    },
-}
-
-impl Default for LabelDisabledStyle {
-    fn default() -> Self {
-        Self::AlphaMultiplier(DEFAULT_DISABLED_ALPHA_MULTIPLIER)
-    }
-}
 
 /// The style of a [`Label`] element
 #[derive(Debug, Clone, PartialEq)]
@@ -84,11 +63,6 @@ pub struct LabelStyle {
     /// By default this is set to `QuadStyle::TRANSPARENT`.
     pub back_quad: QuadStyle,
 
-    /// A descriptor for how to style a disabled [`Label`] element.
-    ///
-    /// By default this is set to `LabelDisabledStyle::AlphaMultiplier(0.5)`.
-    pub disabled_style: LabelDisabledStyle,
-
     /// The vertical alignment.
     ///
     /// By default this is set to `Align::Center`.
@@ -117,7 +91,6 @@ impl Default for LabelStyle {
             icon_padding: Padding::default(),
             text_icon_spacing: 0.0,
             back_quad: QuadStyle::TRANSPARENT,
-            disabled_style: LabelDisabledStyle::default(),
             vertical_align: crate::layout::Align::Center,
         }
     }
@@ -408,7 +381,6 @@ impl LabelInner {
     pub fn render_primitives(
         &mut self,
         bounds: Rect,
-        disabled: bool,
         style: &LabelStyle,
         font_system: &mut FontSystem,
     ) -> LabelPrimitives {
@@ -443,23 +415,12 @@ impl LabelInner {
         }
 
         let text = if let Some(inner) = &self.text_inner {
-            let text_color = if disabled {
-                match &style.disabled_style {
-                    LabelDisabledStyle::AlphaMultiplier(multiplier) => {
-                        color::multiply_alpha(style.text_color, *multiplier)
-                    }
-                    LabelDisabledStyle::Custom { text_color, .. } => *text_color,
-                }
-            } else {
-                style.text_color
-            };
-
             Some(TextPrimitive::new(
                 inner.text_buffer.clone(),
                 bounds.origin
                     + self.text_bounds_rect.origin.to_vector()
                     + self.text_offset.to_vector(),
-                text_color,
+                style.text_color,
                 None,
             ))
         } else {
@@ -476,24 +437,12 @@ impl LabelInner {
                 (style.icon_size, 0.0)
             };
 
-            let icon_color = if disabled {
-                match &style.disabled_style {
-                    LabelDisabledStyle::AlphaMultiplier(multiplier) => {
-                        let icon_color = style.icon_color.unwrap_or(style.text_color);
-                        color::multiply_alpha(icon_color, *multiplier)
-                    }
-                    LabelDisabledStyle::Custom { icon_color, .. } => *icon_color,
-                }
-            } else {
-                style.icon_color.unwrap_or(style.text_color)
-            };
-
             Some(TextPrimitive::new_with_icons(
                 None,
                 bounds.origin
                     + self.icon_bounds_rect.origin.to_vector()
                     + self.icon_offset.to_vector(),
-                icon_color,
+                style.icon_color.unwrap_or(style.text_color),
                 Some(Rect::new(
                     Point::new(-1.0, -1.0),
                     Size::new(
@@ -514,22 +463,7 @@ impl LabelInner {
             None
         };
 
-        let bg_quad = if disabled {
-            match &style.disabled_style {
-                LabelDisabledStyle::AlphaMultiplier(multiplier) => {
-                    if style.back_quad.is_transparent() {
-                        None
-                    } else {
-                        let mut q = style.back_quad.clone();
-                        q.multiply_alpha(*multiplier);
-                        Some(q.create_primitive(bounds))
-                    }
-                }
-                LabelDisabledStyle::Custom { back_quad, .. } => {
-                    Some(back_quad.create_primitive(bounds))
-                }
-            }
-        } else if !style.back_quad.is_transparent() {
+        let bg_quad = if !style.back_quad.is_transparent() {
             Some(style.back_quad.create_primitive(bounds))
         } else {
             None
@@ -554,7 +488,6 @@ pub struct LabelBuilder {
     pub z_index: Option<ZIndex>,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
-    pub disabled: bool,
     pub scissor_rect_id: Option<ScissorRectID>,
 }
 
@@ -571,7 +504,6 @@ impl LabelBuilder {
             z_index: None,
             bounding_rect: Rect::default(),
             manually_hidden: false,
-            disabled: false,
             scissor_rect_id: None,
         }
     }
@@ -684,14 +616,6 @@ impl LabelBuilder {
         self
     }
 
-    /// Whether or not this element is in the disabled state
-    ///
-    /// By default this is set to `false`.
-    pub const fn disabled(mut self, disabled: bool) -> Self {
-        self.disabled = disabled;
-        self
-    }
-
     /// The ID of the scissoring rectangle this element belongs to.
     ///
     /// If this method is not used, then the current scissoring rectangle ID from the
@@ -723,7 +647,6 @@ impl LabelElement {
             z_index,
             bounding_rect,
             manually_hidden,
-            disabled,
             scissor_rect_id,
         } = builder;
 
@@ -741,7 +664,6 @@ impl LabelElement {
                 &style,
                 &mut cx.res.font_system,
             ),
-            disabled,
         }));
 
         let element_builder = ElementBuilder {
@@ -782,11 +704,9 @@ impl<A: Clone + 'static> Element<A> for LabelElement {
 
     fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-        let disabled = shared_state.disabled;
 
         let label_primitives = shared_state.inner.render_primitives(
             Rect::from_size(cx.bounds_size),
-            disabled,
             cx.res.style_system.get(cx.class),
             &mut cx.res.font_system,
         );
@@ -809,7 +729,6 @@ impl<A: Clone + 'static> Element<A> for LabelElement {
 
 struct SharedState {
     inner: LabelInner,
-    disabled: bool,
 }
 
 /// A handle to a [`LabelElement`], a label with an optional quad background.
@@ -909,19 +828,6 @@ impl Label {
             shared_state.inner.icon_scale = scale;
             self.el._notify_custom_state_change();
         }
-    }
-
-    pub fn set_disabled(&mut self, disabled: bool) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
-        if shared_state.disabled != disabled {
-            shared_state.disabled = disabled;
-            self.el._notify_custom_state_change();
-        }
-    }
-
-    pub fn disabled(&self) -> bool {
-        RefCell::borrow(&self.shared_state).disabled
     }
 
     pub fn layout(&mut self, origin: Point, res: &mut ResourceCtx) {

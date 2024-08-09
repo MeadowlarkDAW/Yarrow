@@ -125,7 +125,7 @@ impl MyStyle {
             "fancy_icon",
             true,
             IconStyle {
-                color: yarrow::style::DEFAULT_ACCENT_COLOR,
+                color: yarrow::theme::DEFAULT_ACCENT_COLOR,
                 size: 20.0,
                 back_quad: QuadStyle {
                     bg: Background::Solid(RGBA8::new(42, 42, 42, 255)),
@@ -151,7 +151,7 @@ impl MyStyle {
                     },
                 },
                 text_color: RGBA8::new(255, 255, 255, 200),
-                icon_color: Some(yarrow::style::DEFAULT_ACCENT_COLOR),
+                icon_color: Some(yarrow::theme::DEFAULT_ACCENT_COLOR),
                 text_padding: Padding::new(6.0, 12.0, 6.0, 12.0),
                 icon_padding: Padding::new(4.0, 8.0, 4.0, 8.0),
                 text_icon_spacing: -12.0,
@@ -171,11 +171,7 @@ impl MyStyle {
         res.style_system.add(
             "knob2",
             true,
-            KnobStyle {
-                notch: KnobNotchStyle::Line(Default::default()),
-                markers: KnobMarkersStyle::Dots(Default::default()),
-                ..Default::default()
-            },
+            yarrow::theme::yarrow_dark::knob_style(None, None, true, true),
         );
     }
 }

@@ -7,13 +7,13 @@ pub const SCROLL_AREA_SCISSOR_RECT: ScissorRectID = 1;
 #[repr(usize)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, derive_more::Display)]
 pub enum DropDownOption {
-    #[display(fmt = "Option A")]
+    #[display("Option A")]
     A,
-    #[display(fmt = "Option B")]
+    #[display("Option B")]
     B,
-    #[display(fmt = "Option C")]
+    #[display("Option C")]
     C,
-    #[display(fmt = "Option D")]
+    #[display("Option D")]
     D,
 }
 impl DropDownOption {
@@ -26,7 +26,7 @@ pub enum TextMenuOption {
     Cut,
     Copy,
     Paste,
-    #[display(fmt = "Select All")]
+    #[display("Select All")]
     SelectAll,
 }
 impl TextMenuOption {

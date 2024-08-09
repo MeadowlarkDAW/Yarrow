@@ -9,33 +9,13 @@ use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::{Align2, Padding};
 use crate::math::{Point, Rect, Size, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::{QuadStyle, DEFAULT_DISABLED_ALPHA_MULTIPLIER};
+use crate::style::QuadStyle;
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
 };
 use crate::view::ScissorRectID;
 use crate::window::WindowContext;
-
-/// A descriptor for how to style a disabled [`Icon`] element.
-#[derive(Debug, Clone, PartialEq)]
-pub enum IconDisabledStyle {
-    /// Use a multipler on the alpha channel for all colors.
-    AlphaMultiplier(f32),
-    /// Use a custom-defined style.
-    Custom {
-        /// The color of the icon.
-        color: RGBA8,
-        /// The style of the padded background rectangle behind the text and icon.
-        back_quad: QuadStyle,
-    },
-}
-
-impl Default for IconDisabledStyle {
-    fn default() -> Self {
-        Self::AlphaMultiplier(DEFAULT_DISABLED_ALPHA_MULTIPLIER)
-    }
-}
 
 /// The style of an [`Icon`] element
 #[derive(Debug, Clone, PartialEq)]
@@ -61,8 +41,6 @@ pub struct IconStyle {
     ///
     /// By default this has all values set to `0.0`.
     pub padding: Padding,
-
-    pub disabled_style: IconDisabledStyle,
 }
 
 impl IconStyle {
@@ -81,7 +59,6 @@ impl Default for IconStyle {
             color: color::WHITE,
             back_quad: QuadStyle::TRANSPARENT,
             padding: Padding::zero(),
-            disabled_style: Default::default(),
         }
     }
 }
@@ -165,12 +142,7 @@ impl IconInner {
         self.size_needs_calculated = true;
     }
 
-    pub fn render_primitives(
-        &mut self,
-        bounds: Rect,
-        disabled: bool,
-        style: &IconStyle,
-    ) -> IconPrimitives {
+    pub fn render_primitives(&mut self, bounds: Rect, style: &IconStyle) -> IconPrimitives {
         let icon_rect = self.icon_rect(style, bounds.size);
 
         let (size, offset) = if self.scale != 1.0 {
@@ -182,48 +154,11 @@ impl IconInner {
             (style.size, 0.0)
         };
 
-        let (icon_color, back_quad) = if disabled {
-            match &style.disabled_style {
-                IconDisabledStyle::AlphaMultiplier(multiplier) => {
-                    let mut bg_quad_style = if !style.back_quad.is_transparent() {
-                        Some(style.back_quad)
-                    } else {
-                        None
-                    };
-                    bg_quad_style
-                        .as_mut()
-                        .map(|s| s.multiply_alpha(*multiplier));
-
-                    (
-                        color::multiply_alpha(style.color, *multiplier),
-                        bg_quad_style,
-                    )
-                }
-                IconDisabledStyle::Custom { color, back_quad } => (
-                    *color,
-                    if back_quad.is_transparent() {
-                        None
-                    } else {
-                        Some(*back_quad)
-                    },
-                ),
-            }
-        } else {
-            (
-                style.color,
-                if style.back_quad.is_transparent() {
-                    None
-                } else {
-                    Some(style.back_quad)
-                },
-            )
-        };
-
         IconPrimitives {
             icon: TextPrimitive::new_with_icons(
                 None,
                 bounds.origin + icon_rect.origin.to_vector() + self.offset.to_vector(),
-                icon_color,
+                style.color,
                 None,
                 smallvec::smallvec![CustomGlyphDesc {
                     id: self.icon_id,
@@ -234,7 +169,11 @@ impl IconInner {
                     metadata: 0,
                 }],
             ),
-            bg_quad: back_quad.as_ref().map(|b| b.create_primitive(bounds)),
+            bg_quad: if !style.back_quad.is_transparent() {
+                Some(style.back_quad.create_primitive(bounds))
+            } else {
+                None
+            },
         }
     }
 }
@@ -247,7 +186,6 @@ pub struct IconBuilder {
     pub z_index: Option<ZIndex>,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
-    pub disabled: bool,
     pub scissor_rect_id: Option<ScissorRectID>,
 }
 
@@ -261,7 +199,6 @@ impl IconBuilder {
             z_index: None,
             bounding_rect: Rect::default(),
             manually_hidden: false,
-            disabled: false,
             scissor_rect_id: None,
         }
     }
@@ -323,14 +260,6 @@ impl IconBuilder {
         self
     }
 
-    /// Whether or not this element is in the disabled state
-    ///
-    /// By default this is set to `false`.
-    pub const fn disabled(mut self, disabled: bool) -> Self {
-        self.disabled = disabled;
-        self
-    }
-
     /// The ID of the scissoring rectangle this element belongs to.
     ///
     /// If this method is not used, then the current scissoring rectangle ID from the
@@ -356,7 +285,6 @@ impl IconElement {
             z_index,
             bounding_rect,
             manually_hidden,
-            disabled,
             scissor_rect_id,
         } = builder;
 
@@ -364,7 +292,6 @@ impl IconElement {
 
         let shared_state = Rc::new(RefCell::new(SharedState {
             inner: IconInner::new(icon, scale, offset),
-            disabled,
         }));
 
         let element_builder = ElementBuilder {
@@ -405,11 +332,9 @@ impl<A: Clone + 'static> Element<A> for IconElement {
 
     fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-        let disabled = shared_state.disabled;
 
         let icon_primitives = shared_state.inner.render_primitives(
             Rect::from_size(cx.bounds_size),
-            disabled,
             cx.res.style_system.get(cx.class),
         );
 
@@ -424,7 +349,6 @@ impl<A: Clone + 'static> Element<A> for IconElement {
 
 struct SharedState {
     inner: IconInner,
-    disabled: bool,
 }
 
 /// A handle to a [`IconElement`], an icon with an optional quad background.

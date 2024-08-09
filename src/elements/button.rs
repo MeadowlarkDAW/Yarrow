@@ -10,9 +10,8 @@ use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent
 use crate::layout::{Align, Align2, Padding};
 use crate::math::{Rect, Size, ZIndex};
 use crate::prelude::ResourceCtx;
-use crate::style::{
-    Background, BorderStyle, QuadStyle, DEFAULT_DISABLED_ALPHA_MULTIPLIER, DEFAULT_ICON_SIZE,
-};
+use crate::style::{Background, BorderStyle, DisabledBackground, DisabledColor, QuadStyle};
+use crate::theme::DEFAULT_ICON_SIZE;
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, ElementStyle,
@@ -39,32 +38,6 @@ impl ButtonState {
         } else {
             Self::Idle
         }
-    }
-}
-
-/// A descriptor for how to style a disabled [`Button`] element.
-#[derive(Debug, Clone, PartialEq)]
-pub enum ButtonDisabledStyle {
-    /// Use a multipler on the alpha channel for all colors.
-    AlphaMultiplier(f32),
-    /// Use a custom-defined style.
-    Custom {
-        /// The color of the text
-        text_color: RGBA8,
-        /// The color of the icon.
-        icon_color: RGBA8,
-        /// The background of the background quad.
-        back_bg: Background,
-        /// The color of the border on the background quad.
-        back_border_color: RGBA8,
-        /// The width of the border on the background quad.
-        back_border_width: f32,
-    },
-}
-
-impl Default for ButtonDisabledStyle {
-    fn default() -> Self {
-        Self::AlphaMultiplier(DEFAULT_DISABLED_ALPHA_MULTIPLIER)
     }
 }
 
@@ -109,6 +82,7 @@ pub struct ButtonStyle {
     ///
     /// By default this is set to `None`.
     pub text_color_down: Option<RGBA8>,
+    pub text_color_disabled: DisabledColor,
 
     /// The color of the icon.
     ///
@@ -128,6 +102,7 @@ pub struct ButtonStyle {
     ///
     /// By default this is set to `None`.
     pub icon_color_down: Option<RGBA8>,
+    pub icon_color_disabled: DisabledColor,
 
     /// The background of the background quad.
     pub back_bg: Background,
@@ -143,6 +118,7 @@ pub struct ButtonStyle {
     ///
     /// By default this is set to `None`.
     pub back_bg_down: Option<Background>,
+    pub back_bg_disabled: DisabledBackground,
 
     /// The color of the border on the background quad.
     pub back_border_color: RGBA8,
@@ -158,6 +134,7 @@ pub struct ButtonStyle {
     ///
     /// By default this is set to `None`.
     pub back_border_color_down: Option<RGBA8>,
+    pub back_border_color_disabled: DisabledColor,
 
     /// The width of the border on the background quad.
     pub back_border_width: f32,
@@ -183,8 +160,6 @@ pub struct ButtonStyle {
     ///
     /// By default this is set to `None`.
     pub cursor_icon: Option<CursorIcon>,
-
-    pub disabled_style: ButtonDisabledStyle,
 }
 
 impl Default for ButtonStyle {
@@ -198,21 +173,24 @@ impl Default for ButtonStyle {
             text_color: color::WHITE,
             text_color_hover: None,
             text_color_down: None,
+            text_color_disabled: Default::default(),
             icon_color: None,
             icon_color_hover: None,
             icon_color_down: None,
+            icon_color_disabled: Default::default(),
             back_bg: Background::TRANSPARENT,
             back_bg_hover: None,
             back_bg_down: None,
+            back_bg_disabled: Default::default(),
             back_border_color: color::TRANSPARENT,
             back_border_color_hover: None,
             back_border_color_down: None,
+            back_border_color_disabled: Default::default(),
             back_border_width: 0.0,
             back_border_width_hover: None,
             back_border_width_down: None,
             back_border_radius: Default::default(),
             cursor_icon: None,
-            disabled_style: Default::default(),
         }
     }
 }
@@ -287,44 +265,21 @@ impl ButtonStyle {
                     },
                 },
             ),
-            ButtonState::Disabled => match &self.disabled_style {
-                ButtonDisabledStyle::AlphaMultiplier(multiplier) => {
-                    let mut back_bg = self.back_bg.clone();
-                    back_bg.multiply_alpha(*multiplier);
-
-                    (
-                        color::multiply_alpha(self.text_color, *multiplier),
-                        self.icon_color
-                            .map(|c| color::multiply_alpha(c, *multiplier)),
-                        QuadStyle {
-                            bg: back_bg.clone(),
-                            border: BorderStyle {
-                                color: color::multiply_alpha(self.back_border_color, *multiplier),
-                                width: self.back_border_width,
-                                radius: self.back_border_radius,
-                            },
-                        },
-                    )
-                }
-                ButtonDisabledStyle::Custom {
-                    text_color,
-                    icon_color,
-                    back_bg,
-                    back_border_color,
-                    back_border_width,
-                } => (
-                    *text_color,
-                    Some(*icon_color),
-                    QuadStyle {
-                        bg: back_bg.clone(),
-                        border: BorderStyle {
-                            color: *back_border_color,
-                            width: *back_border_width,
-                            radius: self.back_border_radius,
-                        },
-                    },
+            ButtonState::Disabled => (
+                self.text_color_disabled.get(self.text_color),
+                Some(
+                    self.icon_color_disabled
+                        .get(self.icon_color.unwrap_or(self.text_color)),
                 ),
-            },
+                QuadStyle {
+                    bg: self.back_bg_disabled.get(self.back_bg),
+                    border: BorderStyle {
+                        color: self.back_border_color_disabled.get(self.back_border_color),
+                        width: self.back_border_width,
+                        radius: self.back_border_radius,
+                    },
+                },
+            ),
         };
 
         LabelStyle {
@@ -337,7 +292,6 @@ impl ButtonStyle {
             icon_padding: self.icon_padding,
             text_icon_spacing: self.text_icon_spacing,
             vertical_align: Align::Center,
-            disabled_style: Default::default(),
         }
     }
 }
@@ -447,12 +401,8 @@ impl ButtonInner {
         style: &ButtonStyle,
         font_system: &mut FontSystem,
     ) -> LabelPrimitives {
-        self.label_inner.render_primitives(
-            bounds,
-            false,
-            &style.label_style(self.state),
-            font_system,
-        )
+        self.label_inner
+            .render_primitives(bounds, &style.label_style(self.state), font_system)
     }
 
     /// An offset that can be used mainly to correct the position of text.

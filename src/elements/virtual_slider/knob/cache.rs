@@ -7,11 +7,9 @@ use std::{any::Any, hash::Hash};
 use ahash::AHashMap;
 use rootvg::{math::Rect, mesh::MeshPrimitive};
 
-use crate::{
-    elements::knob::KnobMarkersStyle, prelude::KnobNotchStyle, view::element::ElementRenderCache,
-};
+use crate::view::element::ElementRenderCache;
 
-use super::{KnobNotchLinePrimitives, KnobStyle};
+use super::{KnobMarkersStyle, KnobNotchLinePrimitives, KnobNotchStyle, KnobStyle};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct KnobNotchLineCacheKey {
@@ -23,6 +21,7 @@ struct KnobNotchLineCacheKey {
 struct KnobMarkersArcCacheKey {
     class: &'static str,
     back_size: i32,
+    disabled: bool,
 }
 
 #[derive(Default)]
@@ -77,6 +76,7 @@ impl KnobRenderCacheInner {
         class: &'static str,
         style: &KnobStyle,
         back_bounds: Rect,
+        disabled: bool,
     ) -> Option<MeshPrimitive> {
         let KnobMarkersStyle::Arc(arc_style) = &style.markers else {
             return None;
@@ -85,11 +85,12 @@ impl KnobRenderCacheInner {
         let key = KnobMarkersArcCacheKey {
             class,
             back_size: back_bounds.width().round() as i32,
+            disabled,
         };
 
         let entry = self.marker_arc_meshes.entry(key).or_insert_with(|| {
             (
-                arc_style.create_back_primitive(back_bounds.width(), style.angle_range),
+                arc_style.create_back_primitive(back_bounds.width(), style.angle_range, disabled),
                 true,
             )
         });

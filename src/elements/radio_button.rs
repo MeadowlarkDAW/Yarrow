@@ -9,7 +9,7 @@ use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent
 use crate::layout::{self, Align2};
 use crate::math::{Rect, Size, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::{Background, BorderStyle, QuadStyle, DEFAULT_DISABLED_ALPHA_MULTIPLIER};
+use crate::style::{Background, BorderStyle, DisabledBackground, DisabledColor, QuadStyle};
 use crate::vg::color::RGBA8;
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
@@ -19,34 +19,6 @@ use crate::window::WindowContext;
 use crate::CursorIcon;
 
 use super::label::Label;
-
-/// A descriptor for how to style a disabled [`RadioButton`] element.
-#[derive(Debug, Clone, PartialEq)]
-pub enum RadioButtonDisabledStyle {
-    /// Use a multipler on the alpha channel for all colors.
-    AlphaMultiplier(f32),
-    /// Use a custom-defined style.
-    Custom {
-        /// The background of the dot when the button is toggled on
-        dot_bg: Background,
-
-        /// The background of the background quad when the button is toggled on
-        back_bg_on: Background,
-        /// The color of the border on the background quad when the button is toggled on
-        back_border_color_on: RGBA8,
-
-        /// The background of the background quad when the button is toggled off
-        back_bg_off: Background,
-        /// The color of the border on the background quad when the button is toggled off
-        back_border_color_off: RGBA8,
-    },
-}
-
-impl Default for RadioButtonDisabledStyle {
-    fn default() -> Self {
-        Self::AlphaMultiplier(DEFAULT_DISABLED_ALPHA_MULTIPLIER)
-    }
-}
 
 /// The style of a [`RadioButton`] element
 #[derive(Debug, Clone, PartialEq)]
@@ -58,20 +30,30 @@ pub struct RadioButtonStyle {
 
     pub outer_border_color_off: RGBA8,
     pub outer_border_color_off_hover: Option<RGBA8>,
+    pub outer_border_color_off_disabled: DisabledColor,
     pub outer_border_color_on: Option<RGBA8>,
     pub outer_border_color_on_hover: Option<RGBA8>,
+    pub outer_border_color_on_disabled: DisabledColor,
 
     pub off_bg: Background,
-    pub on_bg: Option<Background>,
     pub off_bg_hover: Option<Background>,
+    pub off_bg_disabled: DisabledBackground,
+    pub on_bg: Option<Background>,
     pub on_bg_hover: Option<Background>,
+    pub on_bg_disabled: DisabledBackground,
 
     pub dot_padding: f32,
 
     pub dot_bg: Background,
     pub dot_bg_hover: Option<Background>,
+    pub dot_bg_disabled: DisabledBackground,
 
-    pub disabled_style: RadioButtonDisabledStyle,
+    /// The cursor icon to show when the user hovers over this element.
+    ///
+    /// If this is `None`, then the cursor icon will not be changed.
+    ///
+    /// By default this is set to `None`.
+    pub cursor_icon: Option<CursorIcon>,
 }
 
 impl Default for RadioButtonStyle {
@@ -81,17 +63,22 @@ impl Default for RadioButtonStyle {
             radius: 20.0.into(),
             outer_border_width: 0.0,
             outer_border_color_off: color::TRANSPARENT,
-            outer_border_color_on: None,
             outer_border_color_off_hover: None,
+            outer_border_color_off_disabled: Default::default(),
+            outer_border_color_on: None,
             outer_border_color_on_hover: None,
+            outer_border_color_on_disabled: Default::default(),
             off_bg: Background::TRANSPARENT,
-            on_bg: None,
             off_bg_hover: None,
+            off_bg_disabled: Default::default(),
+            on_bg: None,
             on_bg_hover: None,
+            on_bg_disabled: Default::default(),
             dot_padding: 6.0,
             dot_bg: Background::TRANSPARENT,
             dot_bg_hover: None,
-            disabled_style: Default::default(),
+            dot_bg_disabled: Default::default(),
+            cursor_icon: None,
         }
     }
 }
@@ -216,6 +203,7 @@ pub struct RadioButtonElement<A: Clone + 'static> {
     tooltip_message: Option<String>,
     tooltip_align: Align2,
     hovered: bool,
+    cursor_icon: Option<CursorIcon>,
 }
 
 impl<A: Clone + 'static> RadioButtonElement<A> {
@@ -234,6 +222,8 @@ impl<A: Clone + 'static> RadioButtonElement<A> {
         } = builder;
 
         let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
+        let style = cx.res.style_system.get::<RadioButtonStyle>(class);
+        let cursor_icon = style.cursor_icon;
 
         let shared_state = Rc::new(RefCell::new(SharedState { toggled, disabled }));
 
@@ -244,6 +234,7 @@ impl<A: Clone + 'static> RadioButtonElement<A> {
                 tooltip_message,
                 tooltip_align,
                 hovered: false,
+                cursor_icon,
             }),
             z_index,
             bounding_rect,
@@ -274,12 +265,18 @@ impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
             ElementEvent::CustomStateChanged => {
                 cx.request_repaint();
             }
+            ElementEvent::StyleChanged => {
+                let style = cx.res.style_system.get::<RadioButtonStyle>(cx.class());
+                self.cursor_icon = style.cursor_icon;
+            }
             ElementEvent::Pointer(PointerEvent::Moved { just_entered, .. }) => {
                 if RefCell::borrow(&self.shared_state).disabled {
                     return EventCaptureStatus::NotCaptured;
                 }
 
-                cx.cursor_icon = CursorIcon::Pointer;
+                if let Some(cursor_icon) = self.cursor_icon {
+                    cx.cursor_icon = cursor_icon;
+                }
 
                 if just_entered && self.tooltip_message.is_some() {
                     cx.start_hover_timeout();
@@ -341,95 +338,53 @@ impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
 
         let style = cx.res.style_system.get::<RadioButtonStyle>(cx.class);
 
-        let bg_quad_style = {
-            let mut bg = if shared_state.toggled {
-                if self.hovered {
-                    style.on_bg_hover.unwrap_or(
-                        style
-                            .on_bg
-                            .unwrap_or(style.off_bg_hover.unwrap_or(style.off_bg)),
-                    )
-                } else {
-                    style.on_bg.unwrap_or(style.off_bg)
-                }
-            } else {
-                if self.hovered {
-                    style.off_bg_hover.unwrap_or(style.off_bg)
-                } else {
-                    style.off_bg
-                }
-            };
-
-            let border_color = if shared_state.toggled {
-                if self.hovered {
-                    style.outer_border_color_on_hover.unwrap_or(
-                        style.outer_border_color_on.unwrap_or(
+        let bg_quad_style = if shared_state.disabled {
+            if shared_state.toggled {
+                QuadStyle {
+                    bg: style
+                        .on_bg_disabled
+                        .get(style.on_bg.unwrap_or(style.off_bg)),
+                    border: BorderStyle {
+                        color: style.outer_border_color_on_disabled.get(
                             style
-                                .outer_border_color_off_hover
+                                .outer_border_color_on
                                 .unwrap_or(style.outer_border_color_off),
                         ),
-                    )
-                } else {
-                    style
-                        .outer_border_color_on
-                        .unwrap_or(style.outer_border_color_off)
-                }
-            } else {
-                if self.hovered {
-                    style
-                        .outer_border_color_off_hover
-                        .unwrap_or(style.outer_border_color_off)
-                } else {
-                    style.outer_border_color_off
-                }
-            };
-
-            if shared_state.disabled {
-                match &style.disabled_style {
-                    RadioButtonDisabledStyle::AlphaMultiplier(multiplier) => {
-                        bg.multiply_alpha(*multiplier);
-
-                        QuadStyle {
-                            bg,
-                            border: BorderStyle {
-                                color: color::multiply_alpha(border_color, *multiplier),
-                                width: style.outer_border_width,
-                                radius: style.radius,
-                            },
-                        }
-                    }
-                    RadioButtonDisabledStyle::Custom {
-                        back_bg_on,
-                        back_border_color_on,
-                        back_bg_off,
-                        back_border_color_off,
-                        ..
-                    } => QuadStyle {
-                        bg: if shared_state.toggled {
-                            *back_bg_on
-                        } else {
-                            *back_bg_off
-                        },
-                        border: BorderStyle {
-                            color: if shared_state.toggled {
-                                *back_border_color_on
-                            } else {
-                                *back_border_color_off
-                            },
-                            width: style.outer_border_width,
-                            radius: style.radius,
-                        },
-                    },
-                }
-            } else {
-                QuadStyle {
-                    bg,
-                    border: BorderStyle {
-                        color: border_color,
                         width: style.outer_border_width,
                         radius: style.radius,
                     },
                 }
+            } else {
+                QuadStyle {
+                    bg: style.off_bg_disabled.get(style.off_bg),
+                    border: BorderStyle {
+                        color: style
+                            .outer_border_color_off_disabled
+                            .get(style.outer_border_color_off),
+                        width: style.outer_border_width,
+                        radius: style.radius,
+                    },
+                }
+            }
+        } else if shared_state.toggled {
+            QuadStyle {
+                bg: style.on_bg.unwrap_or(style.off_bg),
+                border: BorderStyle {
+                    color: style
+                        .outer_border_color_on
+                        .unwrap_or(style.outer_border_color_off),
+                    width: style.outer_border_width,
+                    radius: style.radius,
+                },
+            }
+        } else {
+            QuadStyle {
+                bg: style.off_bg,
+                border: BorderStyle {
+                    color: style.outer_border_color_off,
+                    width: style.outer_border_width,
+                    radius: style.radius,
+                },
             }
         };
 
@@ -441,28 +396,22 @@ impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
         primitives.add(bg_quad_style.create_primitive(bg_bounds));
 
         if shared_state.toggled {
-            let bg = if shared_state.disabled {
-                match &style.disabled_style {
-                    RadioButtonDisabledStyle::AlphaMultiplier(multiplier) => {
-                        let mut bg = style.dot_bg;
-                        bg.multiply_alpha(*multiplier);
-
-                        bg
-                    }
-                    RadioButtonDisabledStyle::Custom { dot_bg, .. } => *dot_bg,
+            let quad_style = if shared_state.disabled {
+                QuadStyle {
+                    bg: style.dot_bg_disabled.get(style.dot_bg),
+                    border: BorderStyle {
+                        radius: style.radius,
+                        ..Default::default()
+                    },
                 }
-            } else if self.hovered {
-                style.dot_bg_hover.unwrap_or(style.dot_bg)
             } else {
-                style.dot_bg
-            };
-
-            let quad_style = QuadStyle {
-                bg,
-                border: BorderStyle {
-                    radius: style.radius,
-                    ..Default::default()
-                },
+                QuadStyle {
+                    bg: style.dot_bg,
+                    border: BorderStyle {
+                        radius: style.radius,
+                        ..Default::default()
+                    },
+                }
             };
 
             let padding = style.dot_padding;

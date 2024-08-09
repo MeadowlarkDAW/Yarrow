@@ -265,7 +265,6 @@ impl<A: Clone + 'static> Element<A> for TooltipElement {
 
         let label_primitives = shared_state.inner.render_primitives(
             Rect::from_size(cx.bounds_size),
-            false,
             &style.label_style(),
             &mut cx.res.font_system,
         );

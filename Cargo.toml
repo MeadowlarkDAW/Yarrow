@@ -40,13 +40,12 @@ wgpu = { version = "22", default-features = false, features = ["wgsl"] }
 window_clipboard = "0.4.1"
 thiserror = "1.0.61"
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
-#rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "82a817944cb0f6936743029876f85454aac7e9f0" }
-rootvg = { path = "../rootvg" }
+rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "75bae0b43a1f8c4d52519ee7c5dd0aeac8a93f55" }
 
 [dev-dependencies]
 wgpu = { version = "22", default-features = true }
 env_logger = { version = "0.11.3", default-features = false }
-derive_more = "0.99.17"
+derive_more = { version = "1.0", features = ["display"] }
 
 [profile.dev]
 opt-level = 1 # Laying out text can be really slow without optimizations.

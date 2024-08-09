@@ -10,7 +10,8 @@ use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent
 use crate::layout::Padding;
 use crate::math::{Rect, Size, ZIndex};
 use crate::prelude::ElementStyle;
-use crate::style::{QuadStyle, DEFAULT_ICON_SIZE};
+use crate::style::QuadStyle;
+use crate::theme::DEFAULT_ICON_SIZE;
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
@@ -176,6 +177,13 @@ pub struct DropDownMenuStyle {
     pub divider_color: RGBA8,
     pub divider_width: f32,
     pub divider_padding: f32,
+
+    /// The cursor icon to show when the user hovers over a menu entry.
+    ///
+    /// If this is `None`, then the cursor icon will not be changed.
+    ///
+    /// By default this is set to `None`.
+    pub cursor_icon: Option<CursorIcon>,
 }
 
 impl Default for DropDownMenuStyle {
@@ -200,6 +208,7 @@ impl Default for DropDownMenuStyle {
             divider_color: color::TRANSPARENT,
             divider_width: 1.0,
             divider_padding: 0.0,
+            cursor_icon: None,
         }
     }
 }
@@ -406,6 +415,7 @@ pub struct DropDownMenuElement<A: Clone + 'static> {
     size: Size,
     active: bool,
     hovered_entry_index: Option<usize>,
+    cursor_icon: Option<CursorIcon>,
 }
 
 impl<A: Clone + 'static> DropDownMenuElement<A> {
@@ -426,7 +436,8 @@ impl<A: Clone + 'static> DropDownMenuElement<A> {
             open_requested: false,
         }));
 
-        let style = cx.res.style_system.get(class);
+        let style = cx.res.style_system.get::<DropDownMenuStyle>(class);
+        let cursor_icon = style.cursor_icon;
 
         let mut entries = build_entries(entries, &style, &mut cx.res.font_system);
 
@@ -440,6 +451,7 @@ impl<A: Clone + 'static> DropDownMenuElement<A> {
                 size,
                 active: false,
                 hovered_entry_index: None,
+                cursor_icon,
             }),
             z_index,
             bounding_rect: Rect::new(position, Size::zero()),
@@ -521,6 +533,10 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
                     cx.listen_to_pointer_clicked_off();
                 }
             }
+            ElementEvent::StyleChanged => {
+                let style = cx.res.style_system.get::<DropDownMenuStyle>(cx.class());
+                self.cursor_icon = style.cursor_icon;
+            }
             ElementEvent::ClickedOff => {
                 cx.release_focus();
             }
@@ -555,8 +571,10 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
                     cx.request_repaint();
                 }
 
-                if self.hovered_entry_index.is_some() {
-                    cx.cursor_icon = CursorIcon::Pointer;
+                if let Some(cursor_icon) = self.cursor_icon {
+                    if self.hovered_entry_index.is_some() {
+                        cx.cursor_icon = cursor_icon;
+                    }
                 }
 
                 return EventCaptureStatus::Captured;
@@ -675,7 +693,6 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
 
                     let left_primitives = left_label.render_primitives(
                         Rect::new(Point::new(style.outer_padding, *start_y), label_size),
-                        false,
                         if hovered {
                             &left_style_hover
                         } else {
@@ -706,7 +723,6 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
 
                         let right_primitives = right_label.render_primitives(
                             Rect::new(Point::new(right_x, *start_y), label_size),
-                            false,
                             right_style,
                             &mut cx.res.font_system,
                         );

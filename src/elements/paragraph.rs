@@ -9,7 +9,6 @@ use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::{Align, Align2, Padding};
 use crate::math::{Point, Rect, Size, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::DEFAULT_DISABLED_ALPHA_MULTIPLIER;
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
 };
@@ -20,26 +19,6 @@ use super::label::LabelPrimitives;
 use super::quad::QuadStyle;
 
 // TODO: Add ability to select, copy, and right-click text.
-
-/// A descriptor for how to style a disabled [`Paragraph`] element.
-#[derive(Debug, Clone, PartialEq)]
-pub enum ParagraphDisabledStyle {
-    /// Use a multipler on the alpha channel for all colors.
-    AlphaMultiplier(f32),
-    /// Use a custom-defined style.
-    Custom {
-        /// The color of the text
-        text_color: RGBA8,
-        /// The style of the padded background rectangle behind the text and icon.
-        back_quad: QuadStyle,
-    },
-}
-
-impl Default for ParagraphDisabledStyle {
-    fn default() -> Self {
-        Self::AlphaMultiplier(DEFAULT_DISABLED_ALPHA_MULTIPLIER)
-    }
-}
 
 /// The style of a [`Paragraph`] element
 #[derive(Debug, Clone, PartialEq)]
@@ -68,11 +47,6 @@ pub struct ParagraphStyle {
     ///
     /// By default this has all values set to `0.0`.
     pub padding: Padding,
-
-    /// A descriptor for how to style a disabled [`Paragraph`] element.
-    ///
-    /// By default this is set to `ParagraphDisabledStyle::AlphaMultiplier(0.5)`.
-    pub disabled_style: ParagraphDisabledStyle,
 }
 
 impl Default for ParagraphStyle {
@@ -87,7 +61,6 @@ impl Default for ParagraphStyle {
             vertical_align: Align::Center,
             back_quad: QuadStyle::TRANSPARENT,
             padding: Padding::default(),
-            disabled_style: ParagraphDisabledStyle::default(),
         }
     }
 }
@@ -249,12 +222,7 @@ impl ParagraphInner {
         self.padded_size_needs_calculated = true;
     }
 
-    pub fn render_primitives(
-        &mut self,
-        bounds: Rect,
-        style: &ParagraphStyle,
-        disabled: bool,
-    ) -> LabelPrimitives {
+    pub fn render_primitives(&mut self, bounds: Rect, style: &ParagraphStyle) -> LabelPrimitives {
         let mut needs_layout = self.text_size_needs_calculated;
 
         if self.prev_bounds_size != bounds.size {
@@ -278,45 +246,19 @@ impl ParagraphInner {
         }
 
         let text = if !self.text.is_empty() {
-            let text_color = if disabled {
-                match &style.disabled_style {
-                    ParagraphDisabledStyle::AlphaMultiplier(multiplier) => {
-                        color::multiply_alpha(style.text_color, *multiplier)
-                    }
-                    ParagraphDisabledStyle::Custom { text_color, .. } => *text_color,
-                }
-            } else {
-                style.text_color
-            };
-
             Some(TextPrimitive::new(
                 self.text_buffer.clone(),
                 bounds.origin
                     + self.text_bounds_rect.origin.to_vector()
                     + self.text_offset.to_vector(),
-                text_color,
+                style.text_color,
                 None,
             ))
         } else {
             None
         };
 
-        let bg_quad = if disabled {
-            match &style.disabled_style {
-                ParagraphDisabledStyle::AlphaMultiplier(multiplier) => {
-                    if style.back_quad.is_transparent() {
-                        None
-                    } else {
-                        let mut q = style.back_quad.clone();
-                        q.multiply_alpha(*multiplier);
-                        Some(q.create_primitive(bounds))
-                    }
-                }
-                ParagraphDisabledStyle::Custom { back_quad, .. } => {
-                    Some(back_quad.create_primitive(bounds))
-                }
-            }
-        } else if !style.back_quad.is_transparent() {
+        let bg_quad = if !style.back_quad.is_transparent() {
             Some(style.back_quad.create_primitive(bounds))
         } else {
             None
@@ -338,7 +280,6 @@ pub struct ParagraphBuilder {
     pub z_index: Option<ZIndex>,
     pub bounding_rect: Rect,
     pub manually_hidden: bool,
-    pub disabled: bool,
     pub scissor_rect_id: Option<ScissorRectID>,
 }
 
@@ -352,7 +293,6 @@ impl ParagraphBuilder {
             z_index: None,
             bounding_rect: Rect::default(),
             manually_hidden: false,
-            disabled: false,
             scissor_rect_id: None,
         }
     }
@@ -420,14 +360,6 @@ impl ParagraphBuilder {
         self
     }
 
-    /// Whether or not this element is in the disabled state
-    ///
-    /// By default this is set to `false`.
-    pub const fn disabled(mut self, disabled: bool) -> Self {
-        self.disabled = disabled;
-        self
-    }
-
     /// The ID of the scissoring rectangle this element belongs to.
     ///
     /// If this method is not used, then the current scissoring rectangle ID from the
@@ -457,7 +389,6 @@ impl ParagraphElement {
             bounding_rect,
             manually_hidden,
             scissor_rect_id,
-            disabled,
         } = builder;
 
         let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
@@ -474,7 +405,6 @@ impl ParagraphElement {
                 &mut cx.res.font_system,
                 text_offset,
             ),
-            disabled,
         }));
 
         let element_builder = ElementBuilder {
@@ -516,12 +446,9 @@ impl<A: Clone + 'static> Element<A> for ParagraphElement {
     fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
-        let disabled = shared_state.disabled;
-
         let paragraph_primitives = shared_state.inner.render_primitives(
             Rect::from_size(cx.bounds_size),
             cx.res.style_system.get(cx.class),
-            disabled,
         );
 
         if let Some(quad_primitive) = paragraph_primitives.bg_quad {
@@ -537,7 +464,6 @@ impl<A: Clone + 'static> Element<A> for ParagraphElement {
 
 struct SharedState {
     inner: ParagraphInner,
-    disabled: bool,
 }
 
 /// A handle to a [`ParagraphElement`], a Paragraph with an optional quad background.
@@ -624,19 +550,6 @@ impl Paragraph {
             shared_state.inner.text_offset = offset;
             self.el._notify_custom_state_change();
         }
-    }
-
-    pub fn set_disabled(&mut self, disabled: bool) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
-        if shared_state.disabled != disabled {
-            shared_state.disabled = disabled;
-            self.el._notify_custom_state_change();
-        }
-    }
-
-    pub fn disabled(&self) -> bool {
-        RefCell::borrow(&self.shared_state).disabled
     }
 
     pub fn layout(&mut self, origin: Point, res: &mut ResourceCtx) {

@@ -16,36 +16,10 @@ use crate::event::{EventCaptureStatus, KeyboardEvent, PointerButton};
 use crate::layout::Padding;
 use crate::math::{Point, Rect, Size};
 use crate::prelude::ElementStyle;
-use crate::style::{
-    Background, BorderStyle, QuadStyle, DEFAULT_ACCENT_COLOR, DEFAULT_DISABLED_ALPHA_MULTIPLIER,
-};
+use crate::style::{Background, BorderStyle, DisabledBackground, DisabledColor, QuadStyle};
+
+use crate::theme::DEFAULT_ACCENT_COLOR;
 use crate::vg::color::{self, RGBA8};
-
-/// A descriptor for how to style a disabled [`TextInput`] element.
-#[derive(Debug, Clone, PartialEq)]
-pub enum TextInputDisabledStyle {
-    /// Use a multipler on the alpha channel for all colors.
-    AlphaMultiplier(f32),
-    /// Use a custom-defined style.
-    Custom {
-        /// The color of the text
-        text_color: RGBA8,
-        /// The color of the placeholder text
-        text_color_placeholder: RGBA8,
-        /// The background of the background quad.
-        back_bg: Background,
-        /// The color of the border on the background quad.
-        back_border_color: RGBA8,
-        /// The width of the border on the background quad.
-        back_border_width: f32,
-    },
-}
-
-impl Default for TextInputDisabledStyle {
-    fn default() -> Self {
-        Self::AlphaMultiplier(DEFAULT_DISABLED_ALPHA_MULTIPLIER)
-    }
-}
 
 /// The style of a [`TextInput`] element
 #[derive(Debug, Clone, PartialEq)]
@@ -76,12 +50,14 @@ pub struct TextInputStyle {
     ///
     /// By default this is set to `None`.
     pub text_color_hover: Option<RGBA8>,
+    pub text_color_disabled: DisabledColor,
     /// The color of the placeholder font when hovered and not focused
     ///
     /// If this is `None`, then `text_color` will be used.
     ///
     /// By default this is set to `None`.
     pub text_color_placeholder_hover: Option<RGBA8>,
+    pub text_color_placeholder_disabled: DisabledColor,
     /// The color of the font when focused
     ///
     /// If this is `None`, then `text_color` will be used.
@@ -142,6 +118,7 @@ pub struct TextInputStyle {
     ///
     /// By default this is set to `None`.
     pub back_bg_focused: Option<Background>,
+    pub back_bg_disabled: DisabledBackground,
 
     /// The color of the border on the background quad.
     pub back_border_color: RGBA8,
@@ -157,6 +134,7 @@ pub struct TextInputStyle {
     ///
     /// By default this is set to `None`.
     pub back_border_color_focused: Option<RGBA8>,
+    pub back_border_color_disabled: DisabledColor,
 
     /// The width of the border on the background quad.
     pub back_border_width: f32,
@@ -176,8 +154,6 @@ pub struct TextInputStyle {
     /// The border radius of the background quad.
     pub back_border_radius: Radius,
 
-    pub disabled_style: TextInputDisabledStyle,
-
     /// The interval at which the text cursor blinks.
     ///
     /// By default this is set to half a second.
@@ -193,6 +169,8 @@ impl Default for TextInputStyle {
             text_color_placeholder: None,
             text_color_hover: None,
             text_color_placeholder_hover: None,
+            text_color_disabled: Default::default(),
+            text_color_placeholder_disabled: Default::default(),
             text_color_focused: None,
             text_color_placeholder_focused: None,
             text_color_highlighted: None,
@@ -204,14 +182,15 @@ impl Default for TextInputStyle {
             back_bg: Background::TRANSPARENT,
             back_bg_hover: None,
             back_bg_focused: None,
+            back_bg_disabled: Default::default(),
             back_border_color: color::TRANSPARENT,
             back_border_color_hover: None,
             back_border_color_focused: None,
+            back_border_color_disabled: Default::default(),
             back_border_width: 0.0,
             back_border_width_hover: None,
             back_border_width_focused: None,
             back_border_radius: Radius::default(),
-            disabled_style: Default::default(),
             cursor_blink_interval: Duration::from_millis(500),
         }
     }
@@ -1281,46 +1260,19 @@ impl TextInputInner {
         };
 
         if self.disabled {
-            match &style.disabled_style {
-                TextInputDisabledStyle::AlphaMultiplier(multiplier) => {
-                    if !(style.back_bg.is_transparent() && style.back_border_width == 0.0) {
-                        let mut bg = style.back_bg.clone();
-                        bg.multiply_alpha(*multiplier);
+            let quad_style = QuadStyle {
+                bg: style.back_bg_disabled.get(style.back_bg),
+                border: BorderStyle {
+                    color: style
+                        .back_border_color_disabled
+                        .get(style.back_border_color),
+                    width: style.back_border_width,
+                    radius: style.back_border_radius,
+                },
+            };
 
-                        primitives.back_quad = Some(
-                            QuadStyle {
-                                bg,
-                                border: BorderStyle {
-                                    color: color::multiply_alpha(
-                                        style.back_border_color,
-                                        *multiplier,
-                                    ),
-                                    width: style.back_border_width,
-                                    radius: style.back_border_radius,
-                                },
-                            }
-                            .create_primitive(bounds),
-                        );
-                    }
-                }
-                TextInputDisabledStyle::Custom {
-                    back_bg,
-                    back_border_color,
-                    back_border_width,
-                    ..
-                } => {
-                    primitives.back_quad = Some(
-                        QuadStyle {
-                            bg: *back_bg,
-                            border: BorderStyle {
-                                color: *back_border_color,
-                                width: *back_border_width,
-                                radius: style.back_border_radius,
-                            },
-                        }
-                        .create_primitive(bounds),
-                    );
-                }
+            if !quad_style.is_transparent() {
+                primitives.back_quad = Some(quad_style.create_primitive(bounds));
             }
         } else if self.focused {
             let bg = style.back_bg_focused.unwrap_or(style.back_bg);
@@ -1419,12 +1371,7 @@ impl TextInputInner {
 
         if !self.text.is_empty() {
             let color = if self.disabled {
-                match &style.disabled_style {
-                    TextInputDisabledStyle::AlphaMultiplier(multiplier) => {
-                        color::multiply_alpha(style.text_color, *multiplier)
-                    }
-                    TextInputDisabledStyle::Custom { text_color, .. } => *text_color,
-                }
+                style.text_color_disabled.get(style.text_color)
             } else if self.focused {
                 style.text_color_focused.unwrap_or(style.text_color)
             } else if self.pointer_hovered {
@@ -1458,18 +1405,7 @@ impl TextInputInner {
         } else if !self.placeholder_text.is_empty() {
             if let Some(placeholder_buffer) = &self.placeholder_buffer {
                 let color = if self.disabled {
-                    match &style.disabled_style {
-                        TextInputDisabledStyle::AlphaMultiplier(multiplier) => {
-                            color::multiply_alpha(
-                                style.text_color_placeholder.unwrap_or(style.text_color),
-                                *multiplier,
-                            )
-                        }
-                        TextInputDisabledStyle::Custom {
-                            text_color_placeholder,
-                            ..
-                        } => *text_color_placeholder,
-                    }
+                    style.text_color_placeholder_disabled.get(style.text_color)
                 } else if self.focused {
                     style.text_color_placeholder_focused.unwrap_or(
                         style

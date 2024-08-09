@@ -9,8 +9,7 @@ use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent
 use crate::layout::{Align2, LayoutDirection};
 use crate::math::{Rect, Size, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::{Background, BorderStyle, QuadStyle, DEFAULT_ACCENT_COLOR};
-use crate::vg::color::RGBA8;
+use crate::style::QuadStyle;
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
 };
@@ -35,19 +34,9 @@ pub struct TabStyle {
 impl Default for TabStyle {
     fn default() -> Self {
         Self {
-            toggle_btn_style: ToggleButtonStyle {
-                back_bg: Background::TRANSPARENT,
-                back_bg_on: Some(Background::Solid(RGBA8::new(60, 60, 60, 255))),
-                back_border_width: 0.0,
-                back_border_radius: 0.0.into(),
-                ..Default::default()
-            },
-
-            on_indicator_line_width: 3.0,
-            on_indicator_line_style: QuadStyle {
-                bg: Background::Solid(DEFAULT_ACCENT_COLOR),
-                border: BorderStyle::default(),
-            },
+            toggle_btn_style: ToggleButtonStyle::default(),
+            on_indicator_line_width: 0.0,
+            on_indicator_line_style: QuadStyle::TRANSPARENT,
             on_indicator_line_padding_to_edges: 0.0,
         }
     }
@@ -272,6 +261,7 @@ pub struct TabElement<A: Clone + 'static> {
     tooltip_message: Option<String>,
     tooltip_align: Align2,
     on_indicator_line_placement: IndicatorLinePlacement,
+    cursor_icon: Option<CursorIcon>,
 }
 
 impl<A: Clone + 'static> TabElement<A> {
@@ -298,6 +288,7 @@ impl<A: Clone + 'static> TabElement<A> {
 
         let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
         let style = cx.res.style_system.get::<TabStyle>(class);
+        let cursor_icon = style.toggle_btn_style.cursor_icon;
 
         let shared_state = Rc::new(RefCell::new(SharedState {
             inner: ToggleButtonInner::new(
@@ -321,6 +312,7 @@ impl<A: Clone + 'static> TabElement<A> {
                 tooltip_message,
                 tooltip_align,
                 on_indicator_line_placement,
+                cursor_icon,
             }),
             z_index,
             bounding_rect,
@@ -351,6 +343,10 @@ impl<A: Clone + 'static> Element<A> for TabElement<A> {
             ElementEvent::CustomStateChanged => {
                 cx.request_repaint();
             }
+            ElementEvent::StyleChanged => {
+                let style = cx.res.style_system.get::<TabStyle>(cx.class());
+                self.cursor_icon = style.toggle_btn_style.cursor_icon;
+            }
             ElementEvent::Pointer(PointerEvent::Moved { just_entered, .. }) => {
                 let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -358,7 +354,9 @@ impl<A: Clone + 'static> Element<A> for TabElement<A> {
                     return EventCaptureStatus::NotCaptured;
                 }
 
-                cx.cursor_icon = CursorIcon::Pointer;
+                if let Some(cursor_icon) = self.cursor_icon {
+                    cx.cursor_icon = cursor_icon;
+                }
 
                 if just_entered && self.tooltip_message.is_some() {
                     cx.start_hover_timeout();

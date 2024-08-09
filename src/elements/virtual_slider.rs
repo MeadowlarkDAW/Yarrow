@@ -18,7 +18,7 @@ use crate::{
         Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, ElementRenderCache,
         RenderContext,
     },
-    ScissorRectID, WindowContext,
+    CursorIcon, ScissorRectID, WindowContext,
 };
 
 mod inner;
@@ -26,6 +26,9 @@ mod renderer;
 
 pub use inner::*;
 pub use renderer::*;
+
+pub mod knob;
+pub mod slider;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ParamOpenTextEntryInfo {
@@ -189,6 +192,21 @@ pub struct VirtualSliderConfig {
     /// By default this is set to `true`.
     pub open_text_entry_on_right_click: bool,
 
+    /// The cursor icon to show when the user hovers over this element.
+    ///
+    /// If this is `None`, then the cursor icon will not be changed.
+    ///
+    /// By default this is set to `None`.
+    pub cursor_icon_hover: Option<CursorIcon>,
+
+    /// The cursor icon to show when the user is gesturing (dragging)
+    /// this element.
+    ///
+    /// If this is `None`, then the cursor icon will not be changed.
+    ///
+    /// By default this is set to `None`.
+    pub cursor_icon_gesturing: Option<CursorIcon>,
+
     /// Whether or not to disabled locking the pointer in place while
     /// dragging this element.
     ///
@@ -208,6 +226,8 @@ impl Default for VirtualSliderConfig {
             open_text_entry_modifier: Some(Modifiers::CONTROL),
             open_text_entry_on_middle_click: true,
             open_text_entry_on_right_click: true,
+            cursor_icon_hover: None,
+            cursor_icon_gesturing: None,
             disable_pointer_locking: false,
         }
     }
@@ -694,6 +714,16 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                 }
 
                 let hovered = cx.rect().contains(position);
+
+                if hovered {
+                    if inner.is_gesturing() {
+                        if let Some(cursor_icon) = inner.config.cursor_icon_gesturing {
+                            cx.cursor_icon = cursor_icon;
+                        }
+                    } else if let Some(cursor_icon) = inner.config.cursor_icon_hover {
+                        cx.cursor_icon = cursor_icon;
+                    }
+                }
 
                 if self.hovered != hovered {
                     self.hovered = hovered;
