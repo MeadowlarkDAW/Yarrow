@@ -35,9 +35,9 @@ impl Default for KnobMarkersDotStyle {
             primary_size: 2.0,
             secondary_size: 1.0,
             third_size: 1.0,
-            primary_padding: 3.0,
-            secondary_padding: 3.0,
-            third_padding: 3.0,
+            primary_padding: 4.0,
+            secondary_padding: 4.0,
+            third_padding: 4.0,
         }
     }
 }

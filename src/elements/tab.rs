@@ -395,14 +395,18 @@ impl<A: Clone + 'static> Element<A> for TabElement<A> {
                         || shared_state.inner.state() == ButtonState::Hovered)
                 {
                     shared_state.inner.set_state(ButtonState::Down);
-                    shared_state.inner.toggled = !shared_state.inner.toggled;
 
-                    cx.request_repaint();
+                    if !shared_state.inner.toggled {
+                        shared_state.inner.toggled = true;
 
-                    if let Some(action) = self.action.clone() {
-                        cx.send_action(action).unwrap();
+                        if let Some(action) = &self.action {
+                            cx.send_action(action.clone()).unwrap();
+                        }
+
+                        cx.request_repaint();
                     }
 
+                    cx.request_repaint();
                     return EventCaptureStatus::Captured;
                 }
             }
