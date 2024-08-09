@@ -114,6 +114,8 @@ impl ParagraphInner {
             style.properties,
             Some(width),
             None,
+            Some(width),
+            None,
             false,
             font_system,
         );

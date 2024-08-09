@@ -427,7 +427,7 @@ impl<A: Clone + 'static> WindowState<A> {
         self.logical_size
     }
 
-    pub fn context<'a>(&'a mut self, res: &'a mut ResourceCtx) -> WindowContext<'a, A> {
+    pub fn context<'b>(&'b mut self, res: &'b mut ResourceCtx) -> WindowContext<'b, A> {
         WindowContext {
             view: &mut self.view,
             res,
