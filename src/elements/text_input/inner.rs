@@ -549,15 +549,11 @@ impl TextInputInner {
         }
         self.prev_bounds_size = bounds_size;
 
-        dbg!(style.padding);
-
         self.text_bounds_rect = layout_text_bounds(
             bounds_size,
             style.padding,
             style.text_properties.metrics.line_height,
         );
-
-        dbg!(self.text_bounds_rect);
 
         self.buffer
             .set_bounds(Some(self.text_bounds_rect.width()), None, font_system);
