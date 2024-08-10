@@ -8,7 +8,7 @@
 [![Crates.io](https://img.shields.io/crates/v/yarrow.svg)](https://crates.io/crates/yarrow)
 [![License](https://img.shields.io/crates/l/yarrow.svg)](https://github.com/MeadowlarkDAW/Yarrow/blob/main/LICENSE)
 
-> **WORK IN PROGRESS. This project is currently in alpha and is missing some features. Check the [roadmap] for more details.**
+> **WORK IN PROGRESS. This project is currently unstable and is missing some features. Check the [project board] for more details.**
 
 **A modern retained-mode GUI library in Rust with extreme performance and control, geared towards audio software.**
 
@@ -58,9 +58,11 @@ To get started, read the [book] (TODO).
 
 # Contributing
 
-(TODO)
+See the [project board] for a list of current tasks.
+
+If you have any questions, reach out in the [Meadowlark Discord Server](https://discord.gg/2W3Xvc8wy4) under the #yarrow channel.
 
 [wgpu]: https://wgpu.rs
-[roadmap]: ROADMAP.md
+[project board]: https://github.com/orgs/MeadowlarkDAW/projects/4
 [Elm]: https://elm-lang.org
 [Iced]: https://github.com/iced-rs/iced
