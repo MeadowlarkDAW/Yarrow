@@ -52,7 +52,7 @@ Rendering is done in [wgpu] using the [RootVG](https://github.com/MeadowlarkDAW/
 
 # Get Started
 
-To get started, read the [book] (TODO).
+To get started, read the [book](https://meadowlark.app/yarrow-book/) (WIP).
 
 > This repository only houses the GUI library. For examples and guides on how to use Yarrow for audio plugin development, see (TODO).
 
