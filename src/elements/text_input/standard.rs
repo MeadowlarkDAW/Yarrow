@@ -6,7 +6,7 @@ use rootvg::PrimitiveGroup;
 use crate::elements::text_input::TextInputUpdateResult;
 use crate::event::{ElementEvent, EventCaptureStatus, PointerEvent};
 use crate::layout::Align2;
-use crate::math::{Point, Rect, ZIndex};
+use crate::math::{Point, Rect, ZIndex, Vector};
 use crate::prelude::ResourceCtx;
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
@@ -24,7 +24,7 @@ pub struct TextInputBuilder<A: Clone + 'static> {
     pub tooltip_align: Align2,
     pub placeholder_text: String,
     pub text: String,
-    pub text_offset: Point,
+    pub text_offset: Vector,
     pub select_all_when_focused: bool,
     pub password_mode: bool,
     pub max_characters: usize,
@@ -45,7 +45,7 @@ impl<A: Clone + 'static> TextInputBuilder<A> {
             tooltip_align: Align2::TOP_CENTER,
             placeholder_text: String::new(),
             text: String::new(),
-            text_offset: Point::default(),
+            text_offset: Vector::default(),
             select_all_when_focused: false,
             password_mode: false,
             max_characters: 256,
@@ -90,7 +90,7 @@ impl<A: Clone + 'static> TextInputBuilder<A> {
 
     /// An offset that can be used mainly to correct the position of icon glyphs.
     /// This does not effect the position of the background quad.
-    pub const fn text_offset(mut self, offset: Point) -> Self {
+    pub const fn text_offset(mut self, offset: Vector) -> Self {
         self.text_offset = offset;
         self
     }
@@ -391,7 +391,7 @@ impl<A: Clone + 'static> Element<A> for TextInputElement<A> {
 
 struct SharedState {
     inner: TextInputInner,
-    text_offset: Point,
+    text_offset: Vector,
 }
 
 /// A handle to a [`TextInputElement`]
@@ -462,7 +462,7 @@ impl TextInput {
 
     /// An offset that can be used mainly to correct the position of icon glyphs.
     /// This does not effect the position of the background quad.
-    pub fn set_text_offset(&mut self, offset: Point) {
+    pub fn set_text_offset(&mut self, offset: Vector) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.text_offset != offset {

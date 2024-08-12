@@ -8,7 +8,7 @@ use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
 use crate::layout::{Align, Align2, Padding};
-use crate::math::{Rect, Size, ZIndex};
+use crate::math::{Rect, Size, ZIndex, Vector};
 use crate::prelude::{ElementStyle, ResourceCtx};
 use crate::style::{Background, BorderStyle, DisabledBackground, DisabledColor, QuadStyle};
 use crate::theme::DEFAULT_ICON_SIZE;
@@ -511,8 +511,8 @@ impl ToggleButtonInner {
     pub fn new(
         text: Option<impl Into<String>>,
         icon_id: Option<CustomGlyphID>,
-        text_offset: Point,
-        icon_offset: Point,
+        text_offset: Vector,
+        icon_offset: Vector,
         icon_scale: f32,
         toggled: bool,
         disabled: bool,
@@ -607,7 +607,7 @@ impl ToggleButtonInner {
     /// This does not effect the position of the background quad.
     ///
     /// Returns `true` if the text offset has changed.
-    pub fn set_text_offset(&mut self, offset: Point) -> bool {
+    pub fn set_text_offset(&mut self, offset: Vector) -> bool {
         if self.label_inner.text_offset != offset {
             self.label_inner.text_offset = offset;
             true
@@ -620,7 +620,7 @@ impl ToggleButtonInner {
     /// This does not effect the position of the background quad.
     ///
     /// Returns `true` if the text offset has changed.
-    pub fn set_icon_offset(&mut self, offset: Point) -> bool {
+    pub fn set_icon_offset(&mut self, offset: Vector) -> bool {
         if self.label_inner.icon_offset != offset {
             self.label_inner.icon_offset = offset;
             true
@@ -629,11 +629,11 @@ impl ToggleButtonInner {
         }
     }
 
-    pub fn text_offset(&self) -> Point {
+    pub fn text_offset(&self) -> Vector {
         self.label_inner.text_offset
     }
 
-    pub fn icon_offset(&self) -> Point {
+    pub fn icon_offset(&self) -> Vector {
         self.label_inner.icon_offset
     }
 
@@ -660,8 +660,8 @@ pub struct ToggleButtonBuilder<A: Clone + 'static> {
     pub text: Option<String>,
     pub icon: Option<CustomGlyphID>,
     pub icon_scale: f32,
-    pub text_offset: Point,
-    pub icon_offset: Point,
+    pub text_offset: Vector,
+    pub icon_offset: Vector,
     pub text_icon_layout: TextIconLayout,
     pub class: Option<&'static str>,
     pub z_index: Option<ZIndex>,
@@ -681,8 +681,8 @@ impl<A: Clone + 'static> ToggleButtonBuilder<A> {
             text: None,
             icon: None,
             icon_scale: 1.0,
-            text_offset: Point::default(),
-            icon_offset: Point::default(),
+            text_offset: Vector::default(),
+            icon_offset: Vector::default(),
             text_icon_layout: TextIconLayout::default(),
             class: None,
             z_index: None,
@@ -759,7 +759,7 @@ impl<A: Clone + 'static> ToggleButtonBuilder<A> {
     /// This does not effect the position of the background quad.
     ///
     /// By default this is set to an offset of zero.
-    pub const fn text_offset(mut self, offset: Point) -> Self {
+    pub const fn text_offset(mut self, offset: Vector) -> Self {
         self.text_offset = offset;
         self
     }
@@ -768,7 +768,7 @@ impl<A: Clone + 'static> ToggleButtonBuilder<A> {
     /// This does not effect the position of the background quad.
     ///
     /// By default this is set to an offset of zero.
-    pub const fn icon_offset(mut self, offset: Point) -> Self {
+    pub const fn icon_offset(mut self, offset: Vector) -> Self {
         self.icon_offset = offset;
         self
     }
@@ -1127,7 +1127,7 @@ impl ToggleButton {
     /// An offset that can be used mainly to correct the position of the text.
     ///
     /// This does not effect the position of the background quad.
-    pub fn set_text_offset(&mut self, offset: Point) {
+    pub fn set_text_offset(&mut self, offset: Vector) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.set_text_offset(offset) {
@@ -1138,7 +1138,7 @@ impl ToggleButton {
     /// An offset that can be used mainly to correct the position of the icon.
     ///
     /// This does not effect the position of the background quad.
-    pub fn set_icon_offset(&mut self, offset: Point) {
+    pub fn set_icon_offset(&mut self, offset: Vector) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.set_icon_offset(offset) {

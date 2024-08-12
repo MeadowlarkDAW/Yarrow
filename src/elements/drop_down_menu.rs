@@ -8,7 +8,7 @@ use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
 use crate::layout::Padding;
-use crate::math::{Rect, Size, ZIndex};
+use crate::math::{Rect, Size, ZIndex, Vector};
 use crate::prelude::ElementStyle;
 use crate::style::QuadStyle;
 use crate::theme::DEFAULT_ICON_SIZE;
@@ -810,8 +810,8 @@ fn build_entries(
                 left_label: LabelInner::new(
                     Some(left_text),
                     left_icon,
-                    Point::default(),
-                    Point::default(),
+                    Vector::default(),
+                    Vector::default(),
                     icon_scale,
                     Default::default(),
                     &left_style,
@@ -821,8 +821,8 @@ fn build_entries(
                     LabelInner::new(
                         Some(text),
                         None,
-                        Point::default(),
-                        Point::default(),
+                        Vector::default(),
+                        Vector::default(),
                         1.0,
                         Default::default(),
                         &right_style,

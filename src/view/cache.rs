@@ -1,6 +1,6 @@
-use rootvg::{math::Point, PrimitiveGroup};
+use rootvg::PrimitiveGroup;
 
-use crate::math::{Rect, ZIndex};
+use crate::math::{Rect, Vector, ZIndex};
 
 use super::{ElementFlags, ElementID, EntryStackData, ScissorRectID};
 
@@ -13,7 +13,7 @@ pub(super) struct CachedElementRectForPointerEvent {
 #[derive(Debug)]
 pub(super) struct CachedElementPrimitives {
     pub element_id: ElementID,
-    pub offset: Point,
+    pub offset: Vector,
     pub z_index: ZIndex,
     pub scissor_rect_id: ScissorRectID,
     pub visible: bool,
@@ -24,7 +24,7 @@ pub(super) struct CachedElementPrimitives {
 impl CachedElementPrimitives {
     pub fn new(
         element_id: ElementID,
-        offset: Point,
+        offset: Vector,
         z_index: ZIndex,
         scissor_rect_id: ScissorRectID,
         visible: bool,
@@ -59,7 +59,7 @@ pub(super) fn sync_element_rect_cache(
     if entry_stack_data.flags.contains(ElementFlags::PAINTS) {
         let cache = &mut painted_elements[entry_stack_data.index_in_painted_list as usize];
 
-        cache.offset = entry_stack_data.rect.origin;
+        cache.offset = entry_stack_data.rect.origin.to_vector();
         cache.visible = entry_stack_data.visible();
         cache.dirty |= mark_dirty;
     }

@@ -15,7 +15,7 @@
 use thunderdome::Arena;
 
 use super::{ElementEntry, ElementID, EntryStackData};
-use crate::math::{Point, PointI32, RectI32};
+use crate::math::{PointI32, RectI32, Vector};
 use crate::stmpsc_queue;
 use crate::view::element::{ElementModification, ElementModificationType};
 
@@ -27,12 +27,12 @@ pub type ScissorRectID = u8;
 
 pub(super) struct ScissorRect {
     rect: RectI32,
-    scroll_offset: Point,
+    scroll_offset: Vector,
     assigned_elements: Vec<ElementID>,
 }
 
 impl ScissorRect {
-    pub fn new(mut rect: RectI32, scroll_offset: Point) -> Self {
+    pub fn new(mut rect: RectI32, scroll_offset: Vector) -> Self {
         rect.size.width = rect.size.width.max(0);
         rect.size.height = rect.size.height.max(0);
 
@@ -55,7 +55,7 @@ impl ScissorRect {
     pub fn update(
         &mut self,
         mut new_rect: Option<RectI32>,
-        new_scroll_offset: Option<Point>,
+        new_scroll_offset: Option<Vector>,
         mod_queue_sender: &mut stmpsc_queue::Sender<ElementModification>,
     ) -> bool {
         let mut changed = false;
@@ -93,7 +93,7 @@ impl ScissorRect {
         self.rect.origin
     }
 
-    pub fn scroll_offset(&self) -> Point {
+    pub fn scroll_offset(&self) -> Vector {
         self.scroll_offset
     }
 

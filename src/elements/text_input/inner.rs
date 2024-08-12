@@ -14,7 +14,7 @@ use unicode_segmentation::UnicodeSegmentation;
 use crate::clipboard::{Clipboard, ClipboardKind};
 use crate::event::{EventCaptureStatus, KeyboardEvent, PointerButton};
 use crate::layout::Padding;
-use crate::math::{Point, Rect, Size};
+use crate::math::{Point, Rect, Size, Vector};
 use crate::prelude::ElementStyle;
 use crate::style::{Background, BorderStyle, DisabledBackground, DisabledColor, QuadStyle};
 
@@ -1245,7 +1245,7 @@ impl TextInputInner {
         &self,
         style: &TextInputStyle,
         bounds: Rect,
-        text_offset: Point,
+        text_offset: Vector,
         hovered: bool,
     ) -> TextInputPrimitives {
         let mut primitives = TextInputPrimitives {
@@ -1388,7 +1388,7 @@ impl TextInputInner {
 
             primitives.text = Some(TextPrimitive {
                 buffer: Some(buffer),
-                pos: self.text_bounds_rect.origin + text_offset.to_vector()
+                pos: self.text_bounds_rect.origin + text_offset
                     - Point::new(scroll_x, 0.0).to_vector()
                     + bounds.origin.to_vector(),
                 color,
@@ -1419,7 +1419,7 @@ impl TextInputInner {
                 primitives.text = Some(TextPrimitive {
                     buffer: Some(placeholder_buffer.clone()),
                     pos: self.text_bounds_rect.origin
-                        + text_offset.to_vector()
+                        + text_offset
                         + bounds.origin.to_vector(),
                     color,
                     clipping_bounds: Some(Rect::new(bounds.origin, self.text_bounds_rect.size)),

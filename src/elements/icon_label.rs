@@ -125,10 +125,10 @@ struct TextInner {
 pub struct IconLabelInner {
     /// An offset that can be used mainly to correct the position of text.
     /// This does not effect the position of the background quad.
-    pub text_offset: Point,
+    pub text_offset: Vector,
     /// An offset that can be used mainly to correct the position of icons.
     /// This does not effect the position of the background quad.
-    pub icon_offset: Point,
+    pub icon_offset: Vector,
     pub icon_id: Option<CustomGlyphID>,
     pub icon_scale: f32,
     text_inner: Option<TextInner>,
@@ -145,8 +145,8 @@ impl IconLabelInner {
     pub fn new(
         text: Option<impl Into<String>>,
         icon_id: Option<CustomGlyphID>,
-        text_offset: Point,
-        icon_offset: Point,
+        text_offset: Vector,
+        icon_offset: Vector,
         icon_scale: f32,
         style: &IconLabelStyle,
         res: &mut ResourceCtx,
@@ -410,7 +410,7 @@ impl IconLabelInner {
     /// This does not effect the position of the background quad.
     ///
     /// Returns `true` if the text offset has changed.
-    pub fn set_text_offset(&mut self, offset: Point) -> bool {
+    pub fn set_text_offset(&mut self, offset: Vector) -> bool {
         if self.text_offset != offset {
             self.text_offset = offset;
             true
@@ -423,7 +423,7 @@ impl IconLabelInner {
     /// This does not effect the position of the background quad.
     ///
     /// Returns `true` if the text offset has changed.
-    pub fn set_icon_offset(&mut self, offset: Point) -> bool {
+    pub fn set_icon_offset(&mut self, offset: Vector) -> bool {
         if self.icon_offset != offset {
             self.icon_offset = offset;
             true
@@ -437,8 +437,8 @@ pub struct IconLabelBuilder {
     pub text: Option<String>,
     pub icon: Option<CustomGlyphID>,
     pub icon_scale: f32,
-    pub text_offset: Point,
-    pub icon_offset: Point,
+    pub text_offset: Vector,
+    pub icon_offset: Vector,
     pub style: Rc<IconLabelStyle>,
     pub z_index: Option<ZIndex>,
     pub bounding_rect: Rect,
@@ -452,8 +452,8 @@ impl IconLabelBuilder {
             text: None,
             icon: None,
             icon_scale: 1.0,
-            text_offset: Point::default(),
-            icon_offset: Point::default(),
+            text_offset: Vector::default(),
+            icon_offset: Vector::default(),
             style: Rc::clone(style),
             z_index: None,
             bounding_rect: Rect::default(),
@@ -483,14 +483,14 @@ impl IconLabelBuilder {
 
     /// An offset that can be used mainly to correct the position of the text.
     /// This does not effect the position of the background quad.
-    pub const fn text_offset(mut self, offset: Point) -> Self {
+    pub const fn text_offset(mut self, offset: Vector) -> Self {
         self.text_offset = offset;
         self
     }
 
     /// An offset that can be used mainly to correct the position of the icon.
     /// This does not effect the position of the background quad.
-    pub const fn icon_offset(mut self, offset: Point) -> Self {
+    pub const fn icon_offset(mut self, offset: Vector) -> Self {
         self.icon_offset = offset;
         self
     }
@@ -683,7 +683,7 @@ impl IconLabel {
 
     /// An offset that can be used mainly to correct the position of the text.
     /// This does not effect the position of the background quad.
-    pub fn set_text_offset(&mut self, offset: Point) {
+    pub fn set_text_offset(&mut self, offset: Vector) {
         let changed = RefCell::borrow_mut(&self.shared_state)
             .inner
             .set_text_offset(offset);
@@ -695,7 +695,7 @@ impl IconLabel {
 
     /// An offset that can be used mainly to correct the position of the icon.
     /// This does not effect the position of the background quad.
-    pub fn set_icon_offset(&mut self, offset: Point) {
+    pub fn set_icon_offset(&mut self, offset: Vector) {
         let changed = RefCell::borrow_mut(&self.shared_state)
             .inner
             .set_icon_offset(offset);

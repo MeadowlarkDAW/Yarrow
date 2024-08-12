@@ -7,7 +7,7 @@ use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::{Align2, Padding};
-use crate::math::{Point, Rect, Size, ZIndex};
+use crate::math::{Point, Rect, Size, ZIndex, Vector};
 use crate::prelude::{ElementStyle, ResourceCtx};
 use crate::style::QuadStyle;
 use crate::vg::color::{self, RGBA8};
@@ -97,7 +97,7 @@ pub struct IconPrimitives {
 pub struct IconInner {
     /// An offset that can be used mainly to correct the position of icon glyphs.
     /// This does not effect the position of the background quad.
-    pub offset: Point,
+    pub offset: Vector,
     pub icon_id: CustomGlyphID,
     pub scale: f32,
     desired_size: Size,
@@ -105,7 +105,7 @@ pub struct IconInner {
 }
 
 impl IconInner {
-    pub fn new(icon_id: CustomGlyphID, scale: f32, offset: Point) -> Self {
+    pub fn new(icon_id: CustomGlyphID, scale: f32, offset: Vector) -> Self {
         Self {
             offset,
             icon_id,
@@ -157,7 +157,7 @@ impl IconInner {
         IconPrimitives {
             icon: TextPrimitive::new_with_icons(
                 None,
-                bounds.origin + icon_rect.origin.to_vector() + self.offset.to_vector(),
+                bounds.origin + icon_rect.origin.to_vector() + self.offset,
                 style.color,
                 None,
                 smallvec::smallvec![CustomGlyphDesc {
@@ -181,7 +181,7 @@ impl IconInner {
 pub struct IconBuilder {
     pub icon: CustomGlyphID,
     pub scale: f32,
-    pub offset: Point,
+    pub offset: Vector,
     pub class: Option<&'static str>,
     pub z_index: Option<ZIndex>,
     pub bounding_rect: Rect,
@@ -194,7 +194,7 @@ impl IconBuilder {
         Self {
             icon: CustomGlyphID::MAX,
             scale: 1.0,
-            offset: Point::default(),
+            offset: Vector::default(),
             class: None,
             z_index: None,
             bounding_rect: Rect::default(),
@@ -220,7 +220,7 @@ impl IconBuilder {
 
     /// An offset that can be used mainly to correct the position of icon glyphs.
     /// This does not effect the position of the background quad.
-    pub const fn offset(mut self, offset: Point) -> Self {
+    pub const fn offset(mut self, offset: Vector) -> Self {
         self.offset = offset;
         self
     }
@@ -402,7 +402,7 @@ impl Icon {
 
     /// An offset that can be used mainly to correct the position of icon glyphs.
     /// This does not effect the position of the background quad.
-    pub fn set_offset(&mut self, offset: Point) {
+    pub fn set_offset(&mut self, offset: Vector) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.offset != offset {

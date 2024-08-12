@@ -6,7 +6,7 @@ use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::{Align2, Padding};
-use crate::math::{Point, Rect, ZIndex};
+use crate::math::{Rect, ZIndex, Vector};
 use crate::prelude::{ElementStyle, ResourceCtx};
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
@@ -81,7 +81,7 @@ impl ElementStyle for TooltipStyle {
 }
 
 pub struct TooltipBuilder {
-    pub text_offset: Point,
+    pub text_offset: Vector,
     pub class: Option<&'static str>,
     pub element_padding: Padding,
     pub z_index: Option<ZIndex>,
@@ -91,7 +91,7 @@ pub struct TooltipBuilder {
 impl TooltipBuilder {
     pub fn new() -> Self {
         Self {
-            text_offset: Point::default(),
+            text_offset: Vector::default(),
             class: None,
             element_padding: Padding::new(10.0, 10.0, 10.0, 10.0),
             z_index: None,
@@ -113,7 +113,7 @@ impl TooltipBuilder {
 
     /// An offset that can be used mainly to correct the position of icon glyphs.
     /// This does not effect the position of the background quad.
-    pub const fn text_offset(mut self, offset: Point) -> Self {
+    pub const fn text_offset(mut self, offset: Vector) -> Self {
         self.text_offset = offset;
         self
     }
@@ -173,7 +173,7 @@ impl TooltipElement {
                 Some(String::new()),
                 None,
                 text_offset,
-                Point::default(),
+                Vector::default(),
                 1.0,
                 Default::default(),
                 &style.label_style(),
@@ -341,7 +341,7 @@ impl Tooltip {
     /// An offset that can be used mainly to correct the position of the text.
     ///
     /// This does not effect the position of the background quad.
-    pub fn set_text_offset(&mut self, offset: Point) {
+    pub fn set_text_offset(&mut self, offset: Vector) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.text_offset != offset {

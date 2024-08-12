@@ -73,7 +73,7 @@ pub enum Action {
         text_input_id: TextInputID,
     },
     TextInputMenuOptionSelected(TextMenuOption),
-    ScrollOffsetChanged(Point),
+    ScrollOffsetChanged(Vector),
 }
 
 pub struct Elements {
@@ -450,7 +450,7 @@ impl Elements {
             style.radio_group_row_padding,
             style.radio_group_column_padding,
             None,
-            Point::default(),
+            Default::default(),
             cx.res,
         );
 

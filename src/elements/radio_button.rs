@@ -7,7 +7,7 @@ use rootvg::{color, PrimitiveGroup};
 
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
 use crate::layout::{self, Align2};
-use crate::math::{Rect, Size, ZIndex};
+use crate::math::{Rect, Size, ZIndex, Vector};
 use crate::prelude::{ElementStyle, ResourceCtx};
 use crate::style::{Background, BorderStyle, DisabledBackground, DisabledColor, QuadStyle};
 use crate::vg::color::RGBA8;
@@ -583,7 +583,7 @@ impl RadioButtonGroup {
         row_padding: f32,
         column_padding: f32,
         max_width: Option<f32>,
-        text_offset: Point,
+        text_offset: Vector,
         res: &mut ResourceCtx,
     ) {
         self.bounds.origin = origin;

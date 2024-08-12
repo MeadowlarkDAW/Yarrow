@@ -94,10 +94,10 @@ impl ElementStyle for ScrollBarStyle {
 }
 
 pub struct ScrollAreaBuilder<A: Clone + 'static> {
-    pub scrolled_action: Option<Box<dyn FnMut(Point) -> A>>,
+    pub scrolled_action: Option<Box<dyn FnMut(Vector) -> A>>,
     pub bounds: Rect,
     pub content_size: Size,
-    pub scroll_offset: Point,
+    pub scroll_offset: Vector,
     pub scroll_horizontally: bool,
     pub scroll_vertically: bool,
     pub scroll_with_scroll_wheel: bool,
@@ -117,7 +117,7 @@ impl<A: Clone + 'static> ScrollAreaBuilder<A> {
             scrolled_action: None,
             bounds: Rect::default(),
             content_size: Size::default(),
-            scroll_offset: Point::default(),
+            scroll_offset: Vector::default(),
             scroll_horizontally: true,
             scroll_vertically: true,
             scroll_with_scroll_wheel: true,
@@ -136,7 +136,7 @@ impl<A: Clone + 'static> ScrollAreaBuilder<A> {
         ScrollAreaElement::create(self, cx)
     }
 
-    pub fn on_scrolled<F: FnMut(Point) -> A + 'static>(mut self, f: F) -> Self {
+    pub fn on_scrolled<F: FnMut(Vector) -> A + 'static>(mut self, f: F) -> Self {
         self.scrolled_action = Some(Box::new(f));
         self
     }
@@ -151,7 +151,7 @@ impl<A: Clone + 'static> ScrollAreaBuilder<A> {
         self
     }
 
-    pub const fn scroll_offset(mut self, offset: Point) -> Self {
+    pub const fn scroll_offset(mut self, offset: Vector) -> Self {
         self.scroll_offset = offset;
         self
     }
@@ -232,13 +232,13 @@ impl<A: Clone + 'static> ScrollAreaBuilder<A> {
 
 struct DragState {
     drag_start_pos: Point,
-    drag_start_scroll_offset: Point,
+    drag_start_scroll_offset: Vector,
 }
 
 pub struct ScrollAreaElement<A: Clone + 'static> {
     shared_state: Rc<RefCell<SharedState>>,
 
-    scrolled_action: Option<Box<dyn FnMut(Point) -> A>>,
+    scrolled_action: Option<Box<dyn FnMut(Vector) -> A>>,
 
     scroll_horizontally: bool,
     scroll_vertically: bool,
@@ -707,7 +707,7 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
 
                 let delta = delta_type.points(self.points_per_line, cx.rect().height());
 
-                let new_scroll_offset = Point::new(
+                let new_scroll_offset = Vector::new(
                     (self.sliders_state.scroll_offset.x + (delta.x))
                         .clamp(0.0, self.sliders_state.max_scroll_offset.x),
                     (self.sliders_state.scroll_offset.y + (delta.y))
@@ -909,7 +909,7 @@ enum ScrollBarState {
 
 struct SharedState {
     content_size: Size,
-    scroll_offset: Point,
+    scroll_offset: Vector,
     disabled: bool,
 }
 
@@ -929,7 +929,7 @@ impl ScrollArea {
         }
     }
 
-    pub fn set_scroll_offset(&mut self, scroll_offset: Point) {
+    pub fn set_scroll_offset(&mut self, scroll_offset: Vector) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.scroll_offset != scroll_offset {
@@ -938,7 +938,7 @@ impl ScrollArea {
         }
     }
 
-    pub fn scroll_offset(&self) -> Point {
+    pub fn scroll_offset(&self) -> Vector {
         RefCell::borrow(&self.shared_state).scroll_offset
     }
 
@@ -976,15 +976,15 @@ struct SlidersState {
     horizontal_slider_bounds: Rect,
     show_vertical: bool,
     show_horizontal: bool,
-    scroll_offset: Point,
-    max_scroll_offset: Point,
+    scroll_offset: Vector,
+    max_scroll_offset: Vector,
     slider_to_content_ratio: Vector,
 }
 
 fn update_sliders_state(
     bounds_size: Size,
     content_size: Size,
-    scroll_offset: Point,
+    scroll_offset: Vector,
     slider_width: f32,
     scroll_horizontally: bool,
     scroll_vertically: bool,
@@ -1085,8 +1085,8 @@ fn update_sliders_state(
         horizontal_slider_bounds,
         show_vertical,
         show_horizontal,
-        scroll_offset: Point::new(scroll_offset_x, scroll_offset_y),
-        max_scroll_offset: Point::new(max_scroll_offset_x, max_scroll_offset_y),
+        scroll_offset: Vector::new(scroll_offset_x, scroll_offset_y),
+        max_scroll_offset: Vector::new(max_scroll_offset_x, max_scroll_offset_y),
         slider_to_content_ratio: Vector::new(slider_to_content_ratio_x, slider_to_content_ratio_y),
     }
 }

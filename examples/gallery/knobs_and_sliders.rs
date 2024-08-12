@@ -10,7 +10,7 @@ pub enum Action {
     ShowParamTooltip(ParamElementTooltipInfo),
     OpenTextInput(ParamOpenTextEntryInfo),
     FloatingTextInput(Option<String>),
-    ScrollOffsetChanged(Point),
+    ScrollOffsetChanged(Vector),
 }
 
 pub struct Elements {

@@ -20,6 +20,7 @@ use keyboard_types::CompositionEvent;
 use rootvg::color::PackedSrgb;
 use rootvg::math::PhysicalSizeI32;
 use rootvg::math::SizeI32;
+use rootvg::math::Vector;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use smallvec::SmallVec;
@@ -160,7 +161,7 @@ impl<A: Clone + 'static> View<A> {
             ),
         );
 
-        let scissor_rects = vec![ScissorRect::new(view_rect, Point::default())];
+        let scissor_rects = vec![ScissorRect::new(view_rect, Vector::default())];
 
         let capacity = preallocate_for_this_many_elements as usize;
 
@@ -234,7 +235,7 @@ impl<A: Clone + 'static> View<A> {
             .map(|c| c.rect())
     }
 
-    pub fn scissor_rect_scroll_offset(&self, scissor_rect_id: ScissorRectID) -> Option<Point> {
+    pub fn scissor_rect_scroll_offset(&self, scissor_rect_id: ScissorRectID) -> Option<Vector> {
         self.scissor_rects
             .get(usize::from(scissor_rect_id))
             .map(|c| c.scroll_offset())
@@ -242,7 +243,7 @@ impl<A: Clone + 'static> View<A> {
 
     pub fn set_num_additional_scissor_rects(&mut self, num: usize) {
         self.scissor_rects.resize_with(1 + num, || {
-            ScissorRect::new(RectI32::default(), Point::default())
+            ScissorRect::new(RectI32::default(), Vector::default())
         })
     }
 
@@ -251,7 +252,7 @@ impl<A: Clone + 'static> View<A> {
         &mut self,
         scissor_rect_id: ScissorRectID,
         new_rect: Option<Rect>,
-        new_scroll_offset: Option<Point>,
+        new_scroll_offset: Option<Vector>,
     ) -> Result<(), ()> {
         if scissor_rect_id == MAIN_SCISSOR_RECT {
             return Err(());
@@ -309,7 +310,7 @@ impl<A: Clone + 'static> View<A> {
         let mut stack_data = EntryStackData {
             rect: bounding_rect,
             visible_rect: None,
-            pos_relative_to_scissor_rect: bounding_rect.origin,
+            offset_from_scissor_rect_origin: bounding_rect.origin.to_vector(),
             scissor_rect_id,
             z_index,
             flags,
@@ -364,7 +365,7 @@ impl<A: Clone + 'static> View<A> {
             element_entry.stack_data.index_in_painted_list = self.painted_elements.len() as u32;
             self.painted_elements.push(CachedElementPrimitives::new(
                 element_id,
-                element_entry.stack_data.rect.origin,
+                element_entry.stack_data.rect.origin.to_vector(),
                 element_entry.stack_data.z_index,
                 element_entry.stack_data.scissor_rect_id,
                 element_entry.stack_data.visible(),
@@ -1307,14 +1308,14 @@ impl<A: Clone + 'static> View<A> {
             return;
         };
 
-        let pos_changed = element_entry.stack_data.pos_relative_to_scissor_rect != new_rect.origin;
+        let pos_changed = element_entry.stack_data.offset_from_scissor_rect_origin != new_rect.origin.to_vector();
         let size_changed = element_entry.stack_data.rect.size != new_rect.size;
 
         if !(pos_changed || size_changed) {
             return;
         }
 
-        element_entry.stack_data.pos_relative_to_scissor_rect = new_rect.origin;
+        element_entry.stack_data.offset_from_scissor_rect_origin = new_rect.origin.to_vector();
         element_entry.stack_data.rect.size = new_rect.size;
         element_entry.stack_data.update_layout(&self.scissor_rects);
 
@@ -1963,7 +1964,7 @@ struct ElementEntry<A: Clone + 'static> {
 struct EntryStackData {
     rect: Rect,
     visible_rect: Option<Rect>,
-    pos_relative_to_scissor_rect: Point,
+    offset_from_scissor_rect_origin: Vector,
 
     scissor_rect_id: ScissorRectID,
     z_index: ZIndex,
@@ -1986,8 +1987,8 @@ impl EntryStackData {
         let scissor_rect = &scissor_rects[self.scissor_rect_id as usize];
         let scissor_rect_origin: Point = scissor_rect.origin().cast();
 
-        self.rect.origin = scissor_rect_origin + self.pos_relative_to_scissor_rect.to_vector()
-            - scissor_rect.scroll_offset().to_vector();
+        self.rect.origin = scissor_rect_origin + self.offset_from_scissor_rect_origin
+            - scissor_rect.scroll_offset();
     }
 
     fn update_visibility(&mut self, scissor_rects: &[ScissorRect], window_visible: bool) {

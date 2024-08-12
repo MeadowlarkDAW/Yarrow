@@ -10,7 +10,7 @@ use crate::elements::icon::{IconInner, IconStyle};
 use crate::elements::text_input::TextInputUpdateResult;
 use crate::event::{ElementEvent, EventCaptureStatus, PointerEvent};
 use crate::layout::{Align2, Padding, StartEndAlign};
-use crate::math::{Point, Rect, ZIndex};
+use crate::math::{Point, Rect, ZIndex, Vector};
 use crate::prelude::{ElementStyle, ResourceCtx};
 use crate::style::{DisabledColor, QuadStyle};
 use crate::theme::DEFAULT_ICON_SIZE;
@@ -122,10 +122,10 @@ pub struct IconTextInputBuilder<A: Clone + 'static> {
     pub tooltip_align: Align2,
     pub placeholder_text: String,
     pub text: String,
-    pub text_offset: Point,
+    pub text_offset: Vector,
     pub icon: CustomGlyphID,
     pub icon_scale: f32,
-    pub icon_offset: Point,
+    pub icon_offset: Vector,
     pub select_all_when_focused: bool,
     pub password_mode: bool,
     pub max_characters: usize,
@@ -146,10 +146,10 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
             tooltip_align: Align2::TOP_CENTER,
             placeholder_text: String::new(),
             text: String::new(),
-            text_offset: Point::default(),
+            text_offset: Vector::default(),
             icon: CustomGlyphID::MAX,
             icon_scale: 1.0,
-            icon_offset: Point::default(),
+            icon_offset: Vector::default(),
             select_all_when_focused: false,
             password_mode: false,
             max_characters: 256,
@@ -194,7 +194,7 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
 
     /// An offset that can be used mainly to correct the position of icon glyphs.
     /// This does not effect the position of the background quad.
-    pub const fn text_offset(mut self, offset: Point) -> Self {
+    pub const fn text_offset(mut self, offset: Vector) -> Self {
         self.text_offset = offset;
         self
     }
@@ -212,7 +212,7 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
 
     /// An offset that can be used mainly to correct the position of icon glyphs.
     /// This does not effect the position of the background quad.
-    pub const fn icon_offset(mut self, offset: Point) -> Self {
+    pub const fn icon_offset(mut self, offset: Vector) -> Self {
         self.icon_offset = offset;
         self
     }
@@ -548,7 +548,7 @@ impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
 
 struct SharedState {
     inner: TextInputInner,
-    text_offset: Point,
+    text_offset: Vector,
 }
 
 /// A handle to a [`IconTextInputElement`]
@@ -616,7 +616,7 @@ impl IconTextInput {
 
     /// An offset that can be used mainly to correct the position of icon glyphs.
     /// This does not effect the position of the background quad.
-    pub fn set_text_offset(&mut self, offset: Point) {
+    pub fn set_text_offset(&mut self, offset: Vector) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.text_offset != offset {

@@ -14,7 +14,7 @@
 
 use super::ElementModificationType;
 use crate::layout::Align2;
-use crate::math::{Point, Rect, Size, ZIndex};
+use crate::math::{Point, Rect, Size, ZIndex, Vector};
 use crate::stmpsc_queue;
 use crate::view::{ElementID, ElementModification};
 
@@ -179,8 +179,8 @@ impl ElementHandle {
     }
 
     /// Offset the element's rectangular area.
-    pub fn offset_pos(&mut self, offset: Point) {
-        self.rect.origin += offset.to_vector();
+    pub fn offset_pos(&mut self, offset: Vector) {
+        self.rect.origin += offset;
         self.mod_queue_sender.send(ElementModification {
             element_id: self.element_id,
             type_: ElementModificationType::RectChanged(self.rect),

@@ -9,7 +9,7 @@ use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::{Align, Align2, Padding};
-use crate::math::{Point, Rect, Size, ZIndex};
+use crate::math::{Point, Rect, Size, ZIndex, Vector};
 use crate::prelude::{ElementStyle, ResourceCtx};
 use crate::style::QuadStyle;
 use crate::theme::DEFAULT_ICON_SIZE;
@@ -148,10 +148,10 @@ struct TextInner {
 pub struct LabelInner {
     /// An offset that can be used mainly to correct the position of text.
     /// This does not effect the position of the background quad.
-    pub text_offset: Point,
+    pub text_offset: Vector,
     /// An offset that can be used mainly to correct the position of icons.
     /// This does not effect the position of the background quad.
-    pub icon_offset: Point,
+    pub icon_offset: Vector,
     pub icon_scale: f32,
     icon: Option<CustomGlyphID>,
     text_inner: Option<TextInner>,
@@ -169,8 +169,8 @@ impl LabelInner {
     pub fn new(
         text: Option<impl Into<String>>,
         icon: Option<CustomGlyphID>,
-        text_offset: Point,
-        icon_offset: Point,
+        text_offset: Vector,
+        icon_offset: Vector,
         icon_scale: f32,
         text_icon_layout: TextIconLayout,
         style: &LabelStyle,
@@ -419,7 +419,7 @@ impl LabelInner {
                 inner.text_buffer.clone(),
                 bounds.origin
                     + self.text_bounds_rect.origin.to_vector()
-                    + self.text_offset.to_vector(),
+                    + self.text_offset,
                 style.text_color,
                 None,
             ))
@@ -441,7 +441,7 @@ impl LabelInner {
                 None,
                 bounds.origin
                     + self.icon_bounds_rect.origin.to_vector()
-                    + self.icon_offset.to_vector(),
+                    + self.icon_offset,
                 style.icon_color.unwrap_or(style.text_color),
                 Some(Rect::new(
                     Point::new(-1.0, -1.0),
@@ -481,8 +481,8 @@ pub struct LabelBuilder {
     pub text: Option<String>,
     pub icon: Option<CustomGlyphID>,
     pub icon_scale: f32,
-    pub text_offset: Point,
-    pub icon_offset: Point,
+    pub text_offset: Vector,
+    pub icon_offset: Vector,
     pub text_icon_layout: TextIconLayout,
     pub class: Option<&'static str>,
     pub z_index: Option<ZIndex>,
@@ -497,8 +497,8 @@ impl LabelBuilder {
             text: None,
             icon: None,
             icon_scale: 1.0,
-            text_offset: Point::default(),
-            icon_offset: Point::default(),
+            text_offset: Vector::default(),
+            icon_offset: Vector::default(),
             text_icon_layout: TextIconLayout::default(),
             class: None,
             z_index: None,
@@ -559,7 +559,7 @@ impl LabelBuilder {
     /// This does not effect the position of the background quad.
     ///
     /// By default this is set to an offset of zero.
-    pub const fn text_offset(mut self, offset: Point) -> Self {
+    pub const fn text_offset(mut self, offset: Vector) -> Self {
         self.text_offset = offset;
         self
     }
@@ -568,7 +568,7 @@ impl LabelBuilder {
     /// This does not effect the position of the background quad.
     ///
     /// By default this is set to an offset of zero.
-    pub const fn icon_offset(mut self, offset: Point) -> Self {
+    pub const fn icon_offset(mut self, offset: Vector) -> Self {
         self.icon_offset = offset;
         self
     }
@@ -797,7 +797,7 @@ impl Label {
     /// An offset that can be used mainly to correct the position of the text.
     ///
     /// This does not effect the position of the background quad.
-    pub fn set_text_offset(&mut self, offset: Point) {
+    pub fn set_text_offset(&mut self, offset: Vector) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.text_offset != offset {
@@ -809,7 +809,7 @@ impl Label {
     /// An offset that can be used mainly to correct the position of the icon.
     ///
     /// This does not effect the position of the background quad.
-    pub fn set_icon_offset(&mut self, offset: Point) {
+    pub fn set_icon_offset(&mut self, offset: Vector) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.icon_offset != offset {

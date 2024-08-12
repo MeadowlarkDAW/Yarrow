@@ -7,7 +7,7 @@ use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::{Align, Align2, Padding};
-use crate::math::{Point, Rect, Size, ZIndex};
+use crate::math::{Point, Rect, Size, ZIndex, Vector};
 use crate::prelude::{ElementStyle, ResourceCtx};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
@@ -84,7 +84,7 @@ impl ElementStyle for ParagraphStyle {
 pub struct ParagraphInner {
     /// An offset that can be used mainly to correct the position of icon glyphs.
     /// This does not effect the position of the background quad.
-    pub text_offset: Point,
+    pub text_offset: Vector,
     text: String,
     text_buffer: RcTextBuffer,
     bounds_width: f32,
@@ -102,7 +102,7 @@ impl ParagraphInner {
         style: &ParagraphStyle,
         bounds_width: f32,
         font_system: &mut FontSystem,
-        text_offset: Point,
+        text_offset: Vector,
     ) -> Self {
         let text: String = text.into();
 
@@ -250,7 +250,7 @@ impl ParagraphInner {
                 self.text_buffer.clone(),
                 bounds.origin
                     + self.text_bounds_rect.origin.to_vector()
-                    + self.text_offset.to_vector(),
+                    + self.text_offset,
                 style.text_color,
                 None,
             ))
@@ -274,7 +274,7 @@ impl ParagraphInner {
 
 pub struct ParagraphBuilder {
     pub text: String,
-    pub text_offset: Point,
+    pub text_offset: Vector,
     pub bounds_width: Option<f32>,
     pub class: Option<&'static str>,
     pub z_index: Option<ZIndex>,
@@ -287,7 +287,7 @@ impl ParagraphBuilder {
     pub fn new() -> Self {
         Self {
             text: String::new(),
-            text_offset: Point::default(),
+            text_offset: Vector::default(),
             bounds_width: None,
             class: None,
             z_index: None,
@@ -320,7 +320,7 @@ impl ParagraphBuilder {
     /// This does not effect the position of the background quad.
     ///
     /// By default this is set to an offset of zero.
-    pub const fn text_offset(mut self, offset: Point) -> Self {
+    pub const fn text_offset(mut self, offset: Vector) -> Self {
         self.text_offset = offset;
         self
     }
@@ -543,7 +543,7 @@ impl Paragraph {
 
     /// An offset that can be used mainly to correct the position of icon glyphs.
     /// This does not effect the position of the background quad.
-    pub fn set_text_offset(&mut self, offset: Point) {
+    pub fn set_text_offset(&mut self, offset: Vector) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.text_offset != offset {

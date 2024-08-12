@@ -70,7 +70,7 @@ pub struct ShadowStyle {
     pub color: RGBA8,
 
     /// The offset of the shadow in logical points.
-    pub offset: Point,
+    pub offset: Vector,
 
     /// The blur radius of the shadow in logical points.
     pub blur_radius: f32,
