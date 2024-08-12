@@ -334,8 +334,7 @@ impl<A: Clone + 'static> Element<A> for ResizeHandleElement<A> {
                 let resize_bounds = shared_state
                     .layout
                     .resize_bounds(self.direction, shared_state.current_span);
-                let rect =
-                    calc_drag_handle_rect(resize_bounds, self.direction, DRAG_HANDLE_WIDTH);
+                let rect = calc_drag_handle_rect(resize_bounds, self.direction, DRAG_HANDLE_WIDTH);
 
                 cx.set_rect(rect);
                 cx.request_repaint();

@@ -423,10 +423,7 @@ impl LabelInner {
                 style.text_color,
                 Some(Rect::new(
                     Point::new(-1.0, -1.0),
-                    Size::new(
-                        bounds.width() + 2.0,
-                        bounds.height() + 2.0,
-                    ),
+                    Size::new(bounds.width() + 2.0, bounds.height() + 2.0),
                 )),
             ))
         } else {
@@ -449,10 +446,7 @@ impl LabelInner {
                 style.icon_color.unwrap_or(style.text_color),
                 Some(Rect::new(
                     Point::new(-1.0, -1.0),
-                    Size::new(
-                        bounds.width() + 2.0,
-                        bounds.height() + 2.0,
-                    ),
+                    Size::new(bounds.width() + 2.0, bounds.height() + 2.0),
                 )),
                 smallvec::smallvec![CustomGlyphDesc {
                     id: icon,

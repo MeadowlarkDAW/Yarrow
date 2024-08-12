@@ -43,7 +43,9 @@ pub use crate::math::{
     Size, SizeI32, Transform, Translation, Vector, ZIndex,
 };
 pub use crate::style::*;
-pub use crate::vg::color::{self, gray, gray_a, rgb, rgba, BLACK, RGBA8, TRANSPARENT, WHITE};
+pub use crate::vg::color::{
+    self, gray, gray_a, hex, hex_a, rgb, rgba, BLACK, RGBA8, TRANSPARENT, WHITE,
+};
 pub use crate::vg::quad::{radius, Radius};
 pub use crate::vg::text::glyphon::fontdb::Source as FontSource;
 pub use crate::vg::text::glyphon::FontSystem;
