@@ -14,7 +14,7 @@
 
 use super::ElementModificationType;
 use crate::layout::Align2;
-use crate::math::{Point, Rect, Size, ZIndex, Vector};
+use crate::math::{Point, Rect, Size, Vector, ZIndex};
 use crate::stmpsc_queue;
 use crate::view::{ElementID, ElementModification};
 

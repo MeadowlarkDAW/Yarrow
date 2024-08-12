@@ -9,7 +9,7 @@ use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::{Align, Align2, Padding};
-use crate::math::{Point, Rect, Size, ZIndex, Vector};
+use crate::math::{Point, Rect, Size, Vector, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
 use crate::style::QuadStyle;
 use crate::theme::DEFAULT_ICON_SIZE;
@@ -417,9 +417,7 @@ impl LabelInner {
         let text = if let Some(inner) = &self.text_inner {
             Some(TextPrimitive::new(
                 inner.text_buffer.clone(),
-                bounds.origin
-                    + self.text_bounds_rect.origin.to_vector()
-                    + self.text_offset,
+                bounds.origin + self.text_bounds_rect.origin.to_vector() + self.text_offset,
                 style.text_color,
                 None,
             ))
@@ -439,9 +437,7 @@ impl LabelInner {
 
             Some(TextPrimitive::new_with_icons(
                 None,
-                bounds.origin
-                    + self.icon_bounds_rect.origin.to_vector()
-                    + self.icon_offset,
+                bounds.origin + self.icon_bounds_rect.origin.to_vector() + self.icon_offset,
                 style.icon_color.unwrap_or(style.text_color),
                 Some(Rect::new(
                     Point::new(-1.0, -1.0),

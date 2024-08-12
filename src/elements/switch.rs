@@ -6,7 +6,7 @@ use rootvg::{color, PrimitiveGroup};
 
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
 use crate::layout::{self, Align2};
-use crate::math::{Rect, Size, ZIndex, Vector};
+use crate::math::{Rect, Size, Vector, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
 use crate::style::{Background, BorderStyle, DisabledBackground, DisabledColor, QuadStyle};
 use crate::vg::color::RGBA8;
@@ -533,8 +533,7 @@ impl<A: Clone + 'static> Element<A> for SwitchElement<A> {
 
         let slider_bounds = if shared_state.toggled {
             Rect::new(
-                bg_bounds.origin
-                    + Vector::new(bg_bounds.width() - size + padding, padding),
+                bg_bounds.origin + Vector::new(bg_bounds.width() - size + padding, padding),
                 Size::new(size - (padding * 2.0), size - (padding * 2.0)),
             )
         } else {

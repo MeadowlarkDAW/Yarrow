@@ -173,7 +173,7 @@ impl WheelDeltaType {
 pub enum PointerEvent {
     Moved {
         position: Point,
-        delta: Option<Point>,
+        delta: Option<Vector>,
         /// Whether or not the backend has locked the pointer in place.
         ///
         /// This will only be `true` if all the following conditions are true:

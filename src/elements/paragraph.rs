@@ -7,7 +7,7 @@ use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::{Align, Align2, Padding};
-use crate::math::{Point, Rect, Size, ZIndex, Vector};
+use crate::math::{Point, Rect, Size, Vector, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
@@ -248,9 +248,7 @@ impl ParagraphInner {
         let text = if !self.text.is_empty() {
             Some(TextPrimitive::new(
                 self.text_buffer.clone(),
-                bounds.origin
-                    + self.text_bounds_rect.origin.to_vector()
-                    + self.text_offset,
+                bounds.origin + self.text_bounds_rect.origin.to_vector() + self.text_offset,
                 style.text_color,
                 None,
             ))

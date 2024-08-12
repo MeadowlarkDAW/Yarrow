@@ -1418,9 +1418,7 @@ impl TextInputInner {
 
                 primitives.text = Some(TextPrimitive {
                     buffer: Some(placeholder_buffer.clone()),
-                    pos: self.text_bounds_rect.origin
-                        + text_offset
-                        + bounds.origin.to_vector(),
+                    pos: self.text_bounds_rect.origin + text_offset + bounds.origin.to_vector(),
                     color,
                     clipping_bounds: Some(Rect::new(bounds.origin, self.text_bounds_rect.size)),
                     icons: SmallVec::new(),

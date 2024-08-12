@@ -6,7 +6,7 @@ use rootvg::PrimitiveGroup;
 use crate::elements::text_input::TextInputUpdateResult;
 use crate::event::{ElementEvent, EventCaptureStatus, PointerEvent};
 use crate::layout::Align2;
-use crate::math::{Point, Rect, ZIndex, Vector};
+use crate::math::{Point, Rect, Vector, ZIndex};
 use crate::prelude::ResourceCtx;
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,

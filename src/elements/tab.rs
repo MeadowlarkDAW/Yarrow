@@ -7,7 +7,7 @@ use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
 use crate::layout::{Align2, LayoutDirection};
-use crate::math::{Rect, Size, ZIndex, Vector};
+use crate::math::{Rect, Size, Vector, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
 use crate::style::QuadStyle;
 use crate::view::element::{

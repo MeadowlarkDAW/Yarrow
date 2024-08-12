@@ -6,7 +6,7 @@ use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::{Align2, Padding};
-use crate::math::{Rect, ZIndex, Vector};
+use crate::math::{Rect, Vector, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{

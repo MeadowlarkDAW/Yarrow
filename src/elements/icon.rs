@@ -7,7 +7,7 @@ use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::{Align2, Padding};
-use crate::math::{Point, Rect, Size, ZIndex, Vector};
+use crate::math::{Point, Rect, Size, Vector, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
 use crate::style::QuadStyle;
 use crate::vg::color::{self, RGBA8};

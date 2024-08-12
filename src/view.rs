@@ -1308,7 +1308,8 @@ impl<A: Clone + 'static> View<A> {
             return;
         };
 
-        let pos_changed = element_entry.stack_data.offset_from_scissor_rect_origin != new_rect.origin.to_vector();
+        let pos_changed =
+            element_entry.stack_data.offset_from_scissor_rect_origin != new_rect.origin.to_vector();
         let size_changed = element_entry.stack_data.rect.size != new_rect.size;
 
         if !(pos_changed || size_changed) {

@@ -121,7 +121,8 @@ impl<A: Application> AppHandler<A> {
                     let delta = crate::math::to_logical_point_from_recip(
                         PhysicalPoint::new(delta.0 as f32, delta.1 as f32),
                         window_state.scale_factor_recip,
-                    );
+                    )
+                    .to_vector();
 
                     window_state.handle_locked_pointer_delta(delta, &mut self.context.res);
                 }

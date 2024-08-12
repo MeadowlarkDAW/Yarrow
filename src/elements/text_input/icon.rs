@@ -10,7 +10,7 @@ use crate::elements::icon::{IconInner, IconStyle};
 use crate::elements::text_input::TextInputUpdateResult;
 use crate::event::{ElementEvent, EventCaptureStatus, PointerEvent};
 use crate::layout::{Align2, Padding, StartEndAlign};
-use crate::math::{Point, Rect, ZIndex, Vector};
+use crate::math::{Point, Rect, Vector, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
 use crate::style::{DisabledColor, QuadStyle};
 use crate::theme::DEFAULT_ICON_SIZE;

@@ -8,7 +8,7 @@ use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
 use crate::layout::Padding;
-use crate::math::{Rect, Size, ZIndex, Vector};
+use crate::math::{Rect, Size, Vector, ZIndex};
 use crate::prelude::ElementStyle;
 use crate::style::QuadStyle;
 use crate::theme::DEFAULT_ICON_SIZE;

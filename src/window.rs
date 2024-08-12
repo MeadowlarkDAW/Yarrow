@@ -1,5 +1,4 @@
 use keyboard_types::{CompositionEvent, Modifiers};
-use rootvg::math::{to_logical_size_i32, PhysicalPoint, Point, ZIndex};
 use rootvg::surface::{DefaultSurface, DefaultSurfaceConfig, NewSurfaceError};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -10,7 +9,9 @@ use crate::event::{
     CanvasEvent, EventCaptureStatus, KeyboardEvent, PointerButton, PointerEvent, PointerType,
     WheelDeltaType,
 };
-use crate::math::{PhysicalSizeI32, ScaleFactor, Size};
+use crate::math::{
+    to_logical_size_i32, PhysicalPoint, PhysicalSizeI32, Point, ScaleFactor, Size, Vector, ZIndex,
+};
 use crate::prelude::ResourceCtx;
 use crate::{view::ViewConfig, View};
 use crate::{CursorIcon, ScissorRectID, MAIN_SCISSOR_RECT};
@@ -285,7 +286,7 @@ impl<A: Clone + 'static> WindowState<A> {
             // avoid sending a duplicate.
             None
         } else if let Some(prev_pos) = self.prev_pointer_pos {
-            Some(new_pos - prev_pos.to_vector())
+            Some(new_pos.to_vector() - prev_pos.to_vector())
         } else {
             None
         };
@@ -305,7 +306,7 @@ impl<A: Clone + 'static> WindowState<A> {
         );
     }
 
-    pub fn handle_locked_pointer_delta(&mut self, delta: Point, res: &mut ResourceCtx) {
+    pub fn handle_locked_pointer_delta(&mut self, delta: Vector, res: &mut ResourceCtx) {
         self.view.handle_event(
             &CanvasEvent::Pointer(PointerEvent::Moved {
                 position: self.prev_pointer_pos.unwrap_or_default(),
