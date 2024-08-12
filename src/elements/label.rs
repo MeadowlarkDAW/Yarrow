@@ -414,8 +414,6 @@ impl LabelInner {
             }
         }
 
-        dbg!(bounds);
-
         let text = if let Some(inner) = &self.text_inner {
             Some(TextPrimitive::new(
                 inner.text_buffer.clone(),
