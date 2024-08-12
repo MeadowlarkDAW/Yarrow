@@ -414,12 +414,20 @@ impl LabelInner {
             }
         }
 
+        dbg!(bounds);
+
         let text = if let Some(inner) = &self.text_inner {
             Some(TextPrimitive::new(
                 inner.text_buffer.clone(),
                 bounds.origin + self.text_bounds_rect.origin.to_vector() + self.text_offset,
                 style.text_color,
-                None,
+                Some(Rect::new(
+                    Point::new(-1.0, -1.0),
+                    Size::new(
+                        bounds.width() + 2.0,
+                        bounds.height() + 2.0,
+                    ),
+                )),
             ))
         } else {
             None
@@ -442,8 +450,8 @@ impl LabelInner {
                 Some(Rect::new(
                     Point::new(-1.0, -1.0),
                     Size::new(
-                        self.icon_bounds_rect.size.width + 2.0,
-                        self.icon_bounds_rect.size.height + 2.0,
+                        bounds.width() + 2.0,
+                        bounds.height() + 2.0,
                     ),
                 )),
                 smallvec::smallvec![CustomGlyphDesc {
