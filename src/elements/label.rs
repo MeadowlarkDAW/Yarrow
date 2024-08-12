@@ -752,7 +752,10 @@ impl Label {
             })
     }
 
-    pub fn set_text(&mut self, text: Option<&str>, res: &mut ResourceCtx) {
+    /// Set the text of the label.
+    ///
+    /// Returns `true` if the text has changed.
+    pub fn set_text(&mut self, text: Option<&str>, res: &mut ResourceCtx) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.set_text(text, &mut res.font_system, || {
@@ -761,6 +764,9 @@ impl Label {
                 .text_properties
         }) {
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
