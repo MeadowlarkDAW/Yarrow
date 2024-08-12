@@ -220,6 +220,16 @@ pub const fn background_rgb(r: u8, g: u8, b: u8) -> Background {
     Background::Solid(RGBA8::new(r, g, b, 255))
 }
 
+/// An alias for `Background::Solid(hex_a(color))`
+pub const fn background_hex_a(color: u32) -> Background {
+    Background::Solid(color::hex_a(color))
+}
+
+/// An alias for `Background::Solid(hex(color))`
+pub const fn background_hex(color: u32) -> Background {
+    Background::Solid(color::hex(color))
+}
+
 /// An alias for `Background::Solid(RGBA8::new(v, v, v, a))`
 pub const fn background_gray_a(v: u8, a: u8) -> Background {
     Background::Solid(RGBA8::new(v, v, v, a))
