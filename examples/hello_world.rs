@@ -9,19 +9,15 @@ pub fn main() {
 
     yarrow::run_blocking(
         MyApp {
-            _action_sender: action_sender.clone(),
-            _action_receiver: action_receiver,
             main_window_elements: None,
         },
         action_sender,
+        action_receiver,
     )
     .unwrap();
 }
 
 struct MyApp {
-    _action_sender: ActionSender<()>,
-    _action_receiver: ActionReceiver<()>,
-
     // Yarrow is designed to work even when a window is not currently
     // open (useful in an audio plugin context).
     main_window_elements: Option<MainWindowElements>,

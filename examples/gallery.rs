@@ -55,11 +55,7 @@ pub fn main() {
     // Actions are sent via a regular Rust mpsc queue.
     let (action_sender, action_receiver) = yarrow::action_channel();
 
-    yarrow::run_blocking(
-        MyApp::new(action_sender.clone(), action_receiver),
-        action_sender,
-    )
-    .unwrap();
+    yarrow::run_blocking(MyApp::new(), action_sender, action_receiver).unwrap();
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -111,9 +107,6 @@ struct MainWindowElements {
 }
 
 struct MyApp {
-    action_sender: ActionSender<MyAction>,
-    action_receiver: ActionReceiver<MyAction>,
-
     // Yarrow is designed to work even when a window is not currently
     // open (useful in an audio plugin context).
     main_window_elements: Option<MainWindowElements>,
@@ -125,13 +118,8 @@ struct MyApp {
 }
 
 impl MyApp {
-    fn new(
-        action_sender: ActionSender<MyAction>,
-        action_receiver: ActionReceiver<MyAction>,
-    ) -> Self {
+    fn new() -> Self {
         Self {
-            action_sender: action_sender,
-            action_receiver,
             main_window_elements: None,
             about_window_elements: None,
             style: MyStyle::new(),
@@ -258,7 +246,7 @@ impl MyApp {
             MyAction::LeftPanelResizeFinished(_new_span) => {}
             MyAction::MenuItemSelected(option) => {
                 if option == MenuOption::About {
-                    self.action_sender.send(MyAction::OpenAboutWindow).unwrap();
+                    cx.action_sender.send(MyAction::OpenAboutWindow).unwrap();
                 }
             }
             MyAction::OpenMenu => {
@@ -460,7 +448,7 @@ impl Application for MyApp {
     }
 
     fn on_action_emitted(&mut self, cx: &mut AppContext<Self::Action>) {
-        while let Ok(action) = self.action_receiver.try_recv() {
+        while let Ok(action) = cx.action_receiver.try_recv() {
             self.handle_action(action, cx);
         }
     }
@@ -469,7 +457,7 @@ impl Application for MyApp {
         &mut self,
         event: KeyboardEvent,
         window_id: WindowID,
-        _cx: &mut AppContext<Self::Action>,
+        cx: &mut AppContext<Self::Action>,
     ) {
         if window_id == MAIN_WINDOW
             && event.state == KeyState::Down
@@ -478,7 +466,7 @@ impl Application for MyApp {
             && !event.repeat
         {
             println!("program-wide keyboard shortcut activated: Ctrl+A");
-            self.action_sender.send(MyAction::OpenAboutWindow).unwrap();
+            cx.action_sender.send(MyAction::OpenAboutWindow).unwrap();
         }
     }
 }

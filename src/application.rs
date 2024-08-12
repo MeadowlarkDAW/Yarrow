@@ -4,6 +4,7 @@ use std::{error::Error, time::Duration};
 
 use crate::{
     event::{AppWindowEvent, KeyboardEvent},
+    prelude::{ActionReceiver, ActionSender},
     style::StyleSystem,
     window::{
         LinuxBackendType, ScaleFactorConfig, WindowCloseRequest, WindowConfig, WindowContext,
@@ -104,6 +105,11 @@ pub struct AppContext<A: Clone + 'static> {
     pub(crate) linux_backend_type: Option<LinuxBackendType>,
     /// The global resource context
     pub res: ResourceCtx,
+
+    /// The sending end of the action queue.
+    pub action_sender: ActionSender<A>,
+    /// The receiving end of the action queue.
+    pub action_receiver: ActionReceiver<A>,
 }
 
 impl<A: Clone + 'static> AppContext<A> {
@@ -176,7 +182,11 @@ impl<A: Clone + 'static> AppContext<A> {
 }
 
 impl<A: Clone + 'static> AppContext<A> {
-    pub fn new(config: AppConfig) -> Self {
+    pub fn new(
+        config: AppConfig,
+        action_sender: ActionSender<A>,
+        action_receiver: ActionReceiver<A>,
+    ) -> Self {
         let use_dark_theme = config.use_dark_theme;
 
         Self {
@@ -189,6 +199,8 @@ impl<A: Clone + 'static> AppContext<A> {
                 svg_icon_system: Default::default(),
             },
             linux_backend_type: None,
+            action_sender,
+            action_receiver,
         }
     }
 }
