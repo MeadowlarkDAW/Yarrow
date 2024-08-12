@@ -114,9 +114,13 @@ pub struct AppContext<A: Clone + 'static> {
 
 impl<A: Clone + 'static> AppContext<A> {
     pub fn window_context<'a>(&'a mut self, window_id: WindowID) -> Option<WindowContext<'a, A>> {
-        self.window_map
-            .get_mut(&window_id)
-            .map(|w| w.context(&mut self.res))
+        self.window_map.get_mut(&window_id).map(|w| {
+            w.context(
+                &mut self.res,
+                &mut self.action_sender,
+                &mut self.action_receiver,
+            )
+        })
     }
 
     pub fn resize_window(&mut self, window_id: WindowID, logical_size: Size) {

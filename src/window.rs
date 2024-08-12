@@ -12,7 +12,7 @@ use crate::event::{
 use crate::math::{
     to_logical_size_i32, PhysicalPoint, PhysicalSizeI32, Point, ScaleFactor, Size, Vector, ZIndex,
 };
-use crate::prelude::ResourceCtx;
+use crate::prelude::{ActionReceiver, ResourceCtx};
 use crate::{view::ViewConfig, View};
 use crate::{CursorIcon, ScissorRectID, MAIN_SCISSOR_RECT};
 
@@ -428,11 +428,18 @@ impl<A: Clone + 'static> WindowState<A> {
         self.logical_size
     }
 
-    pub fn context<'b>(&'b mut self, res: &'b mut ResourceCtx) -> WindowContext<'b, A> {
+    pub fn context<'b>(
+        &'b mut self,
+        res: &'b mut ResourceCtx,
+        action_sender: &'b mut ActionSender<A>,
+        action_receiver: &'b mut ActionReceiver<A>,
+    ) -> WindowContext<'b, A> {
         WindowContext {
             view: &mut self.view,
             res,
             clipboard: &mut self.clipboard,
+            action_sender,
+            action_receiver,
             z_index_stack: Vec::new(),
             scissor_rect_id_stack: Vec::new(),
             class_name_stack: Vec::new(),
@@ -523,6 +530,10 @@ pub struct WindowContext<'a, A: Clone + 'static> {
     pub view: &'a mut View<A>,
     pub res: &'a mut ResourceCtx,
     pub clipboard: &'a mut Clipboard,
+    /// The sending end of the action queue.
+    pub action_sender: &'a mut ActionSender<A>,
+    /// The receiving end of the action queue.
+    pub action_receiver: &'a mut ActionReceiver<A>,
     z_index_stack: Vec<ZIndex>,
     scissor_rect_id_stack: Vec<ScissorRectID>,
     class_name_stack: Vec<&'static str>,
