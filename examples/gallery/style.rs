@@ -97,17 +97,19 @@ impl MyStyle {
             param_spacing: 30.0,
 
             drop_down_btn_width: 100.0,
-            text_input_size: Size::new(240.0, 30.0),
-            floating_text_input_size: Size::new(100.0, 30.0),
+            text_input_size: size(240.0, 30.0),
+            floating_text_input_size: size(100.0, 30.0),
             floating_text_input_align: Align2::BOTTOM_CENTER,
-            floating_text_input_padding: Padding::new(5.0, 5.0, 5.0, 5.0),
+            floating_text_input_padding: padding_all_same(5.0),
             separator_width: 1.0,
 
-            clear_color: RGBA8::new(15, 15, 15, 255),
+            clear_color: rgb(15, 15, 15),
         }
     }
 
     pub fn load(&self, res: &mut ResourceCtx) {
+        const LABEL_BG_COLOR: RGBA8 = gray(42);
+
         for icon in MyIcon::ALL {
             res.svg_icon_system
                 .add_from_bytes(
@@ -119,7 +121,7 @@ impl MyStyle {
                 .unwrap();
         }
 
-        yarrow::theme::yarrow_dark::load(None, None, res);
+        yarrow::theme::yarrow_dark::load(Default::default(), res);
 
         res.style_system.add(
             "fancy_icon",
@@ -127,14 +129,8 @@ impl MyStyle {
             IconStyle {
                 color: yarrow::theme::DEFAULT_ACCENT_COLOR,
                 size: 20.0,
-                back_quad: QuadStyle {
-                    bg: Background::Solid(RGBA8::new(42, 42, 42, 255)),
-                    border: BorderStyle {
-                        radius: 30.0.into(),
-                        ..Default::default()
-                    },
-                },
-                padding: Padding::new(4.0, 10.0, 4.0, 10.0),
+                back_quad: quad_style(background(LABEL_BG_COLOR), border_radius_only(radius(30.0))),
+                padding: padding_vh(4.0, 10.0),
                 ..Default::default()
             },
         );
@@ -143,17 +139,11 @@ impl MyStyle {
             "fancy_label",
             true,
             LabelStyle {
-                back_quad: QuadStyle {
-                    bg: Background::Solid(RGBA8::new(42, 42, 42, 255)),
-                    border: BorderStyle {
-                        radius: 30.0.into(),
-                        ..Default::default()
-                    },
-                },
-                text_color: RGBA8::new(255, 255, 255, 200),
+                back_quad: quad_style(background(LABEL_BG_COLOR), border_radius_only(radius(30.0))),
+                text_color: gray_a(255, 200),
                 icon_color: Some(yarrow::theme::DEFAULT_ACCENT_COLOR),
-                text_padding: Padding::new(6.0, 12.0, 6.0, 12.0),
-                icon_padding: Padding::new(4.0, 8.0, 4.0, 8.0),
+                text_padding: padding_vh(6.0, 12.0),
+                icon_padding: padding_vh(4.0, 8.0),
                 text_icon_spacing: -12.0,
                 ..Default::default()
             },
@@ -163,7 +153,7 @@ impl MyStyle {
             "panel_border",
             true,
             QuadStyle {
-                bg: Background::Solid(RGBA8::new(2, 2, 2, 255).into()),
+                bg: background_gray(2),
                 ..Default::default()
             },
         );
@@ -171,7 +161,12 @@ impl MyStyle {
         res.style_system.add(
             "knob2",
             true,
-            yarrow::theme::yarrow_dark::knob_style(None, None, true, true),
+            yarrow::theme::yarrow_dark::knob_style(
+                yarrow::theme::DEFAULT_ACCENT_COLOR,
+                yarrow::theme::DEFAULT_ACCENT_HOVER_COLOR,
+                true,
+                true,
+            ),
         );
     }
 }

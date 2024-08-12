@@ -26,15 +26,41 @@ pub struct BorderStyle {
 }
 
 impl BorderStyle {
-    pub fn is_transparent(&self) -> bool {
-        self.width == 0.0 || self.color == rootvg::color::TRANSPARENT
-    }
-
     pub const TRANSPARENT: Self = Self {
         color: rootvg::color::TRANSPARENT,
         width: 0.0,
         radius: Radius::ZERO,
     };
+
+    pub const fn new(color: RGBA8, width: f32, radius: Radius) -> Self {
+        Self {
+            color,
+            width,
+            radius,
+        }
+    }
+
+    pub const fn from_radius(radius: Radius) -> Self {
+        Self {
+            color: rootvg::color::TRANSPARENT,
+            width: 0.0,
+            radius,
+        }
+    }
+
+    pub fn is_transparent(&self) -> bool {
+        self.width == 0.0 || self.color == rootvg::color::TRANSPARENT
+    }
+}
+
+/// An alias for `BorderStyle::new(color, width, radius)`
+pub const fn border(color: RGBA8, width: f32, radius: Radius) -> BorderStyle {
+    BorderStyle::new(color, width, radius)
+}
+
+/// An alias for `BorderStyle::from_radius(color, width, radius)`
+pub const fn border_radius_only(radius: Radius) -> BorderStyle {
+    BorderStyle::from_radius(radius)
 }
 
 /*
@@ -74,6 +100,10 @@ impl QuadStyle {
         border: BorderStyle::TRANSPARENT,
     };
 
+    pub const fn new(bg: Background, border: BorderStyle) -> Self {
+        Self { bg, border }
+    }
+
     pub fn is_transparent(&self) -> bool {
         self.bg.is_transparent() && self.border.is_transparent()
     }
@@ -112,6 +142,11 @@ impl QuadStyle {
 
 impl ElementStyle for QuadStyle {
     const ID: &'static str = "qd";
+}
+
+/// An alias for `QuadStyle::new(color, width, radius)`
+pub const fn quad_style(bg: Background, border: BorderStyle) -> QuadStyle {
+    QuadStyle::new(bg, border)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -168,6 +203,31 @@ impl Into<Border> for BorderStyle {
             radius: self.radius,
         }
     }
+}
+
+/// An alias for `Background::Solid(color)`
+pub const fn background(color: RGBA8) -> Background {
+    Background::Solid(color)
+}
+
+/// An alias for `Background::Solid(RGBA8::new(r, g, b, a))`
+pub const fn background_rgba(r: u8, g: u8, b: u8, a: u8) -> Background {
+    Background::Solid(RGBA8::new(r, g, b, a))
+}
+
+/// An alias for `Background::Solid(RGBA8::new(r, g, b, 255))`
+pub const fn background_rgb(r: u8, g: u8, b: u8) -> Background {
+    Background::Solid(RGBA8::new(r, g, b, 255))
+}
+
+/// An alias for `Background::Solid(RGBA8::new(v, v, v, a))`
+pub const fn background_gray_a(v: u8, a: u8) -> Background {
+    Background::Solid(RGBA8::new(v, v, v, a))
+}
+
+/// An alias for `Background::Solid(RGBA8::new(v, v, v, 255))`
+pub const fn background_gray(v: u8) -> Background {
+    Background::Solid(RGBA8::new(v, v, v, 255))
 }
 
 /// How to style a color property when an element is disabled.

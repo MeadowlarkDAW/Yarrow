@@ -19,7 +19,7 @@ pub use crate::elements::text_input::{
     TextInputStyle,
 };
 pub use crate::elements::toggle_button::{ToggleButton, ToggleButtonStyle};
-pub use crate::elements::tooltip::Tooltip;
+pub use crate::elements::tooltip::{Tooltip, TooltipStyle};
 pub use crate::elements::virtual_slider::knob::{
     Knob, KnobAngleRange, KnobBackStyle, KnobBackStyleQuad, KnobMarkersArcStyle,
     KnobMarkersDotStyle, KnobMarkersStyle, KnobNotchLinePrimitives, KnobNotchStyle,
@@ -43,8 +43,8 @@ pub use crate::math::{
     Size, SizeI32, Transform, Translation, Vector, ZIndex,
 };
 pub use crate::style::*;
-pub use crate::vg::color::{self, RGBA8};
-pub use crate::vg::quad::Radius;
+pub use crate::vg::color::{self, gray, gray_a, rgb, rgba, BLACK, RGBA8, TRANSPARENT, WHITE};
+pub use crate::vg::quad::{radius, Radius};
 pub use crate::vg::text::glyphon::fontdb::Source as FontSource;
 pub use crate::vg::text::glyphon::FontSystem;
 pub use crate::vg::text::{

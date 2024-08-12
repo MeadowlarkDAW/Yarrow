@@ -196,7 +196,7 @@ impl KnobNotchLinePrimitives {
     ) -> MeshPrimitive {
         let mut mesh = self.mesh(state).clone();
 
-        mesh.set_offset(back_bounds.center());
+        mesh.set_offset(back_bounds.center().to_vector());
 
         let notch_angle = angle_range.min() + (angle_range.span() * normal_val);
 

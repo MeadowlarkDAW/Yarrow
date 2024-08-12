@@ -99,7 +99,7 @@ impl KnobRenderCacheInner {
         entry.1 = true;
 
         let mut mesh = entry.0.clone();
-        mesh.set_offset(back_bounds.origin);
+        mesh.set_offset(back_bounds.origin.to_vector());
 
         Some(mesh)
     }
