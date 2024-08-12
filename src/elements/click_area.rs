@@ -24,7 +24,7 @@ pub struct ClickAreaBuilder<A: Clone + 'static> {
     pub click_count: usize,
     pub cursor_icon: Option<CursorIcon>,
     pub pointer_type: Option<PointerType>,
-    pub bounding_rect: Rect,
+    pub rect: Rect,
     pub z_index: Option<ZIndex>,
     pub disabled: bool,
     pub scissor_rect_id: Option<ScissorRectID>,
@@ -41,7 +41,7 @@ impl<A: Clone + 'static> ClickAreaBuilder<A> {
             click_count: 0,
             cursor_icon: None,
             pointer_type: None,
-            bounding_rect: Rect::default(),
+            rect: Rect::default(),
             z_index: None,
             disabled: false,
             scissor_rect_id: None,
@@ -93,8 +93,8 @@ impl<A: Clone + 'static> ClickAreaBuilder<A> {
         self
     }
 
-    pub const fn bounding_rect(mut self, rect: Rect) -> Self {
-        self.bounding_rect = rect;
+    pub const fn rect(mut self, rect: Rect) -> Self {
+        self.rect = rect;
         self
     }
 
@@ -131,7 +131,7 @@ impl<A: Clone + 'static> ClickAreaElement<A> {
             click_count,
             cursor_icon,
             pointer_type,
-            bounding_rect,
+            rect,
             z_index,
             disabled,
             scissor_rect_id,
@@ -152,7 +152,7 @@ impl<A: Clone + 'static> ClickAreaElement<A> {
                 pointer_type,
             }),
             z_index,
-            bounding_rect,
+            rect,
             manually_hidden: disabled,
             scissor_rect_id,
             class: "",

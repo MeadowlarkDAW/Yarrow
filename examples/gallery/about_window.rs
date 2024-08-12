@@ -52,7 +52,7 @@ impl Elements {
         );
 
         let separator = Separator::builder()
-            .bounding_rect(Rect::new(
+            .rect(Rect::new(
                 Point::new(
                     style.content_padding,
                     close_btn.el.rect().min_y() - style.element_padding,
@@ -66,7 +66,7 @@ impl Elements {
 
         let paragraph = Paragraph::builder()
             .text(ABOUT_TEXT)
-            .bounding_rect(Rect::new(
+            .rect(Rect::new(
                 Point::new(style.content_padding, style.content_padding),
                 Size::new(
                     window_size.width - style.content_padding - style.content_padding,

@@ -290,7 +290,7 @@ impl<A: Clone + 'static> View<A> {
         let ElementBuilder {
             element,
             z_index,
-            bounding_rect,
+            rect,
             manually_hidden,
             scissor_rect_id,
             class,
@@ -308,9 +308,9 @@ impl<A: Clone + 'static> View<A> {
         };
 
         let mut stack_data = EntryStackData {
-            rect: bounding_rect,
+            rect: rect,
             visible_rect: None,
-            offset_from_scissor_rect_origin: bounding_rect.origin.to_vector(),
+            offset_from_scissor_rect_origin: rect.origin.to_vector(),
             scissor_rect_id,
             z_index,
             flags,
@@ -398,7 +398,7 @@ impl<A: Clone + 'static> View<A> {
         self::element::new_element_handle(
             element_id,
             self.context.mod_queue_sender.clone(),
-            bounding_rect,
+            rect,
             z_index,
             manually_hidden,
             class,

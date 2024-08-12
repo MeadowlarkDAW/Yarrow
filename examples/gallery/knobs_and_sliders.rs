@@ -45,7 +45,7 @@ impl Elements {
 
         let floating_text_input = FloatingTextInput::builder()
             .on_result(|new_text| Action::FloatingTextInput(new_text).into())
-            .bounding_rect(Rect::from_size(style.floating_text_input_size))
+            .rect(Rect::from_size(style.floating_text_input_size))
             .z_index(OVERLAY_Z_INDEX)
             .build(cx);
 

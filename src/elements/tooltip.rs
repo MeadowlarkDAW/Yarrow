@@ -188,7 +188,7 @@ impl TooltipElement {
                 element_padding,
             }),
             z_index,
-            bounding_rect: Rect::default(),
+            rect: Rect::default(),
             manually_hidden: true,
             scissor_rect_id,
             class,
@@ -250,7 +250,7 @@ impl<A: Clone + 'static> Element<A> for TooltipElement {
                         rect.origin.y = window_rect.max_y() - rect.size.height;
                     }
 
-                    cx.set_bounding_rect(rect);
+                    cx.set_rect(rect);
                 }
             }
             _ => {}

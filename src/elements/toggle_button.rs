@@ -665,7 +665,7 @@ pub struct ToggleButtonBuilder<A: Clone + 'static> {
     pub text_icon_layout: TextIconLayout,
     pub class: Option<&'static str>,
     pub z_index: Option<ZIndex>,
-    pub bounding_rect: Rect,
+    pub rect: Rect,
     pub manually_hidden: bool,
     pub disabled: bool,
     pub scissor_rect_id: Option<ScissorRectID>,
@@ -686,7 +686,7 @@ impl<A: Clone + 'static> ToggleButtonBuilder<A> {
             text_icon_layout: TextIconLayout::default(),
             class: None,
             z_index: None,
-            bounding_rect: Rect::default(),
+            rect: Rect::default(),
             manually_hidden: false,
             disabled: false,
             scissor_rect_id: None,
@@ -803,8 +803,8 @@ impl<A: Clone + 'static> ToggleButtonBuilder<A> {
     ///
     /// If this method is not used, then the element will have a size and position of
     /// zero and will not be visible until its bounding rectangle is set.
-    pub const fn bounding_rect(mut self, rect: Rect) -> Self {
-        self.bounding_rect = rect;
+    pub const fn rect(mut self, rect: Rect) -> Self {
+        self.rect = rect;
         self
     }
 
@@ -858,7 +858,7 @@ impl<A: Clone + 'static> ToggleButtonElement<A> {
             text_icon_layout,
             class,
             z_index,
-            bounding_rect,
+            rect,
             manually_hidden,
             disabled,
             scissor_rect_id,
@@ -892,7 +892,7 @@ impl<A: Clone + 'static> ToggleButtonElement<A> {
                 cursor_icon,
             }),
             z_index,
-            bounding_rect,
+            rect,
             manually_hidden,
             scissor_rect_id,
             class,

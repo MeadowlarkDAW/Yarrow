@@ -132,7 +132,7 @@ pub struct IconTextInputBuilder<A: Clone + 'static> {
     pub disabled: bool,
     pub class: Option<&'static str>,
     pub z_index: Option<ZIndex>,
-    pub bounding_rect: Rect,
+    pub rect: Rect,
     pub manually_hidden: bool,
     pub scissor_rect_id: Option<ScissorRectID>,
 }
@@ -156,7 +156,7 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
             disabled: false,
             class: None,
             z_index: None,
-            bounding_rect: Rect::default(),
+            rect: Rect::default(),
             manually_hidden: false,
             scissor_rect_id: None,
         }
@@ -260,8 +260,8 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
     ///
     /// If this method is not used, then the element will have a size and position of
     /// zero and will not be visible until its bounding rectangle is set.
-    pub const fn bounding_rect(mut self, rect: Rect) -> Self {
-        self.bounding_rect = rect;
+    pub const fn rect(mut self, rect: Rect) -> Self {
+        self.rect = rect;
         self
     }
 
@@ -325,7 +325,7 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
             disabled,
             class,
             z_index,
-            bounding_rect,
+            rect,
             manually_hidden,
             scissor_rect_id,
         } = builder;
@@ -335,7 +335,7 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
 
         let icon = IconInner::new(icon, icon_scale, icon_offset);
 
-        let layout_res = layout(bounding_rect.size, &style);
+        let layout_res = layout(rect.size, &style);
 
         let shared_state = Rc::new(RefCell::new(SharedState {
             inner: TextInputInner::new(
@@ -343,7 +343,7 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
                 placeholder_text,
                 password_mode,
                 max_characters,
-                bounding_rect.size,
+                rect.size,
                 disabled,
                 tooltip_message.is_some(),
                 select_all_when_focused,
@@ -366,7 +366,7 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
                 hovered: false,
             }),
             z_index,
-            bounding_rect,
+            rect,
             manually_hidden,
             scissor_rect_id,
             class,

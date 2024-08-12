@@ -246,7 +246,7 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
             .unwrap_or(false)
     }
 
-    pub fn set_bounding_rect(&mut self, rect: Rect) {
+    pub fn set_rect(&mut self, rect: Rect) {
         self.requested_rect = Some(rect);
     }
 

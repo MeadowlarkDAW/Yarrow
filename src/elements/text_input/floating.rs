@@ -28,7 +28,7 @@ pub struct FloatingTextInputBuilder<A: Clone + 'static> {
     pub max_characters: usize,
     pub class: Option<&'static str>,
     pub z_index: Option<ZIndex>,
-    pub bounding_rect: Rect,
+    pub rect: Rect,
     pub scissor_rect_id: Option<ScissorRectID>,
 }
 
@@ -44,7 +44,7 @@ impl<A: Clone + 'static> FloatingTextInputBuilder<A> {
             max_characters: 256,
             class: None,
             z_index: None,
-            bounding_rect: Rect::default(),
+            rect: Rect::default(),
             scissor_rect_id: None,
         }
     }
@@ -117,8 +117,8 @@ impl<A: Clone + 'static> FloatingTextInputBuilder<A> {
     ///
     /// If this method is not used, then the element will have a size and position of
     /// zero and will not be visible until its bounding rectangle is set.
-    pub const fn bounding_rect(mut self, rect: Rect) -> Self {
-        self.bounding_rect = rect;
+    pub const fn rect(mut self, rect: Rect) -> Self {
+        self.rect = rect;
         self
     }
 
@@ -157,7 +157,7 @@ impl<A: Clone + 'static> FloatingTextInputElement<A> {
             max_characters,
             class,
             z_index,
-            bounding_rect,
+            rect,
             scissor_rect_id,
         } = builder;
 
@@ -170,7 +170,7 @@ impl<A: Clone + 'static> FloatingTextInputElement<A> {
                 placeholder_text,
                 false,
                 max_characters,
-                bounding_rect.size,
+                rect.size,
                 false,
                 false,
                 select_all_when_focused,
@@ -187,12 +187,12 @@ impl<A: Clone + 'static> FloatingTextInputElement<A> {
                 action,
                 right_click_action,
                 start_text: String::new(),
-                size: bounding_rect.size,
+                size: rect.size,
                 canceled: false,
                 hovered: false,
             }),
             z_index,
-            bounding_rect,
+            rect,
             manually_hidden: true,
             scissor_rect_id,
             class,
@@ -248,7 +248,7 @@ impl<A: Clone + 'static> Element<A> for FloatingTextInputElement<A> {
                         rect.origin.y = window_rect.max_y() - rect.size.height;
                     }
 
-                    cx.set_bounding_rect(rect);
+                    cx.set_rect(rect);
                     cx.steal_temporary_focus();
                     cx.listen_to_pointer_clicked_off();
                 }
@@ -298,7 +298,7 @@ impl<A: Clone + 'static> Element<A> for FloatingTextInputElement<A> {
                 .on_text_composition_event(&comp_event, &mut cx.res.font_system),
             ElementEvent::Focus(has_focus) => {
                 if !has_focus {
-                    cx.set_bounding_rect(Rect::new(cx.rect().origin, Size::zero()));
+                    cx.set_rect(Rect::new(cx.rect().origin, Size::zero()));
 
                     if let Some(action) = self.action.as_mut() {
                         let new_text =

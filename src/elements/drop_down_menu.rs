@@ -454,7 +454,7 @@ impl<A: Clone + 'static> DropDownMenuElement<A> {
                 cursor_icon,
             }),
             z_index,
-            bounding_rect: Rect::new(position, Size::zero()),
+            rect: Rect::new(position, Size::zero()),
             manually_hidden: false,
             scissor_rect_id,
             class,
@@ -506,13 +506,13 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
                         let rect = Rect::new(cx.rect().origin, self.size);
                         let layout_info = layout(rect, cx.window_size());
                         if let Some(new_bounds) = layout_info.new_bounds {
-                            cx.set_bounding_rect(new_bounds);
+                            cx.set_rect(new_bounds);
                         } else {
-                            cx.set_bounding_rect(rect)
+                            cx.set_rect(rect)
                         }
                         cx.request_repaint();
                     } else {
-                        cx.set_bounding_rect(Rect::new(cx.rect().origin, Size::zero()));
+                        cx.set_rect(Rect::new(cx.rect().origin, Size::zero()));
                     }
 
                     show = false;
@@ -522,9 +522,9 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
                     let rect = Rect::new(cx.rect().origin, self.size);
                     let layout_info = layout(rect, cx.window_size());
                     if let Some(new_bounds) = layout_info.new_bounds {
-                        cx.set_bounding_rect(new_bounds);
+                        cx.set_rect(new_bounds);
                     } else {
-                        cx.set_bounding_rect(rect)
+                        cx.set_rect(rect)
                     }
                 }
 
@@ -543,7 +543,7 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
             ElementEvent::Focus(false) => {
                 self.active = false;
                 self.hovered_entry_index = None;
-                cx.set_bounding_rect(Rect::new(cx.rect().origin, Size::zero()));
+                cx.set_rect(Rect::new(cx.rect().origin, Size::zero()));
             }
             ElementEvent::Pointer(PointerEvent::Moved { position, .. }) => {
                 if !self.active {
@@ -639,7 +639,7 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
 
                 let layout_info = layout(cx.rect(), cx.window_size());
                 if let Some(new_bounds) = layout_info.new_bounds {
-                    cx.set_bounding_rect(new_bounds);
+                    cx.set_rect(new_bounds);
                 }
             }
             _ => {}

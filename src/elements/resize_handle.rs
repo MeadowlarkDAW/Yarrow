@@ -270,7 +270,7 @@ impl<A: Clone + 'static> ResizeHandleElement<A> {
 
         let layout = layout.unwrap_or_default();
         let resize_bounds = layout.resize_bounds(direction, current_span);
-        let bounding_rect = calc_drag_handle_rect(resize_bounds, direction, DRAG_HANDLE_WIDTH);
+        let rect = calc_drag_handle_rect(resize_bounds, direction, DRAG_HANDLE_WIDTH);
 
         let shared_state = Rc::new(RefCell::new(SharedState {
             layout,
@@ -293,7 +293,7 @@ impl<A: Clone + 'static> ResizeHandleElement<A> {
                 show_drag_handle: false,
             }),
             z_index,
-            bounding_rect,
+            rect,
             manually_hidden,
             scissor_rect_id,
             class,
@@ -334,10 +334,10 @@ impl<A: Clone + 'static> Element<A> for ResizeHandleElement<A> {
                 let resize_bounds = shared_state
                     .layout
                     .resize_bounds(self.direction, shared_state.current_span);
-                let bounding_rect =
+                let rect =
                     calc_drag_handle_rect(resize_bounds, self.direction, DRAG_HANDLE_WIDTH);
 
-                cx.set_bounding_rect(bounding_rect);
+                cx.set_rect(rect);
                 cx.request_repaint();
 
                 if shared_state.resized_by_handle {
@@ -381,10 +381,10 @@ impl<A: Clone + 'static> Element<A> for ResizeHandleElement<A> {
                         let resize_bounds = shared_state
                             .layout
                             .resize_bounds(self.direction, shared_state.current_span);
-                        let bounding_rect =
+                        let rect =
                             calc_drag_handle_rect(resize_bounds, self.direction, DRAG_HANDLE_WIDTH);
 
-                        cx.set_bounding_rect(bounding_rect);
+                        cx.set_rect(rect);
                         cx.request_repaint();
 
                         self.queued_resize_finished_span = Some(new_span);
@@ -448,13 +448,13 @@ impl<A: Clone + 'static> Element<A> for ResizeHandleElement<A> {
                             let resize_bounds = shared_state
                                 .layout
                                 .resize_bounds(self.direction, shared_state.current_span);
-                            let bounding_rect = calc_drag_handle_rect(
+                            let rect = calc_drag_handle_rect(
                                 resize_bounds,
                                 self.direction,
                                 DRAG_HANDLE_WIDTH,
                             );
 
-                            cx.set_bounding_rect(bounding_rect);
+                            cx.set_rect(rect);
                             cx.request_repaint();
 
                             if let Some(f) = &mut self.resized_action {

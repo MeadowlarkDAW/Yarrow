@@ -184,7 +184,7 @@ pub struct IconBuilder {
     pub offset: Vector,
     pub class: Option<&'static str>,
     pub z_index: Option<ZIndex>,
-    pub bounding_rect: Rect,
+    pub rect: Rect,
     pub manually_hidden: bool,
     pub scissor_rect_id: Option<ScissorRectID>,
 }
@@ -197,7 +197,7 @@ impl IconBuilder {
             offset: Vector::default(),
             class: None,
             z_index: None,
-            bounding_rect: Rect::default(),
+            rect: Rect::default(),
             manually_hidden: false,
             scissor_rect_id: None,
         }
@@ -247,8 +247,8 @@ impl IconBuilder {
     ///
     /// If this method is not used, then the element will have a size and position of
     /// zero and will not be visible until its bounding rectangle is set.
-    pub const fn bounding_rect(mut self, rect: Rect) -> Self {
-        self.bounding_rect = rect;
+    pub const fn rect(mut self, rect: Rect) -> Self {
+        self.rect = rect;
         self
     }
 
@@ -283,7 +283,7 @@ impl IconElement {
             offset,
             class,
             z_index,
-            bounding_rect,
+            rect,
             manually_hidden,
             scissor_rect_id,
         } = builder;
@@ -299,7 +299,7 @@ impl IconElement {
                 shared_state: Rc::clone(&shared_state),
             }),
             z_index,
-            bounding_rect,
+            rect,
             manually_hidden,
             scissor_rect_id,
             class,

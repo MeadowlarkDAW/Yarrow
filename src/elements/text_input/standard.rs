@@ -31,7 +31,7 @@ pub struct TextInputBuilder<A: Clone + 'static> {
     pub disabled: bool,
     pub class: Option<&'static str>,
     pub z_index: Option<ZIndex>,
-    pub bounding_rect: Rect,
+    pub rect: Rect,
     pub manually_hidden: bool,
     pub scissor_rect_id: Option<ScissorRectID>,
 }
@@ -52,7 +52,7 @@ impl<A: Clone + 'static> TextInputBuilder<A> {
             disabled: false,
             class: None,
             z_index: None,
-            bounding_rect: Rect::default(),
+            rect: Rect::default(),
             manually_hidden: false,
             scissor_rect_id: None,
         }
@@ -138,8 +138,8 @@ impl<A: Clone + 'static> TextInputBuilder<A> {
     ///
     /// If this method is not used, then the element will have a size and position of
     /// zero and will not be visible until its bounding rectangle is set.
-    pub const fn bounding_rect(mut self, rect: Rect) -> Self {
-        self.bounding_rect = rect;
+    pub const fn rect(mut self, rect: Rect) -> Self {
+        self.rect = rect;
         self
     }
 
@@ -194,7 +194,7 @@ impl<A: Clone + 'static> TextInputElement<A> {
             disabled,
             class,
             z_index,
-            bounding_rect,
+            rect,
             manually_hidden,
             scissor_rect_id,
         } = builder;
@@ -208,7 +208,7 @@ impl<A: Clone + 'static> TextInputElement<A> {
                 placeholder_text,
                 password_mode,
                 max_characters,
-                bounding_rect.size,
+                rect.size,
                 disabled,
                 tooltip_message.is_some(),
                 select_all_when_focused,
@@ -228,7 +228,7 @@ impl<A: Clone + 'static> TextInputElement<A> {
                 hovered: false,
             }),
             z_index,
-            bounding_rect,
+            rect,
             manually_hidden,
             scissor_rect_id,
             class,

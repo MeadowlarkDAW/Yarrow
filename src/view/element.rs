@@ -80,7 +80,7 @@ pub trait ElementRenderCache {
 pub struct ElementBuilder<A: Clone + 'static> {
     pub element: Box<dyn Element<A>>,
     pub z_index: ZIndex,
-    pub bounding_rect: Rect,
+    pub rect: Rect,
     pub manually_hidden: bool,
     pub scissor_rect_id: ScissorRectID,
     pub class: &'static str,
@@ -91,7 +91,7 @@ impl<A: Clone + 'static> ElementBuilder<A> {
         Self {
             element,
             z_index: 0,
-            bounding_rect: Rect::new(Point::new(0.0, 0.0), Size::new(0.0, 0.0)),
+            rect: Rect::new(Point::new(0.0, 0.0), Size::new(0.0, 0.0)),
             manually_hidden: false,
             scissor_rect_id: MAIN_SCISSOR_RECT,
             class: "",
@@ -108,8 +108,8 @@ impl<A: Clone + 'static> ElementBuilder<A> {
         self
     }
 
-    pub const fn bounding_rect(mut self, rect: Rect) -> Self {
-        self.bounding_rect = rect;
+    pub const fn rect(mut self, rect: Rect) -> Self {
+        self.rect = rect;
         self
     }
 

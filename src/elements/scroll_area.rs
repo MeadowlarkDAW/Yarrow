@@ -319,7 +319,7 @@ impl<A: Clone + 'static> ScrollAreaElement<A> {
                 slider_width,
             }),
             z_index,
-            bounding_rect: bounds,
+            rect: bounds,
             manually_hidden,
             scissor_rect_id,
             class,

@@ -441,7 +441,7 @@ pub struct IconLabelBuilder {
     pub icon_offset: Vector,
     pub style: Rc<IconLabelStyle>,
     pub z_index: Option<ZIndex>,
-    pub bounding_rect: Rect,
+    pub rect: Rect,
     pub manually_hidden: bool,
     pub scissor_rect_id: Option<ScissorRectID>,
 }
@@ -456,7 +456,7 @@ impl IconLabelBuilder {
             icon_offset: Vector::default(),
             style: Rc::clone(style),
             z_index: None,
-            bounding_rect: Rect::default(),
+            rect: Rect::default(),
             manually_hidden: false,
             scissor_rect_id: None,
         }
@@ -500,8 +500,8 @@ impl IconLabelBuilder {
         self
     }
 
-    pub const fn bounding_rect(mut self, rect: Rect) -> Self {
-        self.bounding_rect = rect;
+    pub const fn rect(mut self, rect: Rect) -> Self {
+        self.rect = rect;
         self
     }
 
@@ -534,7 +534,7 @@ impl IconLabelElement {
             icon_offset,
             style,
             z_index,
-            bounding_rect,
+            rect,
             manually_hidden,
             scissor_rect_id,
         } = builder;
@@ -559,7 +559,7 @@ impl IconLabelElement {
                 shared_state: Rc::clone(&shared_state),
             }),
             z_index,
-            bounding_rect,
+            rect,
             manually_hidden,
             scissor_rect_id,
         };

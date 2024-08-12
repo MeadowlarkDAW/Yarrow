@@ -125,7 +125,7 @@ pub struct SwitchBuilder<A: Clone + 'static> {
     pub toggled: bool,
     pub class: Option<&'static str>,
     pub z_index: Option<ZIndex>,
-    pub bounding_rect: Rect,
+    pub rect: Rect,
     pub manually_hidden: bool,
     pub disabled: bool,
     pub scissor_rect_id: Option<ScissorRectID>,
@@ -140,7 +140,7 @@ impl<A: Clone + 'static> SwitchBuilder<A> {
             toggled: false,
             class: None,
             z_index: None,
-            bounding_rect: Rect::default(),
+            rect: Rect::default(),
             manually_hidden: false,
             disabled: false,
             scissor_rect_id: None,
@@ -189,8 +189,8 @@ impl<A: Clone + 'static> SwitchBuilder<A> {
     ///
     /// If this method is not used, then the element will have a size and position of
     /// zero and will not be visible until its bounding rectangle is set.
-    pub const fn bounding_rect(mut self, rect: Rect) -> Self {
-        self.bounding_rect = rect;
+    pub const fn rect(mut self, rect: Rect) -> Self {
+        self.rect = rect;
         self
     }
 
@@ -239,7 +239,7 @@ impl<A: Clone + 'static> SwitchElement<A> {
             disabled,
             class,
             z_index,
-            bounding_rect,
+            rect,
             manually_hidden,
             scissor_rect_id,
         } = builder;
@@ -260,7 +260,7 @@ impl<A: Clone + 'static> SwitchElement<A> {
                 cursor_icon,
             }),
             z_index,
-            bounding_rect,
+            rect,
             manually_hidden,
             scissor_rect_id,
             class,
