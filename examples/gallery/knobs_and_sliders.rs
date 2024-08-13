@@ -181,37 +181,37 @@ impl Elements {
                         match param_id {
                             0 => {
                                 if let Ok(v) = new_text.parse::<f64>() {
-                                    self.knob_0.set_normal_value(v)
+                                    self.knob_0.set_normal_value(v);
                                 }
                             }
                             1 => {
                                 if let Ok(v) = new_text.parse::<f64>() {
-                                    self.knob_1.set_normal_value(v)
+                                    self.knob_1.set_normal_value(v);
                                 }
                             }
                             2 => {
                                 if let Ok(v) = new_text.parse::<u32>() {
-                                    self.knob_2.set_stepped_value(v)
+                                    self.knob_2.set_stepped_value(v);
                                 }
                             }
                             3 => {
                                 if let Ok(v) = new_text.parse::<f64>() {
-                                    self.slider_3.set_normal_value(v)
+                                    self.slider_3.set_normal_value(v);
                                 }
                             }
                             4 => {
                                 if let Ok(v) = new_text.parse::<f64>() {
-                                    self.slider_4.set_normal_value(v)
+                                    self.slider_4.set_normal_value(v);
                                 }
                             }
                             5 => {
                                 if let Ok(v) = new_text.parse::<f64>() {
-                                    self.slider_5.set_normal_value(v)
+                                    self.slider_5.set_normal_value(v);
                                 }
                             }
                             6 => {
                                 if let Ok(v) = new_text.parse::<f64>() {
-                                    self.slider_6.set_normal_value(v)
+                                    self.slider_6.set_normal_value(v);
                                 }
                             }
                             _ => {}

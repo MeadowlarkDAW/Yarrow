@@ -923,18 +923,38 @@ impl ScrollArea {
         ScrollAreaBuilder::new()
     }
 
-    pub fn set_class(&mut self, class: &'static str) {
+    /// Set the class of the element.
+    ///
+    /// Returns `true` if the class has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call. However, this method still
+    /// involves a string comparison so you may want to call this method
+    /// sparingly.
+    pub fn set_class(&mut self, class: &'static str) -> bool {
         if self.el.class() != class {
             self.el._notify_class_change(class);
+            true
+        } else {
+            false
         }
     }
 
-    pub fn set_scroll_offset(&mut self, scroll_offset: Vector) {
+    /// Set the scroll offset.
+    ///
+    /// Returns `true` if the offset has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_scroll_offset(&mut self, scroll_offset: Vector) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.scroll_offset != scroll_offset {
             shared_state.scroll_offset = scroll_offset;
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
@@ -942,12 +962,21 @@ impl ScrollArea {
         RefCell::borrow(&self.shared_state).scroll_offset
     }
 
-    pub fn set_content_size(&mut self, content_size: Size) {
+    /// Set the content size.
+    ///
+    /// Returns `true` if the content size has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_content_size(&mut self, content_size: Size) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.content_size != content_size {
             shared_state.content_size = content_size;
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
@@ -959,12 +988,21 @@ impl ScrollArea {
         RefCell::borrow(&self.shared_state).disabled
     }
 
-    pub fn set_disabled(&mut self, disabled: bool) {
+    /// Set the disabled state of this element.
+    ///
+    /// Returns `true` if the disabled state has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_disabled(&mut self, disabled: bool) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.disabled != disabled {
             shared_state.disabled = disabled;
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 }

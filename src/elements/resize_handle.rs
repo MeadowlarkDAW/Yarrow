@@ -560,19 +560,39 @@ impl ResizeHandle {
         ResizeHandleBuilder::new()
     }
 
-    pub fn set_class(&mut self, class: &'static str) {
+    /// Set the class of the element.
+    ///
+    /// Returns `true` if the class has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call. However, this method still
+    /// involves a string comparison so you may want to call this method
+    /// sparingly.
+    pub fn set_class(&mut self, class: &'static str) -> bool {
         if self.el.class() != class {
             self.el._notify_class_change(class);
+            true
+        } else {
+            false
         }
     }
 
-    pub fn set_layout(&mut self, layout: ResizeHandleLayout) {
+    /// Set the layout.
+    ///
+    /// Returns `true` if the layout has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_layout(&mut self, layout: ResizeHandleLayout) -> bool {
         if self.layout != layout {
             self.layout = layout;
 
             RefCell::borrow_mut(&self.shared_state).layout = layout;
 
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
@@ -580,7 +600,13 @@ impl ResizeHandle {
         &self.layout
     }
 
-    pub fn set_span(&mut self, span: f32) {
+    /// Set the span.
+    ///
+    /// Returns `true` if the span has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_span(&mut self, span: f32) -> bool {
         let span = span.clamp(self.min_span, self.max_span);
 
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
@@ -588,12 +614,10 @@ impl ResizeHandle {
             shared_state.current_span = span;
             shared_state.resized_by_handle = true;
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
-    }
-
-    pub fn rect(&self) -> Rect {
-        self.layout
-            .resize_bounds(self.direction, self.current_span())
     }
 
     pub fn current_span(&self) -> f32 {
@@ -616,12 +640,21 @@ impl ResizeHandle {
         RefCell::borrow(&self.shared_state).disabled
     }
 
-    pub fn set_disabled(&mut self, disabled: bool) {
+    /// Set the disabled state of this element.
+    ///
+    /// Returns `true` if the disabled state has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_disabled(&mut self, disabled: bool) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.disabled != disabled {
             shared_state.disabled = disabled;
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 }

@@ -765,16 +765,37 @@ impl DropDownMenu {
         DropDownMenuBuilder::new()
     }
 
-    pub fn set_class(&mut self, class: &'static str) {
+    /// Set the class of the element.
+    ///
+    /// Returns `true` if the class has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call. However, this method still
+    /// involves a string comparison so you may want to call this method
+    /// sparingly.
+    pub fn set_class(&mut self, class: &'static str) -> bool {
         if self.el.class() != class {
             self.el._notify_class_change(class);
+            true
+        } else {
+            false
         }
     }
 
-    pub fn set_position(&mut self, pos: Point) {
+    /// Set the position of the element.
+    ///
+    /// Returns `true` if the position has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_position(&mut self, pos: Point) -> bool {
         self.el.set_pos(pos)
     }
 
+    /// Set the entries of the element.
+    ///
+    /// Note this will *always* trigger an element update, so use
+    /// this method sparingly.
     pub fn set_entries(&mut self, entries: Vec<MenuEntry>) {
         RefCell::borrow_mut(&self.shared_state).new_entries = Some(entries);
         self.el._notify_custom_state_change();

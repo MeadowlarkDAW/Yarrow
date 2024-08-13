@@ -442,7 +442,15 @@ impl FloatingTextInput {
         self.el.set_hidden(true);
     }
 
-    pub fn set_text(&mut self, text: &str, res: &mut ResourceCtx, select_all: bool) {
+    /// Set the text.
+    ///
+    /// Returns `true` if the text has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call. However, this method still
+    /// involves a string comparison so you may want to call this method
+    /// sparingly.
+    pub fn set_text(&mut self, text: &str, res: &mut ResourceCtx, select_all: bool) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         let result = shared_state
@@ -450,6 +458,9 @@ impl FloatingTextInput {
             .set_text(text, &mut res.font_system, select_all);
         if result.needs_repaint {
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
@@ -457,6 +468,10 @@ impl FloatingTextInput {
         Ref::map(RefCell::borrow(&self.shared_state), |s| s.inner.text())
     }
 
+    /// Set the placeholder text.
+    ///
+    /// Note, this will *always* cause an element update even if
+    /// the placeholder text has not changed, so prefer to use this method sparingly.
     pub fn set_placeholder_text(&mut self, text: &str, res: &mut ResourceCtx) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -478,24 +493,43 @@ impl FloatingTextInput {
         })
     }
 
-    pub fn set_class(&mut self, class: &'static str, res: &mut ResourceCtx) {
+    /// Set the class of the element.
+    ///
+    /// Returns `true` if the class has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call. However, this method still
+    /// involves a string comparison so you may want to call this method
+    /// sparingly.
+    pub fn set_class(&mut self, class: &'static str, res: &mut ResourceCtx) -> bool {
         if self.el.class() != class {
             RefCell::borrow_mut(&self.shared_state)
                 .inner
                 .sync_new_style(res.style_system.get(class), &mut res.font_system);
 
             self.el._notify_class_change(class);
+            true
+        } else {
+            false
         }
     }
 
     /// An offset that can be used mainly to correct the position of icon glyphs.
     /// This does not effect the position of the background quad.
-    pub fn set_text_offset(&mut self, offset: Vector) {
+    ///
+    /// Returns `true` if the offset has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_text_offset(&mut self, offset: Vector) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.text_offset != offset {
             shared_state.text_offset = offset;
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
@@ -503,6 +537,9 @@ impl FloatingTextInput {
         RefCell::borrow(&self.shared_state).inner.max_characters()
     }
 
+    /// Perform an action on the text input.
+    ///
+    /// This will do nothing if the element is currently disabled.
     pub fn perform_action(&mut self, action: TextInputAction) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 

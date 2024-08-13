@@ -565,23 +565,43 @@ impl Switch {
         SwitchBuilder::new()
     }
 
-    pub fn min_size(&self, res: &mut ResourceCtx) -> Size {
+    pub fn desired_size(&self, res: &mut ResourceCtx) -> Size {
         let size = res.style_system.get::<SwitchStyle>(self.el.class()).size;
         Size::new(size * 2.0, size)
     }
 
-    pub fn set_class(&mut self, class: &'static str) {
+    /// Set the class of the element.
+    ///
+    /// Returns `true` if the class has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call. However, this method still
+    /// involves a string comparison so you may want to call this method
+    /// sparingly.
+    pub fn set_class(&mut self, class: &'static str) -> bool {
         if self.el.class() != class {
             self.el._notify_class_change(class);
+            true
+        } else {
+            false
         }
     }
 
-    pub fn set_toggled(&mut self, toggled: bool) {
+    /// Set the toggled state of this element.
+    ///
+    /// Returns `true` if the toggle state has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_toggled(&mut self, toggled: bool) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.toggled != toggled {
             shared_state.toggled = toggled;
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
@@ -589,22 +609,43 @@ impl Switch {
         RefCell::borrow(&self.shared_state).toggled
     }
 
-    pub fn set_disabled(&mut self, disabled: bool) {
+    /// Set the disabled state of this element.
+    ///
+    /// Returns `true` if the disabled state has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_disabled(&mut self, disabled: bool) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.disabled != disabled {
             shared_state.disabled = disabled;
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
-    pub fn layout(&mut self, origin: Point, res: &mut ResourceCtx) {
-        let size = self.min_size(res);
-        self.el.set_rect(Rect::new(origin, size));
+    /// Layout out the element (with the top-left corner of the bounds set to `origin`).
+    ///
+    /// Returns `true` if the layout has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn layout(&mut self, origin: Point, res: &mut ResourceCtx) -> bool {
+        let size = self.desired_size(res);
+        self.el.set_rect(Rect::new(origin, size))
     }
 
-    pub fn layout_aligned(&mut self, point: Point, align: Align2, res: &mut ResourceCtx) {
-        let size = self.min_size(res);
-        self.el.set_rect(align.align_rect_to_point(point, size));
+    /// Layout out the element aligned to the given point.
+    ///
+    /// Returns `true` if the layout has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn layout_aligned(&mut self, point: Point, align: Align2, res: &mut ResourceCtx) -> bool {
+        let size = self.desired_size(res);
+        self.el.set_rect(align.align_rect_to_point(point, size))
     }
 }

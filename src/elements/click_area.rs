@@ -251,7 +251,13 @@ impl ClickArea {
         ClickAreaBuilder::new()
     }
 
-    pub fn set_disabled(&mut self, disabled: bool) {
-        self.el.set_hidden(disabled);
+    /// Set the disabled state of this element.
+    ///
+    /// Returns `true` if the disabled state has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_disabled(&mut self, disabled: bool) -> bool {
+        self.el.set_hidden(disabled)
     }
 }

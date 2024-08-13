@@ -325,7 +325,15 @@ impl Tooltip {
         self.el.set_hidden(true);
     }
 
-    pub fn set_class(&mut self, class: &'static str, res: &mut ResourceCtx) {
+    /// Set the class of the element.
+    ///
+    /// Returns `true` if the class has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call. However, this method still
+    /// involves a string comparison so you may want to call this method
+    /// sparingly.
+    pub fn set_class(&mut self, class: &'static str, res: &mut ResourceCtx) -> bool {
         if self.el.class() != class {
             RefCell::borrow_mut(&self.shared_state)
                 .inner
@@ -335,18 +343,29 @@ impl Tooltip {
                 );
 
             self.el._notify_class_change(class);
+            true
+        } else {
+            false
         }
     }
 
     /// An offset that can be used mainly to correct the position of the text.
     ///
     /// This does not effect the position of the background quad.
-    pub fn set_text_offset(&mut self, offset: Vector) {
+    ///
+    /// Returns `true` if the offset has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_text_offset(&mut self, offset: Vector) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.text_offset != offset {
             shared_state.inner.text_offset = offset;
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 }

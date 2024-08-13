@@ -562,7 +562,15 @@ impl IconTextInput {
         IconTextInputBuilder::new()
     }
 
-    pub fn set_text(&mut self, text: &str, res: &mut ResourceCtx, select_all: bool) {
+    /// Set the text.
+    ///
+    /// Returns `true` if the text has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call. However, this method still
+    /// involves a string comparison so you may want to call this method
+    /// sparingly.
+    pub fn set_text(&mut self, text: &str, res: &mut ResourceCtx, select_all: bool) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         let result = shared_state
@@ -570,6 +578,9 @@ impl IconTextInput {
             .set_text(text, &mut res.font_system, select_all);
         if result.needs_repaint {
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
@@ -577,6 +588,10 @@ impl IconTextInput {
         Ref::map(RefCell::borrow(&self.shared_state), |s| s.inner.text())
     }
 
+    /// Set the placeholder text.
+    ///
+    /// Note, this will *always* cause an element update even if
+    /// the placeholder text has not changed, so prefer to use this method sparingly.
     pub fn set_placeholder_text(&mut self, text: &str, res: &mut ResourceCtx) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -599,29 +614,57 @@ impl IconTextInput {
         })
     }
 
-    pub fn set_class(&mut self, class: &'static str) {
+    /// Set the class of the element.
+    ///
+    /// Returns `true` if the class has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call. However, this method still
+    /// involves a string comparison so you may want to call this method
+    /// sparingly.
+    pub fn set_class(&mut self, class: &'static str) -> bool {
         if self.el.class() != class {
             self.el._notify_class_change(class);
+            true
+        } else {
+            false
         }
     }
 
-    pub fn set_disabled(&mut self, disabled: bool) {
+    /// Set the disabled state of this element.
+    ///
+    /// Returns `true` if the disabled state has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_disabled(&mut self, disabled: bool) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.disabled != disabled {
             shared_state.inner.disabled = true;
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
     /// An offset that can be used mainly to correct the position of icon glyphs.
     /// This does not effect the position of the background quad.
-    pub fn set_text_offset(&mut self, offset: Vector) {
+    ///
+    /// Returns `true` if the offset has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_text_offset(&mut self, offset: Vector) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.text_offset != offset {
             shared_state.text_offset = offset;
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
@@ -629,6 +672,9 @@ impl IconTextInput {
         RefCell::borrow(&self.shared_state).inner.max_characters()
     }
 
+    /// Perform an action on the text input.
+    ///
+    /// This will do nothing if the element is currently disabled.
     pub fn perform_action(&mut self, action: TextInputAction) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -640,12 +686,20 @@ impl IconTextInput {
 
     /// Show/hide the password. This has no effect if the element wasn't created
     /// with password mode enabled.
-    pub fn show_password(&mut self, show: bool) {
+    ///
+    /// Returns `true` if the show password state has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn show_password(&mut self, show: bool) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.show_password != show {
             shared_state.inner.show_password = show;
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 }

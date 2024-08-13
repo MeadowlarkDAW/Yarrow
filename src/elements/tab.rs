@@ -532,12 +532,21 @@ impl Tab {
         TabBuilder::new()
     }
 
-    pub fn set_toggled(&mut self, toggled: bool) {
+    /// Set the toggled state of this element.
+    ///
+    /// Returns `true` if the toggle state has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_toggled(&mut self, toggled: bool) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.toggled != toggled {
             shared_state.inner.toggled = toggled;
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
@@ -547,6 +556,9 @@ impl Tab {
 
     /// Returns the size of the padded background rectangle if it were to
     /// cover the text and icon.
+    ///
+    /// This size is automatically cached, so it should be relatively
+    /// inexpensive to call.
     pub fn desired_size(&self, res: &mut ResourceCtx) -> Size {
         RefCell::borrow_mut(&self.shared_state)
             .inner
@@ -558,7 +570,15 @@ impl Tab {
             })
     }
 
-    pub fn set_text(&mut self, text: Option<&str>, res: &mut ResourceCtx) {
+    /// Set the text.
+    ///
+    /// Returns `true` if the text has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call. However, this method still
+    /// involves a string comparison so you may want to call this method
+    /// sparingly.
+    pub fn set_text(&mut self, text: Option<&str>, res: &mut ResourceCtx) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.set_text(text, &mut res.font_system, || {
@@ -568,16 +588,28 @@ impl Tab {
                 .text_properties
         }) {
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
-    pub fn set_icon(&mut self, icon: Option<impl Into<CustomGlyphID>>) {
+    /// Set the icon.
+    ///
+    /// Returns `true` if the icon has changed.
+    ///
+    /// This size is automatically cached, so it should be relatively
+    /// inexpensive to call.
+    pub fn set_icon(&mut self, icon: Option<impl Into<CustomGlyphID>>) -> bool {
         let icon: Option<CustomGlyphID> = icon.map(|i| i.into());
 
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.set_icon(icon) {
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
@@ -589,58 +621,103 @@ impl Tab {
         RefCell::borrow(&self.shared_state).inner.icon()
     }
 
-    pub fn set_class(&mut self, class: &'static str, res: &mut ResourceCtx) {
+    /// Set the class of the element.
+    ///
+    /// Returns `true` if the class has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call. However, this method still
+    /// involves a string comparison so you may want to call this method
+    /// sparingly.
+    pub fn set_class(&mut self, class: &'static str, res: &mut ResourceCtx) -> bool {
         if self.el.class() != class {
             RefCell::borrow_mut(&self.shared_state)
                 .inner
                 .sync_new_style(res.style_system.get(class), &mut res.font_system);
 
             self.el._notify_class_change(class);
+            true
+        } else {
+            false
         }
     }
 
     /// An offset that can be used mainly to correct the position of the text.
     ///
     /// This does not effect the position of the background quad.
-    pub fn set_text_offset(&mut self, offset: Vector) {
+    ///
+    /// Returns `true` if the offset has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_text_offset(&mut self, offset: Vector) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.set_text_offset(offset) {
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
     /// An offset that can be used mainly to correct the position of the icon.
     ///
     /// This does not effect the position of the background quad.
-    pub fn set_icon_offset(&mut self, offset: Vector) {
+    ///
+    /// Returns `true` if the offset has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_icon_offset(&mut self, offset: Vector) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.set_icon_offset(offset) {
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
     /// Scale the icon when rendering (used to help make icons look consistent).
     ///
     /// This does no effect the padded size of the element.
-    pub fn set_icon_scale(&mut self, scale: f32) {
+    ///
+    /// Returns `true` if the scale has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_icon_scale(&mut self, scale: f32) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.set_icon_scale(scale) {
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
-    pub fn set_disabled(&mut self, disabled: bool) {
+    /// Set the disabled state of this element.
+    ///
+    /// Returns `true` if the disabled state has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_disabled(&mut self, disabled: bool) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if disabled && shared_state.inner.state() != ButtonState::Disabled {
             shared_state.inner.set_state(ButtonState::Disabled);
             self.el._notify_custom_state_change();
+            true
         } else if !disabled && shared_state.inner.state() == ButtonState::Disabled {
             shared_state.inner.set_state(ButtonState::Idle);
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
@@ -648,14 +725,26 @@ impl Tab {
         RefCell::borrow(&self.shared_state).inner.state() == ButtonState::Disabled
     }
 
-    pub fn layout(&mut self, origin: Point, res: &mut ResourceCtx) {
+    /// Layout out the element (with the top-left corner of the bounds set to `origin`).
+    ///
+    /// Returns `true` if the layout has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn layout(&mut self, origin: Point, res: &mut ResourceCtx) -> bool {
         let size = self.desired_size(res);
-        self.el.set_rect(Rect::new(origin, size));
+        self.el.set_rect(Rect::new(origin, size))
     }
 
-    pub fn layout_aligned(&mut self, point: Point, align: Align2, res: &mut ResourceCtx) {
+    /// Layout out the element aligned to the given point.
+    ///
+    /// Returns `true` if the layout has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn layout_aligned(&mut self, point: Point, align: Align2, res: &mut ResourceCtx) -> bool {
         let size = self.desired_size(res);
-        self.el.set_rect(align.align_rect_to_point(point, size));
+        self.el.set_rect(align.align_rect_to_point(point, size))
     }
 }
 

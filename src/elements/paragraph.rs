@@ -171,6 +171,8 @@ impl ParagraphInner {
 
     /// Returns `true` if the text has changed.
     pub fn set_text(&mut self, text: &str, font_system: &mut FontSystem) -> bool {
+        // TODO: If the text is sufficiently large, use a hash for comparison
+        // for better performance.
         if &self.text != text {
             self.text = String::from(text);
             self.text_size_needs_calculated = true;
@@ -478,7 +480,8 @@ impl Paragraph {
     /// Returns the size of the padded background rectangle if it were to
     /// cover the entire size of the unclipped text.
     ///
-    /// This can be useful to lay out elements that depend on text size.
+    /// This size is automatically cached, so it should be relatively
+    /// inexpensive to call.
     pub fn desired_size(&self, res: &mut ResourceCtx) -> Size {
         RefCell::borrow_mut(&self.shared_state)
             .inner
@@ -489,22 +492,34 @@ impl Paragraph {
             })
     }
 
-    /// Returns the size of the unclipped text.
+    /// Returns the size of the unclipped text (not including the padding
+    /// background rectangle).
     ///
-    /// This can be useful to lay out elements that depend on text size.
+    /// This size is automatically cached, so it should be relatively
+    /// inexpensive to call.
     pub fn unclipped_text_size(&self) -> Size {
         RefCell::borrow_mut(&self.shared_state)
             .inner
             .unclipped_text_size()
     }
 
-    pub fn set_text(&mut self, text: &str, res: &mut ResourceCtx) {
+    /// Set the text.
+    ///
+    /// Returns `true` if the text has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed.
+    /// However, calling this method can be expensive if the text is particuarly
+    /// long, so prefer to call this method sparingly.
+    pub fn set_text(&mut self, text: &str, res: &mut ResourceCtx) -> bool {
         let changed = RefCell::borrow_mut(&self.shared_state)
             .inner
             .set_text(text, &mut res.font_system);
 
         if changed {
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
@@ -512,7 +527,14 @@ impl Paragraph {
         Ref::map(RefCell::borrow(&self.shared_state), |s| s.inner.text())
     }
 
-    pub fn set_bounds_width(&mut self, width: f32, res: &mut ResourceCtx) {
+    /// Set the width of the bounding rectangle while correctly wrapping
+    /// the text.
+    ///
+    /// Returns `true` if the bounds width has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_bounds_width(&mut self, width: f32, res: &mut ResourceCtx) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.bounds_width() != width {
@@ -522,6 +544,9 @@ impl Paragraph {
                 &mut res.font_system,
             );
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
@@ -529,6 +554,14 @@ impl Paragraph {
         RefCell::borrow(&self.shared_state).inner.bounds_width()
     }
 
+    /// Set the class of the element.
+    ///
+    /// Returns `true` if the class has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call. However, this method still
+    /// involves a string comparison so you may want to call this method
+    /// sparingly.
     pub fn set_class(&mut self, class: &'static str, res: &mut ResourceCtx) {
         if self.el.class() != class {
             RefCell::borrow_mut(&self.shared_state)
@@ -541,23 +574,43 @@ impl Paragraph {
 
     /// An offset that can be used mainly to correct the position of icon glyphs.
     /// This does not effect the position of the background quad.
-    pub fn set_text_offset(&mut self, offset: Vector) {
+    ///
+    /// Returns `true` if the offset has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_text_offset(&mut self, offset: Vector) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.text_offset != offset {
             shared_state.inner.text_offset = offset;
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
-    pub fn layout(&mut self, origin: Point, res: &mut ResourceCtx) {
+    /// Layout out the element (with the top-left corner of the bounds set to `origin`).
+    ///
+    /// Returns `true` if the layout has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn layout(&mut self, origin: Point, res: &mut ResourceCtx) -> bool {
         let size = self.desired_size(res);
-        self.el.set_rect(Rect::new(origin, size));
+        self.el.set_rect(Rect::new(origin, size))
     }
 
-    pub fn layout_aligned(&mut self, point: Point, align: Align2, res: &mut ResourceCtx) {
+    /// Layout out the element aligned to the given point.
+    ///
+    /// Returns `true` if the layout has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn layout_aligned(&mut self, point: Point, align: Align2, res: &mut ResourceCtx) -> bool {
         let size = self.desired_size(res);
-        self.el.set_rect(align.align_rect_to_point(point, size));
+        self.el.set_rect(align.align_rect_to_point(point, size))
     }
 }
 

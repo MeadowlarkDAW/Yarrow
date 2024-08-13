@@ -365,7 +365,8 @@ impl Icon {
     /// Returns the size of the padded background rectangle if it were to
     /// cover the icon.
     ///
-    /// This can be useful to lay out elements that depend on icon size.
+    /// This size is automatically cached, so it should be relatively
+    /// inexpensive to call.
     pub fn desired_size(&self, res: &mut ResourceCtx) -> Size {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -376,7 +377,13 @@ impl Icon {
         })
     }
 
-    pub fn set_icon_id(&mut self, icon_id: impl Into<CustomGlyphID>) {
+    /// Set the icon.
+    ///
+    /// Returns `true` if the icon has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_icon(&mut self, icon_id: impl Into<CustomGlyphID>) -> bool {
         let icon_id: CustomGlyphID = icon_id.into();
 
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
@@ -384,6 +391,9 @@ impl Icon {
         if shared_state.inner.icon_id != icon_id {
             shared_state.inner.icon_id = icon_id;
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
@@ -391,44 +401,83 @@ impl Icon {
         RefCell::borrow(&self.shared_state).inner.icon_id
     }
 
-    pub fn set_class(&mut self, class: &'static str) {
+    /// Set the class of the element.
+    ///
+    /// Returns `true` if the class has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call. However, this method still
+    /// involves a string comparison so you may want to call this method
+    /// sparingly.
+    pub fn set_class(&mut self, class: &'static str) -> bool {
         if self.el.class() != class {
             RefCell::borrow_mut(&self.shared_state)
                 .inner
                 .notify_style_change();
             self.el._notify_class_change(class);
+            true
+        } else {
+            false
         }
     }
 
     /// An offset that can be used mainly to correct the position of icon glyphs.
     /// This does not effect the position of the background quad.
-    pub fn set_offset(&mut self, offset: Vector) {
+    ///
+    /// Returns `true` if the offset has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_offset(&mut self, offset: Vector) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.offset != offset {
             shared_state.inner.offset = offset;
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
     /// Scale the icon when rendering (used to help make icons look consistent).
-    pub fn set_scale(&mut self, scale: f32) {
+    ///
+    /// Returns `true` if the scale has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn set_scale(&mut self, scale: f32) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.scale != scale {
             shared_state.inner.scale = scale;
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
-    pub fn layout(&mut self, origin: Point, res: &mut ResourceCtx) {
+    /// Layout out the element (with the top-left corner of the bounds set to `origin`).
+    ///
+    /// Returns `true` if the layout has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn layout(&mut self, origin: Point, res: &mut ResourceCtx) -> bool {
         let size = self.desired_size(res);
-        self.el.set_rect(Rect::new(origin, size));
+        self.el.set_rect(Rect::new(origin, size))
     }
 
-    pub fn layout_aligned(&mut self, point: Point, align: Align2, res: &mut ResourceCtx) {
+    /// Layout out the element aligned to the given point.
+    ///
+    /// Returns `true` if the layout has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call.
+    pub fn layout_aligned(&mut self, point: Point, align: Align2, res: &mut ResourceCtx) -> bool {
         let size = self.desired_size(res);
-        self.el.set_rect(align.align_rect_to_point(point, size));
+        self.el.set_rect(align.align_rect_to_point(point, size))
     }
 }
 

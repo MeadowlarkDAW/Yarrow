@@ -1112,56 +1112,103 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
         VirtualSliderBuilder::new(param_id)
     }
 
+    /// Returns the desired size for the element (if the renderer provides one).
+    ///
+    /// This method is relatively inexpensive to call.
     pub fn desired_size(&self) -> Option<Size> {
         RefCell::borrow(&self.shared_state).renderer.desired_size()
     }
 
-    pub fn set_normal_value(&mut self, new_normal: f64) {
+    /// Set the normalized value of the parameter.
+    ///
+    /// Returns `true` if the value has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively inexpensive to call.
+    pub fn set_normal_value(&mut self, new_normal: f64) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.normal_value() != new_normal {
             shared_state.queued_new_val = Some(ParamValue::Normal(new_normal));
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
-    pub fn set_stepped_value(&mut self, new_val: u32) {
+    /// Set the stepped value of the parameter. This does nothing if the parameter
+    /// is not stepped.
+    ///
+    /// Returns `true` if the value has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively inexpensive to call.
+    pub fn set_stepped_value(&mut self, new_val: u32) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if let Some(stepped_value) = shared_state.inner.stepped_value() {
             if stepped_value.value != new_val {
                 shared_state.queued_new_val = Some(ParamValue::Stepped(new_val));
                 self.el._notify_custom_state_change();
+                return true;
             }
         }
+
+        false
     }
 
-    pub fn set_value(&mut self, new_val: ParamValue) {
+    /// Set the value of the parameter. This does nothing if the parameter
+    /// is stepped.
+    ///
+    /// Returns `true` if the value has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively inexpensive to call.
+    pub fn set_value(&mut self, new_val: ParamValue) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.value() != new_val {
             if let ParamValue::Stepped(_) = new_val {
                 if shared_state.inner.stepped_value().is_none() {
-                    return;
+                    return false;
                 }
             }
 
             shared_state.queued_new_val = Some(new_val);
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
-    pub fn set_default_normal(&mut self, new_normal: f64) {
+    /// Set the default normalized value of the parameter.
+    ///
+    /// Returns `true` if the value has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively inexpensive to call.
+    pub fn set_default_normal(&mut self, new_normal: f64) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         let state_changed = shared_state.inner.set_default_normal(new_normal);
         if state_changed {
             shared_state.needs_repaint = true;
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
-    pub fn set_automation_info(&mut self, mut info: AutomationInfo) {
+    /// Set the automation information of the parameter.
+    ///
+    /// Returns `true` if the state has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the state has changed,
+    /// so this method is relatively inexpensive to call.
+    pub fn set_automation_info(&mut self, mut info: AutomationInfo) -> bool {
         info.clamp();
 
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
@@ -1169,17 +1216,28 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
             shared_state.automation_info = info;
             shared_state.automation_info_changed = true;
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
     /// Reset the parameter to the default value.
-    pub fn reset_to_default(&mut self) {
+    ///
+    /// Returns `true` if the value has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively inexpensive to call.
+    pub fn reset_to_default(&mut self) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.normal_value() != shared_state.inner.default_normal() {
             shared_state.queued_new_val =
                 Some(ParamValue::Normal(shared_state.inner.default_normal()));
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
@@ -1206,13 +1264,22 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
             .value()
     }
 
-    pub fn set_markers(&mut self, markers: ParamMarkersConfig) {
+    /// Set the markers config for the element.
+    ///
+    /// Returns `true` if the value has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively inexpensive to call.
+    pub fn set_markers(&mut self, markers: ParamMarkersConfig) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.markers != markers {
             shared_state.markers = markers;
             shared_state.needs_repaint = true;
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
@@ -1220,13 +1287,22 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
         Ref::map(RefCell::borrow(&self.shared_state), |s| &s.markers)
     }
 
-    pub fn set_bipolar(&mut self, bipolar: bool) {
+    /// Set the whether or not this parameter is bipolar.
+    ///
+    /// Returns `true` if the value has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively inexpensive to call.
+    pub fn set_bipolar(&mut self, bipolar: bool) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.bipolar != bipolar {
             shared_state.bipolar = bipolar;
             shared_state.needs_repaint = true;
             self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
@@ -1234,12 +1310,24 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
         RefCell::borrow(&self.shared_state).bipolar
     }
 
+    /// Set the class of the element.
+    ///
+    /// Returns `true` if the class has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively inexpensive to call.
     pub fn set_class(&mut self, class: &'static str) {
         if self.el.class() != class {
             self.el._notify_class_change(class);
         }
     }
 
+    /// Set the disabled state of this element.
+    ///
+    /// Returns `true` if the disabled state has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the state has changed,
+    /// so this method is relatively inexpensive to call.
     pub fn set_disabled(&mut self, disabled: bool) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
