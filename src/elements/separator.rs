@@ -8,7 +8,7 @@ use crate::{
     event::{ElementEvent, EventCaptureStatus},
     layout::Align,
     prelude::ElementStyle,
-    style::{Background, BorderStyle, QuadStyle},
+    style::{Background, BorderStyle, ClassID, QuadStyle},
     view::element::{
         Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
     },
@@ -78,7 +78,7 @@ impl ElementStyle for SeparatorStyle {
 }
 
 pub struct SeparatorBuilder {
-    pub class: Option<&'static str>,
+    pub class: Option<ClassID>,
     pub vertical: bool,
     pub z_index: Option<ZIndex>,
     pub rect: Rect,
@@ -107,11 +107,11 @@ impl SeparatorBuilder {
         self
     }
 
-    /// The style class name
+    /// The style class ID
     ///
     /// If this method is not used, then the current class from the window context will
     /// be used.
-    pub const fn class(mut self, class: &'static str) -> Self {
+    pub const fn class(mut self, class: ClassID) -> Self {
         self.class = Some(class);
         self
     }
@@ -251,10 +251,9 @@ impl Separator {
     /// Returns `true` if the class has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call. However, this method still
-    /// involves a string comparison so you may want to call this method
-    /// sparingly.
-    pub fn set_class(&mut self, class: &'static str) -> bool {
+    /// and the class ID is cached in the handle itself, so this is very
+    /// cheap to call frequently.
+    pub fn set_class(&mut self, class: ClassID) -> bool {
         if self.el.class() != class {
             self.el._notify_class_change(class);
             true

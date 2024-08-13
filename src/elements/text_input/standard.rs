@@ -7,7 +7,7 @@ use crate::elements::text_input::TextInputUpdateResult;
 use crate::event::{ElementEvent, EventCaptureStatus, PointerEvent};
 use crate::layout::Align2;
 use crate::math::{Point, Rect, Vector, ZIndex};
-use crate::prelude::ResourceCtx;
+use crate::prelude::{ClassID, ResourceCtx};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
 };
@@ -29,7 +29,7 @@ pub struct TextInputBuilder<A: Clone + 'static> {
     pub password_mode: bool,
     pub max_characters: usize,
     pub disabled: bool,
-    pub class: Option<&'static str>,
+    pub class: Option<ClassID>,
     pub z_index: Option<ZIndex>,
     pub rect: Rect,
     pub manually_hidden: bool,
@@ -116,11 +116,11 @@ impl<A: Clone + 'static> TextInputBuilder<A> {
         self
     }
 
-    /// The style class name
+    /// The style class ID
     ///
     /// If this method is not used, then the current class from the window context will
     /// be used.
-    pub const fn class(mut self, class: &'static str) -> Self {
+    pub const fn class(mut self, class: ClassID) -> Self {
         self.class = Some(class);
         self
     }
@@ -410,7 +410,7 @@ impl TextInput {
     /// Returns `true` if the text has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call. However, this method still
+    /// so this method is relatively cheap to call frequently. However, this method still
     /// involves a string comparison so you may want to call this method
     /// sparingly.
     pub fn set_text(&mut self, text: &str, res: &mut ResourceCtx, select_all: bool) -> bool {
@@ -461,10 +461,9 @@ impl TextInput {
     /// Returns `true` if the class has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call. However, this method still
-    /// involves a string comparison so you may want to call this method
-    /// sparingly.
-    pub fn set_class(&mut self, class: &'static str, res: &mut ResourceCtx) -> bool {
+    /// and the class ID is cached in the handle itself, so this is very
+    /// cheap to call frequently.
+    pub fn set_class(&mut self, class: ClassID, res: &mut ResourceCtx) -> bool {
         if self.el.class() != class {
             RefCell::borrow_mut(&self.shared_state)
                 .inner
@@ -482,7 +481,7 @@ impl TextInput {
     /// Returns `true` if the disabled state has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn set_disabled(&mut self, disabled: bool) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -501,7 +500,7 @@ impl TextInput {
     /// Returns `true` if the offset has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn set_text_offset(&mut self, offset: Vector) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -536,7 +535,7 @@ impl TextInput {
     /// Returns `true` if the show password state has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn show_password(&mut self, show: bool) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 

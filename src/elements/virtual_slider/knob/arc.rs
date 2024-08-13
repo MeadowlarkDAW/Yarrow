@@ -15,7 +15,7 @@ use rootvg::{
 use crate::{
     elements::virtual_slider::VirtualSliderState,
     layout::SizeType,
-    style::{Background, DisabledBackground},
+    style::{Background, ClassID, DisabledBackground},
     theme::DEFAULT_ACCENT_COLOR,
 };
 
@@ -203,7 +203,7 @@ impl KnobMarkersArcStyle {
 #[derive(Default)]
 pub(super) struct CachedKnobMarkerArcFrontMesh {
     mesh: Option<MeshPrimitive>,
-    class: &'static str,
+    class: ClassID,
     back_bounds: Rect,
     normal_val: f32,
     state: VirtualSliderState,
@@ -213,7 +213,7 @@ pub(super) struct CachedKnobMarkerArcFrontMesh {
 impl CachedKnobMarkerArcFrontMesh {
     pub fn create_primitive(
         &mut self,
-        class: &'static str,
+        class: ClassID,
         style: &KnobStyle,
         back_bounds: Rect,
         normal_val: f32,

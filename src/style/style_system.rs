@@ -5,10 +5,16 @@ use ahash::AHashMap;
 
 use crate::view::element::ElementStyle;
 
+pub type ClassID = u16;
+
+pub const CLASS_DEFAULT: ClassID = 0;
+pub const CLASS_MENU: ClassID = ClassID::MAX;
+pub const CLASS_PANEL: ClassID = ClassID::MAX - 1;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Key {
     element_type_id: &'static str,
-    class: &'static str,
+    class: ClassID,
     is_dark_theme: bool,
 }
 
@@ -29,15 +35,10 @@ impl StyleSystem {
         self.use_dark_theme
     }
 
-    /// Insert a new style with the given class name for the given element type.
+    /// Insert a new style with the given class ID for the given element type.
     ///
     /// Returns `true` if this style existed before and has been overwritten.
-    pub fn add<T: ElementStyle>(
-        &mut self,
-        class: &'static str,
-        is_dark_theme: bool,
-        style: T,
-    ) -> bool {
+    pub fn add<T: ElementStyle>(&mut self, class: ClassID, is_dark_theme: bool, style: T) -> bool {
         self.styles
             .insert(
                 Key {
@@ -53,7 +54,7 @@ impl StyleSystem {
     /// Remove a style from the system.
     ///
     /// Returns `true` if the style existed.
-    pub fn remove<T: ElementStyle>(&mut self, class: &'static str, is_dark_theme: bool) -> bool {
+    pub fn remove<T: ElementStyle>(&mut self, class: ClassID, is_dark_theme: bool) -> bool {
         self.styles
             .remove(&Key {
                 element_type_id: T::ID,
@@ -67,7 +68,7 @@ impl StyleSystem {
     ///
     /// If the style doesn't exist in the system, the default style will be
     /// inserted and returned.
-    pub fn get<T: ElementStyle>(&mut self, class: &'static str) -> &T {
+    pub fn get<T: ElementStyle>(&mut self, class: ClassID) -> &T {
         let key = Key {
             element_type_id: T::ID,
             class,
@@ -96,7 +97,7 @@ impl StyleSystem {
     ///
     /// If the style doesn't exist in the system, the default style will be
     /// inserted and returned.
-    pub fn get_rc<T: ElementStyle>(&mut self, class: &'static str) -> Rc<dyn Any> {
+    pub fn get_rc<T: ElementStyle>(&mut self, class: ClassID) -> Rc<dyn Any> {
         let key = Key {
             element_type_id: T::ID,
             class,

@@ -135,11 +135,15 @@ impl MyApp {
         // Push the main Z index onto the stack to make it the default.
         cx.push_z_index(MAIN_Z_INDEX);
 
-        let top_panel_bg = QuadElement::builder().class("panel").build(cx);
-        let top_panel_border = QuadElement::builder().class("panel_border").build(cx);
+        let top_panel_bg = QuadElement::builder().class(CLASS_PANEL).build(cx);
+        let top_panel_border = QuadElement::builder()
+            .class(MyStyle::CLASS_PANEL_BORDER)
+            .build(cx);
 
-        let left_panel_bg = QuadElement::builder().class("panel").build(cx);
-        let left_panel_border = QuadElement::builder().class("panel_border").build(cx);
+        let left_panel_bg = QuadElement::builder().class(CLASS_PANEL).build(cx);
+        let left_panel_border = QuadElement::builder()
+            .class(MyStyle::CLASS_PANEL_BORDER)
+            .build(cx);
 
         let left_panel_resize_handle = ResizeHandle::builder()
             .on_resized(|new_span| MyAction::LeftPanelResized(new_span))
@@ -151,7 +155,7 @@ impl MyApp {
             .build(cx);
 
         let menu_btn = Button::builder()
-            .class("menu")
+            .class(CLASS_MENU)
             .icon(MyIcon::Menu)
             .on_select(MyAction::OpenMenu)
             .build(cx);

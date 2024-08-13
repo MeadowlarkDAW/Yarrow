@@ -7,10 +7,10 @@ use rootvg::quad::SolidQuadBuilder;
 use rootvg::PrimitiveGroup;
 
 use crate::prelude::ElementStyle;
-pub use crate::style::QuadStyle;
 
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
 use crate::math::{Rect, Size, ZIndex};
+use crate::style::ClassID;
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
 };
@@ -105,7 +105,7 @@ pub struct ResizeHandleBuilder<A: Clone + 'static> {
     pub default_span: f32,
     pub current_span: f32,
     pub layout: Option<ResizeHandleLayout>,
-    pub class: Option<&'static str>,
+    pub class: Option<ClassID>,
     pub z_index: Option<ZIndex>,
     pub manually_hidden: bool,
     pub scissor_rect_id: Option<ScissorRectID>,
@@ -175,11 +175,11 @@ impl<A: Clone + 'static> ResizeHandleBuilder<A> {
         self
     }
 
-    /// The style class name
+    /// The style class ID
     ///
     /// If this method is not used, then the current class from the window context will
     /// be used.
-    pub const fn class(mut self, class: &'static str) -> Self {
+    pub const fn class(mut self, class: ClassID) -> Self {
         self.class = Some(class);
         self
     }
@@ -565,10 +565,9 @@ impl ResizeHandle {
     /// Returns `true` if the class has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call. However, this method still
-    /// involves a string comparison so you may want to call this method
-    /// sparingly.
-    pub fn set_class(&mut self, class: &'static str) -> bool {
+    /// and the class ID is cached in the handle itself, so this is very
+    /// cheap to call frequently.
+    pub fn set_class(&mut self, class: ClassID) -> bool {
         if self.el.class() != class {
             self.el._notify_class_change(class);
             true
@@ -582,7 +581,7 @@ impl ResizeHandle {
     /// Returns `true` if the layout has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn set_layout(&mut self, layout: ResizeHandleLayout) -> bool {
         if self.layout != layout {
             self.layout = layout;
@@ -605,7 +604,7 @@ impl ResizeHandle {
     /// Returns `true` if the span has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn set_span(&mut self, span: f32) -> bool {
         let span = span.clamp(self.min_span, self.max_span);
 
@@ -645,7 +644,7 @@ impl ResizeHandle {
     /// Returns `true` if the disabled state has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn set_disabled(&mut self, disabled: bool) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 

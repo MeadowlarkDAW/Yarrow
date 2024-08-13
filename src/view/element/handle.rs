@@ -16,6 +16,7 @@ use super::ElementModificationType;
 use crate::layout::Align2;
 use crate::math::{Point, Rect, Size, Vector, ZIndex};
 use crate::stmpsc_queue;
+use crate::style::ClassID;
 use crate::view::{ElementID, ElementModification};
 
 pub struct ElementHandle {
@@ -25,7 +26,7 @@ pub struct ElementHandle {
     rect: Rect,
     z_index: ZIndex,
     manually_hidden: bool,
-    class: &'static str,
+    class: ClassID,
 }
 
 impl ElementHandle {
@@ -35,7 +36,7 @@ impl ElementHandle {
         rect: Rect,
         z_index: ZIndex,
         manually_hidden: bool,
-        class: &'static str,
+        class: ClassID,
     ) -> Self {
         Self {
             element_id,
@@ -49,14 +50,14 @@ impl ElementHandle {
 
     /// Get the bounding rectangle of this element instance.
     ///
-    /// This is cached directly in the handle so this is very cheap to call.
+    /// This is cached directly in the handle so this is very cheap to call frequently.
     pub fn rect(&self) -> Rect {
         self.rect
     }
 
     /// Get the z index of this element instance.
     ///
-    /// This is cached directly in the handle so this is very cheap to call.
+    /// This is cached directly in the handle so this is very cheap to call frequently.
     pub fn z_index(&self) -> ZIndex {
         self.z_index
     }
@@ -66,7 +67,7 @@ impl ElementHandle {
     /// Note that even if this returns `true`, the element may still be hidden
     /// due to it being outside of the render area.
     ///
-    /// This is cached directly in the handle so this is very cheap to call.
+    /// This is cached directly in the handle so this is very cheap to call frequently.
     pub fn manually_hidden(&self) -> bool {
         self.manually_hidden
     }
@@ -78,7 +79,7 @@ impl ElementHandle {
     /// Returns `true` if the rectangle has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is very cheap to call.
+    /// so this method is very cheap to call frequently.
     pub fn set_rect(&mut self, rect: Rect) -> bool {
         if self.rect != rect {
             self.rect = rect;
@@ -102,7 +103,7 @@ impl ElementHandle {
     /// Returns `true` if the position has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is very cheap to call.
+    /// so this method is very cheap to call frequently.
     pub fn set_pos(&mut self, pos: Point) -> bool {
         if self.rect.origin != pos {
             self.rect.origin = pos;
@@ -126,7 +127,7 @@ impl ElementHandle {
     /// Returns `true` if the size has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is very cheap to call.
+    /// so this method is very cheap to call frequently.
     pub fn set_size(&mut self, size: Size) -> bool {
         if self.rect.size != size || true {
             self.rect.size = size;
@@ -151,7 +152,7 @@ impl ElementHandle {
     /// Returns `true` if the x position has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is very cheap to call.
+    /// so this method is very cheap to call frequently.
     pub fn set_x(&mut self, x: f32) -> bool {
         if self.rect.origin.x != x {
             self.rect.origin.x = x;
@@ -176,7 +177,7 @@ impl ElementHandle {
     /// Returns `true` if the y position has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is very cheap to call.
+    /// so this method is very cheap to call frequently.
     pub fn set_y(&mut self, y: f32) -> bool {
         if self.rect.origin.y != y {
             self.rect.origin.y = y;
@@ -201,7 +202,7 @@ impl ElementHandle {
     /// Returns `true` if the width has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is very cheap to call.
+    /// so this method is very cheap to call frequently.
     pub fn set_width(&mut self, width: f32) -> bool {
         if self.rect.size.width != width {
             self.rect.size.width = width;
@@ -226,7 +227,7 @@ impl ElementHandle {
     /// Returns `true` if the height has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is very cheap to call.
+    /// so this method is very cheap to call frequently.
     pub fn set_height(&mut self, height: f32) -> bool {
         if self.rect.size.height != height {
             self.rect.size.height = height;
@@ -259,7 +260,7 @@ impl ElementHandle {
     /// Returns `true` if the z index has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is very cheap to call.
+    /// so this method is very cheap to call frequently.
     pub fn set_z_index(&mut self, z_index: ZIndex) -> bool {
         if self.z_index != z_index {
             self.z_index = z_index;
@@ -284,7 +285,7 @@ impl ElementHandle {
     /// Returns `true` if the hidden state has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is very cheap to call.
+    /// so this method is very cheap to call frequently.
     pub fn set_hidden(&mut self, hidden: bool) -> bool {
         if self.manually_hidden != hidden {
             self.manually_hidden = hidden;
@@ -312,8 +313,8 @@ impl ElementHandle {
 
     /// The current style class of the element.
     ///
-    /// This is cached directly in the handle so this is very cheap to call.
-    pub fn class(&self) -> &'static str {
+    /// This is cached directly in the handle so this is very cheap to call frequently.
+    pub fn class(&self) -> ClassID {
         self.class
     }
 
@@ -330,7 +331,7 @@ impl ElementHandle {
         });
     }
 
-    /// Notify the element that its class name has changed.
+    /// Notify the element that its class ID has changed.
     ///
     /// This is meant to be used by element implementations, not by the end-user.
     /// Using this method directly instead of the element's provided `set_class`
@@ -338,7 +339,7 @@ impl ElementHandle {
     ///
     /// Note, this will *always* cause an element update, so prefer to call this
     /// method sparingly.
-    pub fn _notify_class_change(&mut self, new_class: &'static str) {
+    pub fn _notify_class_change(&mut self, new_class: ClassID) {
         self.class = new_class;
         self.mod_queue_sender.send(ElementModification {
             element_id: self.element_id,

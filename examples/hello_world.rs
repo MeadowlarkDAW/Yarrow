@@ -78,10 +78,9 @@ impl Application for MyApp {
                 // Yarrow has first-class mutli-window support.
                 if window_id == MAIN_WINDOW {
                     // Each element has its own custom style struct.
-                    // An empty class name `""`` means the default class.
                     cx.res.style_system.add(
-                        "",   // class
-                        true, // is_dark_theme
+                        ClassID::default(), // class ID
+                        true,               // is_dark_theme
                         LabelStyle {
                             back_quad: QuadStyle {
                                 bg: background_rgb(100, 30, 80),

@@ -9,7 +9,7 @@ use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::{Align2, Padding};
 use crate::math::{Point, Rect, Size, Vector, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::QuadStyle;
+use crate::style::{ClassID, QuadStyle};
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
@@ -182,7 +182,7 @@ pub struct IconBuilder {
     pub icon: CustomGlyphID,
     pub scale: f32,
     pub offset: Vector,
-    pub class: Option<&'static str>,
+    pub class: Option<ClassID>,
     pub z_index: Option<ZIndex>,
     pub rect: Rect,
     pub manually_hidden: bool,
@@ -225,11 +225,11 @@ impl IconBuilder {
         self
     }
 
-    /// The style class name
+    /// The style class ID
     ///
     /// If this method is not used, then the current class from the window context will
     /// be used.
-    pub const fn class(mut self, class: &'static str) -> Self {
+    pub const fn class(mut self, class: ClassID) -> Self {
         self.class = Some(class);
         self
     }
@@ -382,7 +382,7 @@ impl Icon {
     /// Returns `true` if the icon has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn set_icon(&mut self, icon_id: impl Into<CustomGlyphID>) -> bool {
         let icon_id: CustomGlyphID = icon_id.into();
 
@@ -406,10 +406,9 @@ impl Icon {
     /// Returns `true` if the class has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call. However, this method still
-    /// involves a string comparison so you may want to call this method
-    /// sparingly.
-    pub fn set_class(&mut self, class: &'static str) -> bool {
+    /// and the class ID is cached in the handle itself, so this is very
+    /// cheap to call frequently.
+    pub fn set_class(&mut self, class: ClassID) -> bool {
         if self.el.class() != class {
             RefCell::borrow_mut(&self.shared_state)
                 .inner
@@ -427,7 +426,7 @@ impl Icon {
     /// Returns `true` if the offset has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn set_offset(&mut self, offset: Vector) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -445,7 +444,7 @@ impl Icon {
     /// Returns `true` if the scale has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn set_scale(&mut self, scale: f32) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -463,7 +462,7 @@ impl Icon {
     /// Returns `true` if the layout has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn layout(&mut self, origin: Point, res: &mut ResourceCtx) -> bool {
         let size = self.desired_size(res);
         self.el.set_rect(Rect::new(origin, size))
@@ -474,7 +473,7 @@ impl Icon {
     /// Returns `true` if the layout has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn layout_aligned(&mut self, point: Point, align: Align2, res: &mut ResourceCtx) -> bool {
         let size = self.desired_size(res);
         self.el.set_rect(align.align_rect_to_point(point, size))

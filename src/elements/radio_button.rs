@@ -9,7 +9,9 @@ use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent
 use crate::layout::{self, Align2};
 use crate::math::{Rect, Size, Vector, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::{Background, BorderStyle, DisabledBackground, DisabledColor, QuadStyle};
+use crate::style::{
+    Background, BorderStyle, ClassID, DisabledBackground, DisabledColor, QuadStyle,
+};
 use crate::vg::color::RGBA8;
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
@@ -100,7 +102,7 @@ pub struct RadioButtonBuilder<A: Clone + 'static> {
     pub tooltip_message: Option<String>,
     pub tooltip_align: Align2,
     pub toggled: bool,
-    pub class: Option<&'static str>,
+    pub class: Option<ClassID>,
     pub z_index: Option<ZIndex>,
     pub rect: Rect,
     pub manually_hidden: bool,
@@ -144,11 +146,11 @@ impl<A: Clone + 'static> RadioButtonBuilder<A> {
         self
     }
 
-    /// The style class name
+    /// The style class ID
     ///
     /// If this method is not used, then the current class from the window context will
     /// be used.
-    pub const fn class(mut self, class: &'static str) -> Self {
+    pub const fn class(mut self, class: ClassID) -> Self {
         self.class = Some(class);
         self
     }
@@ -486,10 +488,9 @@ impl RadioButton {
     /// Returns `true` if the class has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call. However, this method still
-    /// involves a string comparison so you may want to call this method
-    /// sparingly.
-    pub fn set_class(&mut self, class: &'static str) -> bool {
+    /// and the class ID is cached in the handle itself, so this is very
+    /// cheap to call frequently.
+    pub fn set_class(&mut self, class: ClassID) -> bool {
         if self.el.class() != class {
             self.el._notify_class_change(class);
             true
@@ -503,7 +504,7 @@ impl RadioButton {
     /// Returns `true` if the toggle state has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn set_toggled(&mut self, toggled: bool) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -525,7 +526,7 @@ impl RadioButton {
     /// Returns `true` if the disabled state has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn set_disabled(&mut self, disabled: bool) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -543,7 +544,7 @@ impl RadioButton {
     /// Returns `true` if the layout has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn layout(&mut self, origin: Point, res: &mut ResourceCtx) -> bool {
         let size = self.desired_size(res);
         self.el.set_rect(Rect::new(origin, size))
@@ -554,7 +555,7 @@ impl RadioButton {
     /// Returns `true` if the layout has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn layout_aligned(&mut self, point: Point, align: Align2, res: &mut ResourceCtx) -> bool {
         let size = self.desired_size(res);
         self.el.set_rect(align.align_rect_to_point(point, size))
@@ -574,8 +575,8 @@ impl RadioButtonGroup {
         options: impl IntoIterator<Item = impl Into<String>>,
         selected_index: usize,
         mut on_selected: F,
-        label_class: Option<&'static str>,
-        radio_btn_class: Option<&'static str>,
+        label_class: Option<ClassID>,
+        radio_btn_class: Option<ClassID>,
         z_index: Option<ZIndex>,
         scissor_rect_id: Option<ScissorRectID>,
         cx: &mut WindowContext<A>,

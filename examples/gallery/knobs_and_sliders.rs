@@ -74,7 +74,7 @@ impl Elements {
             knob_1_label: Label::builder().text("Bipolar").build(cx),
 
             knob_2: Knob::builder(2)
-                .class("knob2")
+                .class(MyStyle::CLASS_KNOB_2)
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
                 .on_open_text_entry(|info| Action::OpenTextInput(info).into())
                 .on_tooltip_request(

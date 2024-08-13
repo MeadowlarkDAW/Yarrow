@@ -169,17 +169,17 @@ impl Elements {
         cx.with_scissor_rect(SCROLL_AREA_SCISSOR_RECT, |cx| {
             Self {
                 label: Label::builder()
-                    .class("fancy_label")
+                    .class(MyStyle::CLASS_FANCY_LABEL)
                     .text("Label")
                     .build(cx),
 
                 icon: Icon::builder()
-                    .class("fancy_icon")
+                    .class(MyStyle::CLASS_FANCY_LABEL)
                     .icon(MyIcon::Info)
                     .build(cx),
 
                 icon_label: Label::builder()
-                    .class("fancy_label")
+                    .class(MyStyle::CLASS_FANCY_LABEL)
                     .icon(MyIcon::Info)
                     .text("Icon Label")
                     .build(cx),

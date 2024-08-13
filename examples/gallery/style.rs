@@ -80,6 +80,10 @@ pub struct MyStyle {
 }
 
 impl MyStyle {
+    pub const CLASS_PANEL_BORDER: ClassID = 1;
+    pub const CLASS_FANCY_LABEL: ClassID = 2;
+    pub const CLASS_KNOB_2: ClassID = 3;
+
     pub fn new() -> Self {
         Self {
             top_panel_height: 30.0,
@@ -124,7 +128,7 @@ impl MyStyle {
         yarrow::theme::yarrow_dark::load(Default::default(), res);
 
         res.style_system.add(
-            "fancy_icon",
+            Self::CLASS_FANCY_LABEL,
             true,
             IconStyle {
                 color: yarrow::theme::DEFAULT_ACCENT_COLOR,
@@ -136,7 +140,7 @@ impl MyStyle {
         );
 
         res.style_system.add(
-            "fancy_label",
+            Self::CLASS_FANCY_LABEL,
             true,
             LabelStyle {
                 back_quad: quad_style(background(LABEL_BG_COLOR), border_radius_only(radius(30.0))),
@@ -150,7 +154,7 @@ impl MyStyle {
         );
 
         res.style_system.add(
-            "panel_border",
+            Self::CLASS_PANEL_BORDER,
             true,
             QuadStyle {
                 bg: background_gray(2),
@@ -159,7 +163,7 @@ impl MyStyle {
         );
 
         res.style_system.add(
-            "knob2",
+            Self::CLASS_KNOB_2,
             true,
             yarrow::theme::yarrow_dark::knob_style(
                 yarrow::theme::DEFAULT_ACCENT_COLOR,

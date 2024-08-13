@@ -31,7 +31,7 @@ use crate::clipboard::Clipboard;
 use crate::event::{CanvasEvent, ElementEvent, EventCaptureStatus, KeyboardEvent, PointerEvent};
 use crate::layout::Align2;
 use crate::math::{Point, PointI32, Rect, RectI32, ScaleFactor, Size, ZIndex};
-use crate::prelude::ResourceCtx;
+use crate::prelude::{ClassID, ResourceCtx};
 use crate::stmpsc_queue;
 use crate::CursorIcon;
 use crate::WindowID;
@@ -1232,7 +1232,7 @@ impl<A: Clone + 'static> View<A> {
     fn handle_element_class_changed(
         &mut self,
         element_id: ElementID,
-        new_class: &'static str,
+        new_class: ClassID,
         res: &mut ResourceCtx,
         clipboard: &mut Clipboard,
     ) {
@@ -1970,7 +1970,7 @@ struct EntryStackData {
     scissor_rect_id: ScissorRectID,
     z_index: ZIndex,
 
-    class: &'static str,
+    class: ClassID,
 
     flags: ElementFlags,
     manually_hidden: bool,

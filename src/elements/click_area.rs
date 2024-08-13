@@ -155,7 +155,7 @@ impl<A: Clone + 'static> ClickAreaElement<A> {
             rect,
             manually_hidden: disabled,
             scissor_rect_id,
-            class: "",
+            class: Default::default(),
         };
 
         let el = cx
@@ -256,7 +256,7 @@ impl ClickArea {
     /// Returns `true` if the disabled state has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn set_disabled(&mut self, disabled: bool) -> bool {
         self.el.set_hidden(disabled)
     }

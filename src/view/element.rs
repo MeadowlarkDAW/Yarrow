@@ -30,6 +30,7 @@ use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::Align2;
 use crate::math::{Rect, Size, ZIndex};
 use crate::stmpsc_queue;
+use crate::style::ClassID;
 
 pub(crate) use context::ChangeFocusRequest;
 
@@ -83,7 +84,7 @@ pub struct ElementBuilder<A: Clone + 'static> {
     pub rect: Rect,
     pub manually_hidden: bool,
     pub scissor_rect_id: ScissorRectID,
-    pub class: &'static str,
+    pub class: ClassID,
 }
 
 impl<A: Clone + 'static> ElementBuilder<A> {
@@ -94,11 +95,11 @@ impl<A: Clone + 'static> ElementBuilder<A> {
             rect: Rect::new(Point::new(0.0, 0.0), Size::new(0.0, 0.0)),
             manually_hidden: false,
             scissor_rect_id: MAIN_SCISSOR_RECT,
-            class: "",
+            class: 0,
         }
     }
 
-    pub const fn class(mut self, class: &'static str) -> Self {
+    pub const fn class(mut self, class: ClassID) -> Self {
         self.class = class;
         self
     }
@@ -148,7 +149,7 @@ pub(super) enum ElementModificationType {
     ScissorRectChanged,
     ZIndexChanged(ZIndex),
     ExplicitlyHiddenChanged(bool),
-    ClassChanged(&'static str),
+    ClassChanged(ClassID),
     SetAnimating(bool),
     ChangeFocus(ChangeFocusRequest),
     HandleDropped,
@@ -170,7 +171,7 @@ pub(super) fn new_element_handle(
     rect: Rect,
     z_index: ZIndex,
     manually_hidden: bool,
-    class: &'static str,
+    class: ClassID,
 ) -> ElementHandle {
     ElementHandle::new(
         element_id,

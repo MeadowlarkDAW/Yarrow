@@ -10,7 +10,9 @@ use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent
 use crate::layout::{Align, Align2, Padding};
 use crate::math::{Rect, Size, Vector, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::{Background, BorderStyle, DisabledBackground, DisabledColor, QuadStyle};
+use crate::style::{
+    Background, BorderStyle, ClassID, DisabledBackground, DisabledColor, QuadStyle,
+};
 use crate::theme::DEFAULT_ICON_SIZE;
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
@@ -663,7 +665,7 @@ pub struct ToggleButtonBuilder<A: Clone + 'static> {
     pub text_offset: Vector,
     pub icon_offset: Vector,
     pub text_icon_layout: TextIconLayout,
-    pub class: Option<&'static str>,
+    pub class: Option<ClassID>,
     pub z_index: Option<ZIndex>,
     pub rect: Rect,
     pub manually_hidden: bool,
@@ -781,11 +783,11 @@ impl<A: Clone + 'static> ToggleButtonBuilder<A> {
         self
     }
 
-    /// The style class name
+    /// The style class ID
     ///
     /// If this method is not used, then the current class from the window context will
     /// be used.
-    pub const fn class(mut self, class: &'static str) -> Self {
+    pub const fn class(mut self, class: ClassID) -> Self {
         self.class = Some(class);
         self
     }
@@ -1064,7 +1066,7 @@ impl ToggleButton {
     /// Returns `true` if the toggle state has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn set_toggled(&mut self, toggled: bool) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -1101,7 +1103,7 @@ impl ToggleButton {
     /// Returns `true` if the text has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call. However, this method still
+    /// so this method is relatively cheap to call frequently. However, this method still
     /// involves a string comparison so you may want to call this method
     /// sparingly.
     pub fn set_text(&mut self, text: Option<&str>, res: &mut ResourceCtx) -> bool {
@@ -1124,7 +1126,7 @@ impl ToggleButton {
     /// Returns `true` if the icon has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn set_icon(&mut self, icon: Option<impl Into<CustomGlyphID>>) -> bool {
         let icon: Option<CustomGlyphID> = icon.map(|i| i.into());
 
@@ -1151,10 +1153,9 @@ impl ToggleButton {
     /// Returns `true` if the class has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call. However, this method still
-    /// involves a string comparison so you may want to call this method
-    /// sparingly.
-    pub fn set_class(&mut self, class: &'static str, res: &mut ResourceCtx) -> bool {
+    /// and the class ID is cached in the handle itself, so this is very
+    /// cheap to call frequently.
+    pub fn set_class(&mut self, class: ClassID, res: &mut ResourceCtx) -> bool {
         if self.el.class() != class {
             RefCell::borrow_mut(&self.shared_state)
                 .inner
@@ -1174,7 +1175,7 @@ impl ToggleButton {
     /// Returns `true` if the offset has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn set_text_offset(&mut self, offset: Vector) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -1193,7 +1194,7 @@ impl ToggleButton {
     /// Returns `true` if the offset has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn set_icon_offset(&mut self, offset: Vector) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -1212,7 +1213,7 @@ impl ToggleButton {
     /// Returns `true` if the scale has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn set_icon_scale(&mut self, scale: f32) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -1229,7 +1230,7 @@ impl ToggleButton {
     /// Returns `true` if the disabled state has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn set_disabled(&mut self, disabled: bool) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -1255,7 +1256,7 @@ impl ToggleButton {
     /// Returns `true` if the layout has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn layout(&mut self, origin: Point, res: &mut ResourceCtx) -> bool {
         let size = self.desired_size(res);
         self.el.set_rect(Rect::new(origin, size))
@@ -1266,7 +1267,7 @@ impl ToggleButton {
     /// Returns `true` if the layout has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn layout_aligned(&mut self, point: Point, align: Align2, res: &mut ResourceCtx) -> bool {
         let size = self.desired_size(res);
         self.el.set_rect(align.align_rect_to_point(point, size))

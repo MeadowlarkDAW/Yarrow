@@ -10,7 +10,7 @@ use crate::vg::quad::{Border, Radius};
 
 mod style_system;
 
-pub use style_system::StyleSystem;
+pub use style_system::{ClassID, StyleSystem, CLASS_DEFAULT, CLASS_MENU, CLASS_PANEL};
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

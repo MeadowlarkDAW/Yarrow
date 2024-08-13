@@ -404,23 +404,33 @@ impl Default for Config {
 }
 
 pub fn load(config: Config, res: &mut ResourceCtx) {
-    res.style_system.add("", true, button(&config));
-    res.style_system.add("", true, toggle_button(&config));
-    res.style_system.add("", true, switch(&config));
-    res.style_system.add("", true, radio_btn(&config));
-    res.style_system.add("", true, resize_handle());
-    res.style_system.add("", true, scroll_bar());
-    res.style_system.add("", true, text_input(&config));
-    res.style_system.add("", true, icon_text_input(&config));
-    res.style_system.add("", true, tab(&config));
-    res.style_system.add("", true, tooltip(&config));
-    res.style_system.add("", true, separator());
-    res.style_system.add("", true, dropdown_menu(&config));
-    res.style_system.add("", true, label(&config));
-    res.style_system.add("panel", true, panel());
-    res.style_system.add("menu", true, menu_button(&config));
+    res.style_system
+        .add(ClassID::default(), true, button(&config));
+    res.style_system
+        .add(ClassID::default(), true, toggle_button(&config));
+    res.style_system
+        .add(ClassID::default(), true, switch(&config));
+    res.style_system
+        .add(ClassID::default(), true, radio_btn(&config));
+    res.style_system
+        .add(ClassID::default(), true, resize_handle());
+    res.style_system.add(ClassID::default(), true, scroll_bar());
+    res.style_system
+        .add(ClassID::default(), true, text_input(&config));
+    res.style_system
+        .add(ClassID::default(), true, icon_text_input(&config));
+    res.style_system.add(ClassID::default(), true, tab(&config));
+    res.style_system
+        .add(ClassID::default(), true, tooltip(&config));
+    res.style_system.add(ClassID::default(), true, separator());
+    res.style_system
+        .add(ClassID::default(), true, dropdown_menu(&config));
+    res.style_system
+        .add(ClassID::default(), true, label(&config));
+    res.style_system.add(CLASS_PANEL, true, panel());
+    res.style_system.add(CLASS_MENU, true, menu_button(&config));
     res.style_system.add(
-        "",
+        ClassID::default(),
         true,
         SliderStyle::Modern(slider_style_modern(
             config.accent_color,
@@ -429,7 +439,7 @@ pub fn load(config: Config, res: &mut ResourceCtx) {
         )),
     );
     res.style_system.add(
-        "",
+        ClassID::default(),
         true,
         knob_style(config.accent_color, config.accent_color_hover, false, false),
     );

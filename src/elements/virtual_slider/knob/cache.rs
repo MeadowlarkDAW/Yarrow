@@ -4,30 +4,31 @@
 
 use std::{any::Any, hash::Hash};
 
-use ahash::AHashMap;
 use rootvg::{math::Rect, mesh::MeshPrimitive};
+use rustc_hash::FxHashMap;
 
+use crate::style::ClassID;
 use crate::view::element::ElementRenderCache;
 
 use super::{KnobMarkersStyle, KnobNotchLinePrimitives, KnobNotchStyle, KnobStyle};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct KnobNotchLineCacheKey {
-    class: &'static str,
+    class: ClassID,
     back_size: i32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct KnobMarkersArcCacheKey {
-    class: &'static str,
+    class: ClassID,
     back_size: i32,
     disabled: bool,
 }
 
 #[derive(Default)]
 pub struct KnobRenderCacheInner {
-    notch_line_meshes: AHashMap<KnobNotchLineCacheKey, (KnobNotchLinePrimitives, bool)>,
-    marker_arc_meshes: AHashMap<KnobMarkersArcCacheKey, (MeshPrimitive, bool)>,
+    notch_line_meshes: FxHashMap<KnobNotchLineCacheKey, (KnobNotchLinePrimitives, bool)>,
+    marker_arc_meshes: FxHashMap<KnobMarkersArcCacheKey, (MeshPrimitive, bool)>,
 }
 
 impl KnobRenderCacheInner {
@@ -47,7 +48,7 @@ impl KnobRenderCacheInner {
 
     pub fn notch_line_mesh(
         &mut self,
-        class: &'static str,
+        class: ClassID,
         style: &KnobStyle,
         back_size: f32,
     ) -> Option<&KnobNotchLinePrimitives> {
@@ -73,7 +74,7 @@ impl KnobRenderCacheInner {
 
     pub fn marker_arc_back_mesh(
         &mut self,
-        class: &'static str,
+        class: ClassID,
         style: &KnobStyle,
         back_bounds: Rect,
         disabled: bool,

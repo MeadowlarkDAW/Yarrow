@@ -10,7 +10,7 @@ use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent
 use crate::layout::Padding;
 use crate::math::{Rect, Size, Vector, ZIndex};
 use crate::prelude::ElementStyle;
-use crate::style::QuadStyle;
+use crate::style::{ClassID, QuadStyle};
 use crate::theme::DEFAULT_ICON_SIZE;
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
@@ -348,7 +348,7 @@ impl ElementStyle for DropDownMenuStyle {
 pub struct DropDownMenuBuilder<A: Clone + 'static> {
     pub action: Option<Box<dyn FnMut(usize) -> A>>,
     pub entries: Vec<MenuEntry>,
-    pub class: Option<&'static str>,
+    pub class: Option<ClassID>,
     pub z_index: Option<ZIndex>,
     pub position: Point,
     pub scissor_rect_id: Option<ScissorRectID>,
@@ -380,11 +380,11 @@ impl<A: Clone + 'static> DropDownMenuBuilder<A> {
         self
     }
 
-    /// The style class name
+    /// The style class ID
     ///
     /// If this method is not used, then the current class from the window context will
     /// be used.
-    pub const fn class(mut self, class: &'static str) -> Self {
+    pub const fn class(mut self, class: ClassID) -> Self {
         self.class = Some(class);
         self
     }
@@ -770,10 +770,9 @@ impl DropDownMenu {
     /// Returns `true` if the class has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call. However, this method still
-    /// involves a string comparison so you may want to call this method
-    /// sparingly.
-    pub fn set_class(&mut self, class: &'static str) -> bool {
+    /// and the class ID is cached in the handle itself, so this is very
+    /// cheap to call frequently.
+    pub fn set_class(&mut self, class: ClassID) -> bool {
         if self.el.class() != class {
             self.el._notify_class_change(class);
             true
@@ -787,7 +786,7 @@ impl DropDownMenu {
     /// Returns `true` if the position has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is very cheap to call frequently.
     pub fn set_position(&mut self, pos: Point) -> bool {
         self.el.set_pos(pos)
     }

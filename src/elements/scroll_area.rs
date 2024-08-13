@@ -7,8 +7,7 @@ use rootvg::quad::Radius;
 use rootvg::PrimitiveGroup;
 
 use crate::prelude::ElementStyle;
-pub use crate::style::QuadStyle;
-use crate::style::{Background, BorderStyle};
+use crate::style::{Background, BorderStyle, ClassID, QuadStyle};
 
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
 use crate::view::element::{
@@ -104,7 +103,7 @@ pub struct ScrollAreaBuilder<A: Clone + 'static> {
     pub show_slider_when_content_fits: bool,
     pub capture_scroll_wheel: bool,
     pub points_per_line: f32,
-    pub class: Option<&'static str>,
+    pub class: Option<ClassID>,
     pub z_index: Option<ZIndex>,
     pub manually_hidden: bool,
     pub disabled: bool,
@@ -186,11 +185,11 @@ impl<A: Clone + 'static> ScrollAreaBuilder<A> {
         self
     }
 
-    /// The style class name
+    /// The style class ID
     ///
     /// If this method is not used, then the current class from the window context will
     /// be used.
-    pub const fn class(mut self, class: &'static str) -> Self {
+    pub const fn class(mut self, class: ClassID) -> Self {
         self.class = Some(class);
         self
     }
@@ -928,10 +927,9 @@ impl ScrollArea {
     /// Returns `true` if the class has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call. However, this method still
-    /// involves a string comparison so you may want to call this method
-    /// sparingly.
-    pub fn set_class(&mut self, class: &'static str) -> bool {
+    /// and the class ID is cached in the handle itself, so this is very
+    /// cheap to call frequently.
+    pub fn set_class(&mut self, class: ClassID) -> bool {
         if self.el.class() != class {
             self.el._notify_class_change(class);
             true
@@ -945,7 +943,7 @@ impl ScrollArea {
     /// Returns `true` if the offset has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn set_scroll_offset(&mut self, scroll_offset: Vector) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -967,7 +965,7 @@ impl ScrollArea {
     /// Returns `true` if the content size has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn set_content_size(&mut self, content_size: Size) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -993,7 +991,7 @@ impl ScrollArea {
     /// Returns `true` if the disabled state has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn set_disabled(&mut self, disabled: bool) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 

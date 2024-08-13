@@ -20,7 +20,7 @@ use crate::action_queue::ActionSender;
 use crate::clipboard::Clipboard;
 use crate::layout::Align2;
 use crate::math::{Rect, ScaleFactor, ZIndex};
-use crate::prelude::ResourceCtx;
+use crate::prelude::{ClassID, ResourceCtx};
 use crate::{CursorIcon, WindowID};
 
 use super::ElementRenderCache;
@@ -71,7 +71,7 @@ pub struct ElementContext<'a, A: Clone + 'static> {
     pub(crate) window_id: WindowID,
     pub(crate) pointer_lock_request: Option<bool>,
     pointer_locked: bool,
-    class: &'static str,
+    class: ClassID,
 }
 
 impl<'a, A: Clone + 'static> ElementContext<'a, A> {
@@ -87,7 +87,7 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
         cursor_icon: CursorIcon,
         window_id: WindowID,
         pointer_locked: bool,
-        class: &'static str,
+        class: ClassID,
         action_sender: &'a mut ActionSender<A>,
         res: &'a mut ResourceCtx,
         clipboard: &'a mut Clipboard,
@@ -290,8 +290,8 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
         self.pointer_locked
     }
 
-    /// The current class name.
-    pub fn class(&self) -> &'static str {
+    /// The current class ID.
+    pub fn class(&self) -> ClassID {
         self.class
     }
 }
@@ -310,8 +310,8 @@ pub struct RenderContext<'a> {
     pub visible_bounds: Rect,
     /// The scale factor.
     pub scale: ScaleFactor,
-    /// The current class name.
-    pub class: &'static str,
+    /// The current class ID.
+    pub class: ClassID,
     /// The size of the window. This can be useful to reposition/resize elements
     /// like drop-down menus to fit within the window.
     pub window_size: Size,

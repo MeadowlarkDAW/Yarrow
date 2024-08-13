@@ -14,6 +14,7 @@ use smallvec::SmallVec;
 use crate::{
     event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent},
     layout::Align2,
+    style::ClassID,
     view::element::{
         Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, ElementRenderCache,
         RenderContext,
@@ -251,7 +252,7 @@ pub struct VirtualSliderBuilder<A: Clone + 'static> {
     pub on_right_click: Option<Box<dyn FnMut(ParamRightClickInfo) -> A>>,
     pub on_open_text_entry: Option<Box<dyn FnMut(ParamOpenTextEntryInfo) -> A>>,
     pub on_tooltip_request: Option<Box<dyn FnMut(ParamElementTooltipInfo) -> A>>,
-    pub class: Option<&'static str>,
+    pub class: Option<ClassID>,
     pub tooltip_align: Align2,
     pub param_id: u32,
     pub normal_value: f64,
@@ -377,11 +378,11 @@ impl<A: Clone + 'static> VirtualSliderBuilder<A> {
         self
     }
 
-    /// The style class name
+    /// The style class ID
     ///
     /// If this method is not used, then the current class from the window context will
     /// be used.
-    pub const fn class(mut self, class: &'static str) -> Self {
+    pub const fn class(mut self, class: ClassID) -> Self {
         self.class = Some(class);
         self
     }
@@ -1316,7 +1317,7 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
     /// so this method is relatively inexpensive to call.
-    pub fn set_class(&mut self, class: &'static str) {
+    pub fn set_class(&mut self, class: ClassID) {
         if self.el.class() != class {
             self.el._notify_class_change(class);
         }

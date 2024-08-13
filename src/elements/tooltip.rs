@@ -8,6 +8,7 @@ use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::{Align2, Padding};
 use crate::math::{Rect, Vector, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
+use crate::style::ClassID;
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
@@ -82,7 +83,7 @@ impl ElementStyle for TooltipStyle {
 
 pub struct TooltipBuilder {
     pub text_offset: Vector,
-    pub class: Option<&'static str>,
+    pub class: Option<ClassID>,
     pub element_padding: Padding,
     pub z_index: Option<ZIndex>,
     pub scissor_rect_id: Option<ScissorRectID>,
@@ -118,11 +119,11 @@ impl TooltipBuilder {
         self
     }
 
-    /// The style class name
+    /// The style class ID
     ///
     /// If this method is not used, then the current class from the window context will
     /// be used.
-    pub const fn class(mut self, class: &'static str) -> Self {
+    pub const fn class(mut self, class: ClassID) -> Self {
         self.class = Some(class);
         self
     }
@@ -330,10 +331,9 @@ impl Tooltip {
     /// Returns `true` if the class has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call. However, this method still
-    /// involves a string comparison so you may want to call this method
-    /// sparingly.
-    pub fn set_class(&mut self, class: &'static str, res: &mut ResourceCtx) -> bool {
+    /// and the class ID is cached in the handle itself, so this is very
+    /// cheap to call frequently.
+    pub fn set_class(&mut self, class: ClassID, res: &mut ResourceCtx) -> bool {
         if self.el.class() != class {
             RefCell::borrow_mut(&self.shared_state)
                 .inner
@@ -356,7 +356,7 @@ impl Tooltip {
     /// Returns `true` if the offset has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call.
+    /// so this method is relatively cheap to call frequently.
     pub fn set_text_offset(&mut self, offset: Vector) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 

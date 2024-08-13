@@ -4,6 +4,7 @@ pub use crate::style::QuadStyle;
 
 use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::math::{Rect, ZIndex};
+use crate::style::ClassID;
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
 };
@@ -11,7 +12,7 @@ use crate::view::ScissorRectID;
 use crate::window::WindowContext;
 
 pub struct QuadElementBuilder {
-    pub class: Option<&'static str>,
+    pub class: Option<ClassID>,
     pub z_index: Option<ZIndex>,
     pub rect: Rect,
     pub manually_hidden: bool,
@@ -33,11 +34,11 @@ impl QuadElementBuilder {
         QuadElementInternal::create(self, cx)
     }
 
-    /// The style class name
+    /// The style class ID
     ///
     /// If this method is not used, then the current class from the window context will
     /// be used.
-    pub const fn class(mut self, class: &'static str) -> Self {
+    pub const fn class(mut self, class: ClassID) -> Self {
         self.class = Some(class);
         self
     }
@@ -155,10 +156,9 @@ impl QuadElement {
     /// Returns `true` if the class has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call. However, this method still
-    /// involves a string comparison so you may want to call this method
-    /// sparingly.
-    pub fn set_class(&mut self, class: &'static str) -> bool {
+    /// and the class ID is cached in the handle itself, so this is very
+    /// cheap to call frequently.
+    pub fn set_class(&mut self, class: ClassID) -> bool {
         if self.el.class() != class {
             self.el._notify_class_change(class);
             true
