@@ -92,27 +92,27 @@ impl Application for MyApp {
                     );
 
                     // Elements are added to the view of a window context.
-                    let mut main_window_cx = cx.window_context(MAIN_WINDOW).unwrap();
+                    let mut cx = cx.window_context(MAIN_WINDOW).unwrap();
 
                     // The clear color of the window can be set at any time.
-                    main_window_cx.view.clear_color = rgb(20, 20, 20).into();
+                    cx.view.clear_color = rgb(20, 20, 20).into();
 
                     self.main_window_elements =
-                        Some(MainWindowElements::build(&mut main_window_cx));
+                        Some(MainWindowElements::build(&mut cx));
 
                     self.main_window_elements
                         .as_mut()
                         .unwrap()
-                        .layout(&mut main_window_cx);
+                        .layout(&mut cx);
                 }
             }
             AppWindowEvent::WindowResized => {
                 if window_id == MAIN_WINDOW {
-                    let mut main_window_cx = cx.window_context(MAIN_WINDOW).unwrap();
+                    let mut cx = cx.window_context(MAIN_WINDOW).unwrap();
                     self.main_window_elements
                         .as_mut()
                         .unwrap()
-                        .layout(&mut main_window_cx);
+                        .layout(&mut cx);
                 }
             }
             _ => {}

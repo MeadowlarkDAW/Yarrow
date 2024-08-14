@@ -217,17 +217,17 @@ impl MyApp {
 
         match action {
             MyAction::BasicElements(action) => {
-                let mut main_window_cx = cx.window_context(MAIN_WINDOW).unwrap();
+                let mut cx = cx.window_context(MAIN_WINDOW).unwrap();
                 needs_layout = elements
                     .basic_elements
-                    .handle_action(action, &mut main_window_cx);
+                    .handle_action(action, &mut cx);
             }
             MyAction::KnobsAndSliders(action) => {
-                let mut main_window_cx = cx.window_context(MAIN_WINDOW).unwrap();
+                let mut cx = cx.window_context(MAIN_WINDOW).unwrap();
                 needs_layout = elements.knobs_and_sliders.handle_action(
                     action,
                     &self.style,
-                    &mut main_window_cx,
+                    &mut cx,
                 );
             }
             MyAction::AboutWindow(action) => {
@@ -281,8 +281,8 @@ impl MyApp {
         }
 
         if needs_layout {
-            let mut main_window_cx = cx.window_context(MAIN_WINDOW).unwrap();
-            self.layout_main_window(&mut main_window_cx);
+            let mut cx = cx.window_context(MAIN_WINDOW).unwrap();
+            self.layout_main_window(&mut cx);
         }
     }
 
@@ -415,12 +415,12 @@ impl Application for MyApp {
                         self.style.load(&mut cx.res);
                     }
 
-                    let mut main_window_cx = cx.window_context(MAIN_WINDOW).unwrap();
+                    let mut cx = cx.window_context(MAIN_WINDOW).unwrap();
 
-                    self.build_main_window(&mut main_window_cx);
-                    self.layout_main_window(&mut main_window_cx);
+                    self.build_main_window(&mut cx);
+                    self.layout_main_window(&mut cx);
 
-                    main_window_cx.view.set_tooltip_actions(
+                    cx.view.set_tooltip_actions(
                         |info| MyAction::ShowTooltip((info, MAIN_WINDOW)),
                         || MyAction::HideTooltip(MAIN_WINDOW),
                     );
@@ -436,8 +436,8 @@ impl Application for MyApp {
             }
             AppWindowEvent::WindowResized => {
                 if window_id == MAIN_WINDOW {
-                    let mut main_window_cx = cx.window_context(MAIN_WINDOW).unwrap();
-                    self.layout_main_window(&mut main_window_cx);
+                    let mut cx = cx.window_context(MAIN_WINDOW).unwrap();
+                    self.layout_main_window(&mut cx);
                 }
             }
             AppWindowEvent::WindowClosed => {
