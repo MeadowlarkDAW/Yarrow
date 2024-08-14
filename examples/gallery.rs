@@ -218,17 +218,14 @@ impl MyApp {
         match action {
             MyAction::BasicElements(action) => {
                 let mut cx = cx.window_context(MAIN_WINDOW).unwrap();
-                needs_layout = elements
-                    .basic_elements
-                    .handle_action(action, &mut cx);
+                needs_layout = elements.basic_elements.handle_action(action, &mut cx);
             }
             MyAction::KnobsAndSliders(action) => {
                 let mut cx = cx.window_context(MAIN_WINDOW).unwrap();
-                needs_layout = elements.knobs_and_sliders.handle_action(
-                    action,
-                    &self.style,
-                    &mut cx,
-                );
+                needs_layout =
+                    elements
+                        .knobs_and_sliders
+                        .handle_action(action, &self.style, &mut cx);
             }
             MyAction::AboutWindow(action) => {
                 if let Some(mut about_window_cx) = cx.window_context(about_window::ABOUT_WINDOW_ID)

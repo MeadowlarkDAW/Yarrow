@@ -46,7 +46,7 @@ pub use crate::style::*;
 pub use crate::vg::color::{
     self, gray, gray_a, hex, hex_a, rgb, rgba, BLACK, RGBA8, TRANSPARENT, WHITE,
 };
-pub use crate::vg::quad::{radius, Radius};
+pub use crate::vg::quad::{radius, QuadFlags, Radius};
 pub use crate::vg::text::glyphon::fontdb::Source as FontSource;
 pub use crate::vg::text::glyphon::FontSystem;
 pub use crate::vg::text::{

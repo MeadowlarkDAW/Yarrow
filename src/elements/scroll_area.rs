@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use rootvg::color::{self, RGBA8};
 use rootvg::math::{Point, Rect, Size, Vector, ZIndex};
-use rootvg::quad::Radius;
+use rootvg::quad::{QuadFlags, Radius};
 use rootvg::PrimitiveGroup;
 
 use crate::prelude::ElementStyle;
@@ -48,6 +48,11 @@ pub struct ScrollBarStyle {
 
     pub slider_width: f32,
     pub radius: Radius,
+
+    /// Additional flags for the quad primitives.
+    ///
+    /// By default this is set to `QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL`.
+    pub quad_flags: QuadFlags,
 }
 
 impl Default for ScrollBarStyle {
@@ -76,6 +81,7 @@ impl Default for ScrollBarStyle {
             slider_border_width_slider_dragging: None,
             slider_width: 8.0,
             radius: Radius::default(),
+            quad_flags: QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL,
         }
     }
 }
@@ -760,6 +766,7 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                         width: style.back_quad_border_width,
                         radius: style.radius,
                     },
+                    flags: style.quad_flags,
                 },
                 ScrollBarState::ContentHovered => QuadStyle {
                     bg: style
@@ -774,6 +781,7 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                             .unwrap_or(style.back_quad_border_width),
                         radius: style.radius,
                     },
+                    flags: style.quad_flags,
                 },
                 _ => QuadStyle {
                     bg: style
@@ -788,6 +796,7 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                             .unwrap_or(style.back_quad_border_width),
                         radius: style.radius,
                     },
+                    flags: style.quad_flags,
                 },
             }
         };
@@ -817,6 +826,7 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                         width: style.slider_border_width,
                         radius: style.radius,
                     },
+                    flags: style.quad_flags,
                 },
                 ScrollBarState::ContentHovered => QuadStyle {
                     bg: style.slider_bg_content_hover.unwrap_or(style.slider_bg),
@@ -829,6 +839,7 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                             .unwrap_or(style.slider_border_width),
                         radius: style.radius,
                     },
+                    flags: style.quad_flags,
                 },
                 ScrollBarState::SliderHovered => QuadStyle {
                     bg: style
@@ -847,6 +858,7 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                         ),
                         radius: style.radius,
                     },
+                    flags: style.quad_flags,
                 },
                 ScrollBarState::Dragging => QuadStyle {
                     bg: style.slider_bg_slider_dragging.unwrap_or(
@@ -871,6 +883,7 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                         ),
                         radius: style.radius,
                     },
+                    flags: style.quad_flags,
                 },
             }
         };

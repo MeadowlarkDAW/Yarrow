@@ -1,4 +1,4 @@
-use rootvg::text::Metrics;
+use rootvg::{quad::QuadFlags, text::Metrics};
 
 use crate::{
     prelude::*,
@@ -220,6 +220,7 @@ pub fn tab(config: &Config) -> TabStyle {
         on_indicator_line_style: QuadStyle {
             bg: background(config.accent_color),
             border: border_radius_only(config.radius.into()),
+            flags: QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL,
         },
         on_indicator_line_width: 3.0,
         ..Default::default()
@@ -238,6 +239,7 @@ pub fn tooltip(config: &Config) -> TooltipStyle {
         back_quad: QuadStyle {
             bg: background(DROPDOWN_BG_COLOR),
             border: border(DROPDOWN_BORDER_COLOR, 1.0, config.radius.into()),
+            flags: QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL,
         },
         ..Default::default()
     }
@@ -248,6 +250,7 @@ pub fn separator() -> SeparatorStyle {
         quad_style: QuadStyle {
             bg: background(SEPERATOR_COLOR),
             border: BorderStyle::default(),
+            flags: QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL,
         },
         ..Default::default()
     }
@@ -265,10 +268,12 @@ pub fn dropdown_menu(config: &Config) -> DropDownMenuStyle {
         back_quad: QuadStyle {
             bg: background(DROPDOWN_BG_COLOR),
             border: border(DROPDOWN_BORDER_COLOR, 1.0, config.radius.into()),
+            flags: QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL,
         },
         entry_bg_quad_hover: QuadStyle {
             bg: background(BUTTON_BG_HOVER_COLOR),
             border: border(BUTTON_BORDER_COLOR, 1.0, config.radius.into()),
+            flags: QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL,
         },
         outer_padding: 2.0,
         left_icon_padding: padding_vh(0.0, 4.0),
@@ -299,6 +304,7 @@ pub fn panel() -> QuadStyle {
     QuadStyle {
         bg: background(PANEL_BG_COLOR),
         border: Default::default(),
+        flags: QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL,
     }
 }
 
@@ -365,6 +371,7 @@ pub fn knob_style(
                 primary_quad_style: QuadStyle {
                     bg: background(TEXT_COLOR_DIMMED),
                     border: border_radius_only(Radius::CIRCLE),
+                    flags: QuadFlags::empty(),
                 },
                 ..Default::default()
             })

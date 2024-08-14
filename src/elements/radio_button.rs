@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use rootvg::math::Point;
-use rootvg::quad::Radius;
+use rootvg::quad::{QuadFlags, Radius};
 use rootvg::{color, PrimitiveGroup};
 
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
@@ -56,6 +56,11 @@ pub struct RadioButtonStyle {
     ///
     /// By default this is set to `None`.
     pub cursor_icon: Option<CursorIcon>,
+
+    /// Additional flags for the quad primitives.
+    ///
+    /// By default this is set to `QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL`.
+    pub quad_flags: QuadFlags,
 }
 
 impl Default for RadioButtonStyle {
@@ -81,6 +86,7 @@ impl Default for RadioButtonStyle {
             dot_bg_hover: None,
             dot_bg_disabled: Default::default(),
             cursor_icon: None,
+            quad_flags: QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL,
         }
     }
 }
@@ -355,6 +361,7 @@ impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
                         width: style.outer_border_width,
                         radius: style.radius,
                     },
+                    flags: style.quad_flags,
                 }
             } else {
                 QuadStyle {
@@ -366,6 +373,7 @@ impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
                         width: style.outer_border_width,
                         radius: style.radius,
                     },
+                    flags: style.quad_flags,
                 }
             }
         } else if shared_state.toggled {
@@ -383,6 +391,7 @@ impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
                         width: style.outer_border_width,
                         radius: style.radius,
                     },
+                    flags: style.quad_flags,
                 }
             } else {
                 QuadStyle {
@@ -394,6 +403,7 @@ impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
                         width: style.outer_border_width,
                         radius: style.radius,
                     },
+                    flags: style.quad_flags,
                 }
             }
         } else {
@@ -407,6 +417,7 @@ impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
                         width: style.outer_border_width,
                         radius: style.radius,
                     },
+                    flags: style.quad_flags,
                 }
             } else {
                 QuadStyle {
@@ -416,6 +427,7 @@ impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
                         width: style.outer_border_width,
                         radius: style.radius,
                     },
+                    flags: style.quad_flags,
                 }
             }
         };
@@ -435,6 +447,7 @@ impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
                         radius: style.radius,
                         ..Default::default()
                     },
+                    flags: style.quad_flags,
                 }
             } else {
                 QuadStyle {
@@ -443,6 +456,7 @@ impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
                         radius: style.radius,
                         ..Default::default()
                     },
+                    flags: style.quad_flags,
                 }
             };
 

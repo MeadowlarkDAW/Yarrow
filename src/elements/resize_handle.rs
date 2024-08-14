@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use rootvg::color::{self, RGBA8};
 use rootvg::math::Point;
-use rootvg::quad::SolidQuadBuilder;
+use rootvg::quad::{QuadFlags, SolidQuadBuilder};
 use rootvg::PrimitiveGroup;
 
 use crate::prelude::ElementStyle;
@@ -40,6 +40,11 @@ pub struct ResizeHandleStyle {
     pub drag_handle_color_hover: Option<RGBA8>,
     pub edge_padding_start: f32,
     pub edge_padding_end: f32,
+
+    /// Additional flags for the quad primitives.
+    ///
+    /// By default this is set to `QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL`.
+    pub quad_flags: QuadFlags,
 }
 
 impl Default for ResizeHandleStyle {
@@ -51,6 +56,7 @@ impl Default for ResizeHandleStyle {
             drag_handle_color_hover: None,
             edge_padding_start: 0.0,
             edge_padding_end: 0.0,
+            quad_flags: QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL,
         }
     }
 }
@@ -537,7 +543,8 @@ impl<A: Clone + 'static> Element<A> for ResizeHandleElement<A> {
             primitives.add_solid_quad(
                 SolidQuadBuilder::new(handle_rect.size)
                     .bg_color(handle_opts.color)
-                    .position(handle_rect.origin),
+                    .position(handle_rect.origin)
+                    .flags(style.quad_flags),
             );
         }
     }

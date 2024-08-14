@@ -3,7 +3,7 @@ use std::f32::consts::PI;
 use rootvg::{
     color::{self, RGBA8},
     math::{Angle, Rect, Size, Vector},
-    quad::{QuadPrimitive, Radius},
+    quad::{QuadFlags, QuadPrimitive, Radius},
 };
 
 use crate::{
@@ -30,6 +30,11 @@ pub struct KnobBackStyleQuad {
     pub border_width_hover: Option<f32>,
 
     pub size: SizeType,
+
+    /// Additional flags for the quad primitives.
+    ///
+    /// By default this is set to `QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL`.
+    pub quad_flags: QuadFlags,
 }
 
 impl KnobBackStyleQuad {
@@ -42,6 +47,7 @@ impl KnobBackStyleQuad {
                     width: self.border_width,
                     radius: Radius::CIRCLE,
                 },
+                flags: self.quad_flags,
             },
             VirtualSliderState::Hovered => QuadStyle {
                 bg: self.bg_hover.unwrap_or(self.bg),
@@ -50,6 +56,7 @@ impl KnobBackStyleQuad {
                     width: self.border_width_hover.unwrap_or(self.border_width),
                     radius: Radius::CIRCLE,
                 },
+                flags: self.quad_flags,
             },
             VirtualSliderState::Gesturing => QuadStyle {
                 bg: self
@@ -62,6 +69,7 @@ impl KnobBackStyleQuad {
                     width: self.border_width_hover.unwrap_or(self.border_width),
                     radius: Radius::CIRCLE,
                 },
+                flags: self.quad_flags,
             },
             VirtualSliderState::Disabled => QuadStyle {
                 bg: self.bg_disabled.get(self.bg),
@@ -70,6 +78,7 @@ impl KnobBackStyleQuad {
                     width: self.border_width,
                     radius: Radius::CIRCLE,
                 },
+                flags: self.quad_flags,
             },
         }
     }
@@ -113,6 +122,7 @@ impl Default for KnobBackStyleQuad {
             border_width: 0.0,
             border_width_hover: None,
             size: SizeType::default(),
+            quad_flags: QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL,
         }
     }
 }
@@ -138,6 +148,11 @@ pub struct KnobNotchStyleQuad {
     /// * When `SizeType::Scale(value)`, a value of `0.0` is on the edge of
     /// the knob and a value of `1.0` is in the center of the knob.
     pub edge_offset: SizeType,
+
+    /// Additional flags for the quad primitives.
+    ///
+    /// By default this is set to `QuadFlags::empty()`.
+    pub quad_flags: QuadFlags,
 }
 
 impl KnobNotchStyleQuad {
@@ -150,6 +165,7 @@ impl KnobNotchStyleQuad {
                     width: self.border_width,
                     radius: Radius::CIRCLE,
                 },
+                flags: self.quad_flags,
             },
             VirtualSliderState::Hovered => QuadStyle {
                 bg: self.bg_hover.unwrap_or(self.bg),
@@ -158,6 +174,7 @@ impl KnobNotchStyleQuad {
                     width: self.border_width_hover.unwrap_or(self.border_width),
                     radius: Radius::CIRCLE,
                 },
+                flags: self.quad_flags,
             },
             VirtualSliderState::Gesturing => QuadStyle {
                 bg: self
@@ -170,6 +187,7 @@ impl KnobNotchStyleQuad {
                     width: self.border_width_hover.unwrap_or(self.border_width),
                     radius: Radius::CIRCLE,
                 },
+                flags: self.quad_flags,
             },
             VirtualSliderState::Disabled => QuadStyle {
                 bg: self.bg_disabled.get(self.bg),
@@ -178,6 +196,7 @@ impl KnobNotchStyleQuad {
                     width: self.border_width,
                     radius: Radius::CIRCLE,
                 },
+                flags: self.quad_flags,
             },
         }
     }
@@ -232,6 +251,7 @@ impl Default for KnobNotchStyleQuad {
             border_width_hover: None,
             size: SizeType::Scale(0.2),
             edge_offset: SizeType::Scale(0.18),
+            quad_flags: QuadFlags::empty(),
         }
     }
 }

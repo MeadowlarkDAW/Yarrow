@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use rootvg::math::Point;
+use rootvg::quad::QuadFlags;
 use rootvg::{color, PrimitiveGroup};
 
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
@@ -68,6 +69,11 @@ pub struct SwitchStyle {
     ///
     /// By default this is set to `None`.
     pub cursor_icon: Option<CursorIcon>,
+
+    /// Additional flags for the quad primitives.
+    ///
+    /// By default this is set to `QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL`.
+    pub quad_flags: QuadFlags,
 }
 
 impl Default for SwitchStyle {
@@ -104,6 +110,7 @@ impl Default for SwitchStyle {
             slider_border_color_on_hover: None,
             slider_border_color_on_disabled: Default::default(),
             cursor_icon: None,
+            quad_flags: QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL,
         }
     }
 }
@@ -475,6 +482,7 @@ impl<A: Clone + 'static> Element<A> for SwitchElement<A> {
                         width: style.outer_border_width,
                         radius: style.rounding.into(),
                     },
+                    flags: style.quad_flags,
                 },
                 QuadStyle {
                     bg: if shared_state.toggled {
@@ -495,6 +503,7 @@ impl<A: Clone + 'static> Element<A> for SwitchElement<A> {
                         width: style.slider_border_width,
                         radius: style.rounding.into(),
                     },
+                    flags: style.quad_flags,
                 },
             )
         } else {
@@ -508,6 +517,7 @@ impl<A: Clone + 'static> Element<A> for SwitchElement<A> {
                         width: style.outer_border_width,
                         radius: style.rounding.into(),
                     },
+                    flags: style.quad_flags,
                 },
                 QuadStyle {
                     bg: slider_quad_bg,
@@ -522,6 +532,7 @@ impl<A: Clone + 'static> Element<A> for SwitchElement<A> {
                         },
                         radius: style.rounding.into(),
                     },
+                    flags: style.quad_flags,
                 },
             )
         };

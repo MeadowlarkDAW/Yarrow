@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 use keyboard_types::{Code, CompositionEvent, KeyState, Modifiers};
-use rootvg::quad::{QuadPrimitive, Radius, SolidQuadBuilder, SolidQuadPrimitive};
+use rootvg::quad::{QuadFlags, QuadPrimitive, Radius, SolidQuadBuilder, SolidQuadPrimitive};
 use rootvg::text::glyphon::cosmic_text::{Motion, Selection};
 use rootvg::text::glyphon::{Action, Affinity, Cursor, Edit};
 use rootvg::text::{
@@ -158,6 +158,11 @@ pub struct TextInputStyle {
     ///
     /// By default this is set to half a second.
     pub cursor_blink_interval: Duration,
+
+    /// Additional flags for the quad primitives.
+    ///
+    /// By default this is set to `QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL`.
+    pub quad_flags: QuadFlags,
 }
 
 impl Default for TextInputStyle {
@@ -192,6 +197,7 @@ impl Default for TextInputStyle {
             back_border_width_focused: None,
             back_border_radius: Radius::default(),
             cursor_blink_interval: Duration::from_millis(500),
+            quad_flags: QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL,
         }
     }
 }
@@ -1265,6 +1271,7 @@ impl TextInputInner {
                     width: style.back_border_width,
                     radius: style.back_border_radius,
                 },
+                flags: style.quad_flags,
             };
 
             if !quad_style.is_transparent() {
@@ -1287,6 +1294,7 @@ impl TextInputInner {
                             width: border_width,
                             radius: style.back_border_radius,
                         },
+                        flags: style.quad_flags,
                     }
                     .create_primitive(bounds),
                 );
@@ -1308,6 +1316,7 @@ impl TextInputInner {
                             width: border_width,
                             radius: style.back_border_radius,
                         },
+                        flags: style.quad_flags,
                     }
                     .create_primitive(bounds),
                 );
@@ -1322,6 +1331,7 @@ impl TextInputInner {
                             width: style.back_border_width,
                             radius: style.back_border_radius,
                         },
+                        flags: style.quad_flags,
                     }
                     .create_primitive(bounds),
                 );
@@ -1359,6 +1369,7 @@ impl TextInputInner {
                                 highlight_y + bounds.min_y(),
                             ))
                             .bg_color(style.highlight_bg_color)
+                            .flags(style.quad_flags)
                             .into(),
                     );
                 }
@@ -1442,6 +1453,7 @@ impl TextInputInner {
                             .cursor_color
                             .unwrap_or(style.text_color_focused.unwrap_or(style.text_color)),
                     )
+                    .flags(style.quad_flags)
                     .into(),
             );
         }

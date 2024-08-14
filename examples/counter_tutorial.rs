@@ -183,6 +183,7 @@ impl MyStyle {
                 back_quad: QuadStyle {
                     bg: background_hex(0x641e50),
                     border: border(hex(0xc83ca0), 2.0, radius(10.0)),
+                    ..Default::default()
                 },
                 text_padding: padding_all_same(10.0),
                 ..Default::default()

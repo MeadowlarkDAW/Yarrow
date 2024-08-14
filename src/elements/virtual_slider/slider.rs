@@ -3,7 +3,7 @@ use std::{any::Any, rc::Rc};
 use rootvg::{
     color::{self, RGBA8},
     math::{Point, Rect, Size},
-    quad::Radius,
+    quad::{QuadFlags, Radius},
     PrimitiveGroup,
 };
 
@@ -103,6 +103,11 @@ pub struct SliderStyleModern {
 
     pub fill_hide_threshold_normal: f64,
     pub fill_mode: SliderFillMode,
+
+    /// Additional flags for the quad primitives.
+    ///
+    /// By default this is set to `QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL`.
+    pub quad_flags: QuadFlags,
 }
 
 impl SliderStyleModern {
@@ -122,6 +127,7 @@ impl SliderStyleModern {
                             .back_border_radius_hover
                             .unwrap_or(self.back_border_radius),
                     },
+                    flags: self.quad_flags,
                 },
                 handle_quad: QuadStyle {
                     bg: self
@@ -139,6 +145,7 @@ impl SliderStyleModern {
                             .handle_border_radius_hover
                             .unwrap_or(self.handle_border_radius),
                     },
+                    flags: self.quad_flags,
                 },
                 fill_quad: QuadStyle {
                     bg: self
@@ -150,6 +157,7 @@ impl SliderStyleModern {
                             .unwrap_or(self.back_border_radius),
                         ..Default::default()
                     },
+                    flags: self.quad_flags,
                 },
                 handle_height: self.handle_height_hover.unwrap_or(self.handle_height),
                 handle_padding: self.handle_padding_hover.unwrap_or(self.handle_padding),
@@ -172,6 +180,7 @@ impl SliderStyleModern {
                             .back_border_radius_hover
                             .unwrap_or(self.back_border_radius),
                     },
+                    flags: self.quad_flags,
                 },
                 handle_quad: QuadStyle {
                     bg: self.handle_bg_hover.unwrap_or(self.handle_bg),
@@ -186,6 +195,7 @@ impl SliderStyleModern {
                             .handle_border_radius_hover
                             .unwrap_or(self.handle_border_radius),
                     },
+                    flags: self.quad_flags,
                 },
                 fill_quad: QuadStyle {
                     bg: self.fill_bg_hover.unwrap_or(self.fill_bg),
@@ -195,6 +205,7 @@ impl SliderStyleModern {
                             .unwrap_or(self.back_border_radius),
                         ..Default::default()
                     },
+                    flags: self.quad_flags,
                 },
                 handle_height: self.handle_height_hover.unwrap_or(self.handle_height),
                 handle_padding: self.handle_padding_hover.unwrap_or(self.handle_padding),
@@ -211,6 +222,7 @@ impl SliderStyleModern {
                         width: self.back_border_width,
                         radius: self.back_border_radius,
                     },
+                    flags: self.quad_flags,
                 },
                 handle_quad: QuadStyle {
                     bg: self.handle_bg,
@@ -219,6 +231,7 @@ impl SliderStyleModern {
                         width: self.handle_border_width,
                         radius: self.handle_border_radius,
                     },
+                    flags: self.quad_flags,
                 },
                 fill_quad: QuadStyle {
                     bg: self.fill_bg,
@@ -226,6 +239,7 @@ impl SliderStyleModern {
                         radius: self.back_border_radius,
                         ..Default::default()
                     },
+                    flags: self.quad_flags,
                 },
                 handle_height: self.handle_height,
                 handle_padding: self.handle_padding,
@@ -240,6 +254,7 @@ impl SliderStyleModern {
                         width: self.back_border_width,
                         radius: self.back_border_radius,
                     },
+                    flags: self.quad_flags,
                 },
                 handle_quad: QuadStyle {
                     bg: self.handle_bg_disabled.get(self.handle_bg),
@@ -250,6 +265,7 @@ impl SliderStyleModern {
                         width: self.handle_border_width,
                         radius: self.handle_border_radius,
                     },
+                    flags: self.quad_flags,
                 },
                 fill_quad: QuadStyle {
                     bg: self.fill_bg_disabled.get(self.fill_bg),
@@ -257,6 +273,7 @@ impl SliderStyleModern {
                         radius: self.back_border_radius,
                         ..Default::default()
                     },
+                    flags: self.quad_flags,
                 },
                 handle_height: self.handle_height,
                 handle_padding: self.handle_padding,
@@ -306,6 +323,7 @@ impl Default for SliderStyleModern {
             handle_fill_spacing_hover: None,
             fill_hide_threshold_normal: 0.005,
             fill_mode: SliderFillMode::default(),
+            quad_flags: QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL,
         }
     }
 }

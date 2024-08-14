@@ -85,6 +85,7 @@ impl Application for MyApp {
                             back_quad: QuadStyle {
                                 bg: background_rgb(100, 30, 80),
                                 border: border(rgb(200, 60, 160), 2.0, radius(10.0)),
+                                ..Default::default()
                             },
                             text_padding: padding_all_same(10.0),
                             ..Default::default()
@@ -97,22 +98,15 @@ impl Application for MyApp {
                     // The clear color of the window can be set at any time.
                     cx.view.clear_color = rgb(20, 20, 20).into();
 
-                    self.main_window_elements =
-                        Some(MainWindowElements::build(&mut cx));
+                    self.main_window_elements = Some(MainWindowElements::build(&mut cx));
 
-                    self.main_window_elements
-                        .as_mut()
-                        .unwrap()
-                        .layout(&mut cx);
+                    self.main_window_elements.as_mut().unwrap().layout(&mut cx);
                 }
             }
             AppWindowEvent::WindowResized => {
                 if window_id == MAIN_WINDOW {
                     let mut cx = cx.window_context(MAIN_WINDOW).unwrap();
-                    self.main_window_elements
-                        .as_mut()
-                        .unwrap()
-                        .layout(&mut cx);
+                    self.main_window_elements.as_mut().unwrap().layout(&mut cx);
                 }
             }
             _ => {}

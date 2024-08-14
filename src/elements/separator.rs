@@ -1,6 +1,7 @@
 use rootvg::{
     color::RGBA8,
     math::{Point, Rect, Size, ZIndex},
+    quad::QuadFlags,
     PrimitiveGroup,
 };
 
@@ -58,6 +59,7 @@ impl Default for SeparatorStyle {
             quad_style: QuadStyle {
                 bg: Background::Solid(RGBA8::new(150, 150, 150, 40)),
                 border: BorderStyle::default(),
+                flags: QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL,
             },
             size: SeparatorSizeType::default(),
             align: Align::Center,

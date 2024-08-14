@@ -2,7 +2,7 @@ use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
 use rootvg::math::Point;
-use rootvg::quad::Radius;
+use rootvg::quad::{QuadFlags, Radius};
 use rootvg::text::{CustomGlyphID, FontSystem, TextProperties};
 use rootvg::PrimitiveGroup;
 
@@ -238,6 +238,11 @@ pub struct ToggleButtonStyle {
     ///
     /// By default this is set to `None`.
     pub cursor_icon: Option<CursorIcon>,
+
+    /// Additional flags for the quad primitives.
+    ///
+    /// By default this is set to `QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL`.
+    pub quad_flags: QuadFlags,
 }
 
 impl Default for ToggleButtonStyle {
@@ -288,6 +293,7 @@ impl Default for ToggleButtonStyle {
             back_border_width_off_down: None,
             back_border_radius: Default::default(),
             cursor_icon: None,
+            quad_flags: QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL,
         }
     }
 }
@@ -319,6 +325,7 @@ impl ToggleButtonStyle {
                                 width: self.back_border_width_on.unwrap_or(self.back_border_width),
                                 radius: self.back_border_radius,
                             },
+                            flags: self.quad_flags,
                         },
                     )
                 } else {
@@ -332,6 +339,7 @@ impl ToggleButtonStyle {
                                 width: self.back_border_width,
                                 radius: self.back_border_radius,
                             },
+                            flags: self.quad_flags,
                         },
                     )
                 }
@@ -361,6 +369,7 @@ impl ToggleButtonStyle {
                                 ),
                                 radius: self.back_border_radius,
                             },
+                            flags: self.quad_flags,
                         },
                     )
                 } else {
@@ -379,6 +388,7 @@ impl ToggleButtonStyle {
                                     .unwrap_or(self.back_border_width),
                                 radius: self.back_border_radius,
                             },
+                            flags: self.quad_flags,
                         },
                     )
                 }
@@ -408,6 +418,7 @@ impl ToggleButtonStyle {
                                 ),
                                 radius: self.back_border_radius,
                             },
+                            flags: self.quad_flags,
                         },
                     )
                 } else {
@@ -426,6 +437,7 @@ impl ToggleButtonStyle {
                                     .unwrap_or(self.back_border_width),
                                 radius: self.back_border_radius,
                             },
+                            flags: self.quad_flags,
                         },
                     )
                 }
@@ -451,6 +463,7 @@ impl ToggleButtonStyle {
                                 width: self.back_border_width_on.unwrap_or(self.back_border_width),
                                 radius: self.back_border_radius,
                             },
+                            flags: self.quad_flags,
                         },
                     )
                 } else {
@@ -467,6 +480,7 @@ impl ToggleButtonStyle {
                                 width: self.back_border_width_on.unwrap_or(self.back_border_width),
                                 radius: self.back_border_radius,
                             },
+                            flags: self.quad_flags,
                         },
                     )
                 }

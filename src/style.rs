@@ -1,6 +1,6 @@
 use rootvg::color;
 use rootvg::math::Rect;
-use rootvg::quad::{GradientQuad, QuadPrimitive, SolidQuad};
+use rootvg::quad::{GradientQuad, QuadFlags, QuadPrimitive, SolidQuad};
 
 use crate::prelude::ElementStyle;
 use crate::theme::DEFAULT_DISABLED_ALPHA_MULTIPLIER;
@@ -77,7 +77,7 @@ pub struct ShadowStyle {
 }
 */
 
-#[derive(Default, Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QuadStyle {
     /// The background of the quad
@@ -85,6 +85,11 @@ pub struct QuadStyle {
 
     /// The [`BorderStyle`] of the quad
     pub border: BorderStyle,
+
+    /// Additional flags for the quad primitives.
+    ///
+    /// By default this is set to `QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL`.
+    pub flags: QuadFlags,
     /*
     /// The [`ShadowStyle`] of the quad
     ///
@@ -94,14 +99,33 @@ pub struct QuadStyle {
     */
 }
 
+impl Default for QuadStyle {
+    fn default() -> Self {
+        Self {
+            bg: Background::default(),
+            border: BorderStyle::default(),
+            flags: QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL,
+        }
+    }
+}
+
 impl QuadStyle {
     pub const TRANSPARENT: Self = Self {
         bg: Background::Solid(rootvg::color::TRANSPARENT),
         border: BorderStyle::TRANSPARENT,
+        flags: QuadFlags::empty(),
     };
 
     pub const fn new(bg: Background, border: BorderStyle) -> Self {
-        Self { bg, border }
+        Self {
+            bg,
+            border,
+            flags: QuadFlags::empty(),
+        }
+    }
+
+    pub const fn new_with_flags(bg: Background, border: BorderStyle, flags: QuadFlags) -> Self {
+        Self { bg, border, flags }
     }
 
     pub fn is_transparent(&self) -> bool {
@@ -115,6 +139,7 @@ impl QuadStyle {
                     bounds,
                     bg_color: (*bg_color).into(),
                     border: self.border.into(),
+                    flags: self.flags,
                     //shadow: self.shadow.into(),
                 }
                 .into(),
@@ -124,6 +149,7 @@ impl QuadStyle {
                     bounds,
                     bg_gradient: *bg_gradient,
                     border: self.border.into(),
+                    flags: self.flags,
                 }
                 .into(),
             ),
