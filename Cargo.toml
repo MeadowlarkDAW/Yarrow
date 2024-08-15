@@ -40,7 +40,7 @@ wgpu = { version = "22", default-features = false, features = ["wgsl"] }
 window_clipboard = "0.4.1"
 thiserror = "1.0.61"
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
-rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "4c29b81fe201e160d46bdce438a74ab4f2f51467" }
+rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "d05de6f0da1412603404ab0d43d2935a160b8cd0" }
 #rootvg = { path = "../rootvg" }
 
 [dev-dependencies]

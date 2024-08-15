@@ -9,9 +9,9 @@ pub const TEXT_PADDING: Padding = padding_vh(6.0, 7.0);
 pub const ICON_PADDING: Padding = padding_vh(4.0, 5.0);
 pub const TEXT_ICON_SPACING: f32 = -8.0;
 
-pub const TEXT_COLOR: RGBA8 = gray_a(255, 200);
+pub const TEXT_COLOR: RGBA8 = gray_a(255, 240);
 pub const TEXT_COLOR_BRIGHT: RGBA8 = gray_a(255, 255);
-pub const TEXT_COLOR_DIMMED: RGBA8 = gray_a(255, 100);
+pub const TEXT_COLOR_DIMMED: RGBA8 = gray_a(255, 140);
 
 pub const BUTTON_BG_COLOR: RGBA8 = gray(42);
 pub const BUTTON_BG_HOVER_COLOR: RGBA8 = gray(52);
@@ -31,14 +31,14 @@ pub const TEXT_INPUT_BG_COLOR: RGBA8 = gray(24);
 pub const DROPDOWN_BG_COLOR: RGBA8 = gray(27);
 pub const DROPDOWN_BORDER_COLOR: RGBA8 = gray(105);
 
-pub const TAB_OFF_COLOR_HOVER: RGBA8 = gray_a(255, 5);
-pub const TAB_TOGGLED_COLOR: RGBA8 = gray_a(255, 6);
-pub const TAB_TOGGLED_COLOR_HOVER: RGBA8 = gray_a(255, 8);
+pub const TAB_OFF_COLOR_HOVER: RGBA8 = gray_a(255, 22);
+pub const TAB_TOGGLED_COLOR: RGBA8 = gray_a(255, 32);
+pub const TAB_TOGGLED_COLOR_HOVER: RGBA8 = gray_a(255, 42);
 
-pub const SCROLL_BAR_COLOR: RGBA8 = gray_a(255, 33);
-pub const SCROLL_BAR_COLOR_HOVER: RGBA8 = gray_a(255, 70);
+pub const SCROLL_BAR_COLOR: RGBA8 = gray_a(255, 108);
+pub const SCROLL_BAR_COLOR_HOVER: RGBA8 = gray_a(255, 145);
 
-pub const SEPERATOR_COLOR: RGBA8 = gray_a(202, 6);
+pub const SEPERATOR_COLOR: RGBA8 = gray_a(255, 20);
 
 pub const PANEL_BG_COLOR: RGBA8 = gray(33);
 
@@ -300,6 +300,20 @@ pub fn label(config: &Config) -> LabelStyle {
     }
 }
 
+pub fn paragraph(config: &Config) -> ParagraphStyle {
+    ParagraphStyle {
+        text_properties: TextProperties {
+            metrics: config.text_metrics,
+            attrs: config.text_attrs,
+            wrap: rootvg::text::Wrap::WordOrGlyph,
+            shaping: rootvg::text::Shaping::Advanced,
+            ..Default::default()
+        },
+        text_color: TEXT_COLOR,
+        ..Default::default()
+    }
+}
+
 pub fn panel() -> QuadStyle {
     QuadStyle {
         bg: background(PANEL_BG_COLOR),
@@ -434,6 +448,8 @@ pub fn load(config: Config, res: &mut ResourceCtx) {
         .add(ClassID::default(), true, dropdown_menu(&config));
     res.style_system
         .add(ClassID::default(), true, label(&config));
+    res.style_system
+        .add(ClassID::default(), true, paragraph(&config));
     res.style_system.add(CLASS_PANEL, true, panel());
     res.style_system.add(CLASS_MENU, true, menu_button(&config));
     res.style_system.add(

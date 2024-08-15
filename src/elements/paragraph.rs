@@ -25,7 +25,7 @@ use super::quad::QuadStyle;
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParagraphStyle {
     /// The text properties.
-    pub properties: TextProperties,
+    pub text_properties: TextProperties,
 
     /// The color of the font
     ///
@@ -53,7 +53,7 @@ pub struct ParagraphStyle {
 impl Default for ParagraphStyle {
     fn default() -> Self {
         Self {
-            properties: TextProperties {
+            text_properties: TextProperties {
                 shaping: rootvg::text::Shaping::Advanced,
                 wrap: rootvg::text::Wrap::WordOrGlyph,
                 ..Default::default()
@@ -112,7 +112,7 @@ impl ParagraphInner {
 
         let text_buffer = RcTextBuffer::new(
             &text,
-            style.properties,
+            style.text_properties,
             Some(width),
             None,
             false,
@@ -220,7 +220,7 @@ impl ParagraphInner {
 
     pub fn sync_new_style(&mut self, style: &ParagraphStyle, font_system: &mut FontSystem) {
         self.text_buffer
-            .set_text_and_props(&self.text, style.properties, font_system);
+            .set_text_and_props(&self.text, style.text_properties, font_system);
         self.text_size_needs_calculated = true;
         self.padded_size_needs_calculated = true;
     }
