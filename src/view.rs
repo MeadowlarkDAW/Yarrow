@@ -241,10 +241,15 @@ impl<A: Clone + 'static> View<A> {
             .map(|c| c.scroll_offset())
     }
 
-    pub fn set_num_additional_scissor_rects(&mut self, num: usize) {
-        self.scissor_rects.resize_with(1 + num, || {
-            ScissorRect::new(RectI32::default(), Vector::default())
-        })
+    pub fn add_additional_scissor_rects(&mut self, additional: usize) {
+        self.scissor_rects
+            .resize_with(self.scissor_rects.len() + additional, || {
+                ScissorRect::new(RectI32::default(), Vector::default())
+            })
+    }
+
+    pub fn num_scissor_rects(&self) -> usize {
+        self.scissor_rects.len()
     }
 
     // TODO: Custom error type.

@@ -130,7 +130,7 @@ impl MyApp {
 
     fn build_main_window(&mut self, cx: &mut WindowContext<'_, MyAction>) {
         cx.view.clear_color = self.style.clear_color.into();
-        cx.view.set_num_additional_scissor_rects(2);
+        cx.view.add_additional_scissor_rects(2);
 
         // Push the main Z index onto the stack to make it the default.
         cx.push_z_index(MAIN_Z_INDEX);
