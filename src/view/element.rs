@@ -24,7 +24,7 @@ pub use handle::ElementHandle;
 use rootvg::math::Point;
 use rootvg::PrimitiveGroup;
 
-use super::{ScissorRectID, MAIN_SCISSOR_RECT};
+use super::ScissorRectID;
 use crate::action_queue::ActionSender;
 use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::Align2;
@@ -94,7 +94,7 @@ impl<A: Clone + 'static> ElementBuilder<A> {
             z_index: 0,
             rect: Rect::new(Point::new(0.0, 0.0), Size::new(0.0, 0.0)),
             manually_hidden: false,
-            scissor_rect_id: MAIN_SCISSOR_RECT,
+            scissor_rect_id: ScissorRectID::DEFAULT,
             class: 0,
         }
     }

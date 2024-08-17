@@ -55,6 +55,6 @@ pub use crate::vg::text::{
 };
 pub use crate::view::{
     element::{ElementHandle, ElementStyle},
-    ScissorRectID, TooltipInfo, View, MAIN_SCISSOR_RECT,
+    ScissorRectID, TooltipInfo, View,
 };
 pub use crate::window::*;

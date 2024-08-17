@@ -12,6 +12,8 @@
 //
 // ---------------------------------------------------------------------------------
 
+use std::u32;
+
 use thunderdome::Arena;
 
 use super::{ElementEntry, ElementID, EntryStackData};
@@ -19,11 +21,20 @@ use crate::math::{PointI32, RectI32, Vector};
 use crate::stmpsc_queue;
 use crate::view::element::{ElementModification, ElementModificationType};
 
-/// `ScissorRectID` of `0` means to use use the main View itself as the
-/// scissoring rectangle.
-pub const MAIN_SCISSOR_RECT: ScissorRectID = 0;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ScissorRectID(pub u32);
 
-pub type ScissorRectID = u8;
+impl ScissorRectID {
+    /// `ScissorRectID` of `u32::MAX` means to use use the main View itself as the
+    /// scissoring rectangle.
+    pub const DEFAULT: Self = Self(u32::MAX);
+}
+
+impl Default for ScissorRectID {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
 
 pub(super) struct ScissorRect {
     rect: RectI32,

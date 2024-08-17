@@ -2,7 +2,7 @@ use rootvg::PrimitiveGroup;
 
 use crate::math::{Rect, Vector, ZIndex};
 
-use super::{ElementFlags, ElementID, EntryStackData, ScissorRectID};
+use super::{ElementFlags, ElementID, EntryStackData};
 
 pub(super) struct CachedElementRectForPointerEvent {
     pub z_index: ZIndex,
@@ -15,7 +15,7 @@ pub(super) struct CachedElementPrimitives {
     pub element_id: ElementID,
     pub offset: Vector,
     pub z_index: ZIndex,
-    pub scissor_rect_id: ScissorRectID,
+    pub scissor_rect_index: usize,
     pub visible: bool,
     pub dirty: bool,
     pub primitives: PrimitiveGroup,
@@ -26,14 +26,14 @@ impl CachedElementPrimitives {
         element_id: ElementID,
         offset: Vector,
         z_index: ZIndex,
-        scissor_rect_id: ScissorRectID,
+        scissor_rect_index: usize,
         visible: bool,
     ) -> Self {
         Self {
             element_id,
             offset,
             z_index,
-            scissor_rect_id,
+            scissor_rect_index,
             visible,
             dirty: true,
             primitives: PrimitiveGroup::new(),

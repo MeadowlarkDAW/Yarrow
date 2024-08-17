@@ -2,7 +2,7 @@ use crate::style::MyStyle;
 use crate::{MyAction, OVERLAY_Z_INDEX, RIGHT_CLICK_AREA_Z_INDEX};
 use yarrow::prelude::*;
 
-pub const SCROLL_AREA_SCISSOR_RECT: ScissorRectID = 2;
+const SCROLL_AREA_SRECT: ScissorRectID = ScissorRectID(1);
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
@@ -49,7 +49,7 @@ impl Elements {
             .z_index(OVERLAY_Z_INDEX)
             .build(cx);
 
-        cx.with_scissor_rect(SCROLL_AREA_SCISSOR_RECT, |cx| Self {
+        cx.with_scissor_rect(SCROLL_AREA_SRECT, |cx| Self {
             knob_0: Knob::builder(0)
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
                 .on_open_text_entry(|info| Action::OpenTextInput(info).into())
@@ -221,7 +221,7 @@ impl Elements {
             }
             Action::ScrollOffsetChanged(scroll_offset) => {
                 cx.view
-                    .update_scissor_rect(SCROLL_AREA_SCISSOR_RECT, None, Some(scroll_offset))
+                    .update_scissor_rect(SCROLL_AREA_SRECT, None, Some(scroll_offset))
                     .unwrap();
             }
         }
@@ -276,11 +276,7 @@ impl Elements {
     ) {
         self.scroll_area.el.set_rect(content_rect);
         cx.view
-            .update_scissor_rect(
-                SCROLL_AREA_SCISSOR_RECT,
-                Some(self.scroll_area.el.rect()),
-                None,
-            )
+            .update_scissor_rect(SCROLL_AREA_SRECT, Some(self.scroll_area.el.rect()), None)
             .unwrap();
 
         let start_pos = Point::new(style.content_padding, style.content_padding);

@@ -15,7 +15,7 @@ use crate::math::{
 use crate::prelude::{ActionReceiver, ResourceCtx};
 use crate::style::ClassID;
 use crate::{view::ViewConfig, View};
-use crate::{CursorIcon, ScissorRectID, MAIN_SCISSOR_RECT};
+use crate::{CursorIcon, ScissorRectID};
 
 #[cfg(feature = "winit")]
 mod winit_backend;
@@ -576,7 +576,7 @@ impl<'a, A: Clone + 'static> WindowContext<'a, A> {
         self.scissor_rect_id_stack
             .last()
             .copied()
-            .unwrap_or(MAIN_SCISSOR_RECT)
+            .unwrap_or_default()
     }
 
     /// Get the current style class ID from the stack (peek)

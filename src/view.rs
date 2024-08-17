@@ -42,7 +42,7 @@ mod scissor_rect;
 
 use self::element::ChangeFocusRequest;
 use self::element::RenderContext;
-pub use self::scissor_rect::{ScissorRectID, MAIN_SCISSOR_RECT};
+pub use self::scissor_rect::ScissorRectID;
 
 use self::cache::{
     sync_element_rect_cache, CachedElementPrimitives, CachedElementRectForPointerEvent,
@@ -106,6 +106,7 @@ pub struct View<A: Clone + 'static> {
     context: ViewContext<A>,
 
     element_arena: Arena<ElementEntry<A>>,
+    scissor_rect_id_to_index_map: FxHashMap<ScissorRectID, usize>,
     scissor_rects: Vec<ScissorRect>,
 
     mod_queue_receiver: stmpsc_queue::Receiver<ElementModification>,
@@ -162,6 +163,8 @@ impl<A: Clone + 'static> View<A> {
         );
 
         let scissor_rects = vec![ScissorRect::new(view_rect, Vector::default())];
+        let mut scissor_rect_id_to_index_map = FxHashMap::<ScissorRectID, usize>::default();
+        scissor_rect_id_to_index_map.insert(ScissorRectID::DEFAULT, 0);
 
         let capacity = preallocate_for_this_many_elements as usize;
 
@@ -187,6 +190,7 @@ impl<A: Clone + 'static> View<A> {
             },
 
             element_arena: Arena::with_capacity(capacity),
+            scissor_rect_id_to_index_map,
             scissor_rects,
 
             mod_queue_receiver,
@@ -229,27 +233,14 @@ impl<A: Clone + 'static> View<A> {
         self.hide_tooltip_action = Some(Box::new(on_hide_tooltip));
     }
 
-    pub fn scissor_rect(&self, scissor_rect_id: ScissorRectID) -> Option<RectI32> {
-        self.scissor_rects
-            .get(usize::from(scissor_rect_id))
-            .map(|c| c.rect())
+    pub fn scissor_rect(&mut self, scissor_rect_id: ScissorRectID) -> RectI32 {
+        let i = self.get_scissor_rect_index(scissor_rect_id);
+        self.scissor_rects[i].rect()
     }
 
-    pub fn scissor_rect_scroll_offset(&self, scissor_rect_id: ScissorRectID) -> Option<Vector> {
-        self.scissor_rects
-            .get(usize::from(scissor_rect_id))
-            .map(|c| c.scroll_offset())
-    }
-
-    pub fn add_additional_scissor_rects(&mut self, additional: usize) {
-        self.scissor_rects
-            .resize_with(self.scissor_rects.len() + additional, || {
-                ScissorRect::new(RectI32::default(), Vector::default())
-            })
-    }
-
-    pub fn num_scissor_rects(&self) -> usize {
-        self.scissor_rects.len()
+    pub fn scissor_rect_scroll_offset(&mut self, scissor_rect_id: ScissorRectID) -> Vector {
+        let i = self.get_scissor_rect_index(scissor_rect_id);
+        self.scissor_rects[i].scroll_offset()
     }
 
     // TODO: Custom error type.
@@ -259,25 +250,15 @@ impl<A: Clone + 'static> View<A> {
         new_rect: Option<Rect>,
         new_scroll_offset: Option<Vector>,
     ) -> Result<(), ()> {
-        if scissor_rect_id == MAIN_SCISSOR_RECT {
+        if scissor_rect_id == ScissorRectID::DEFAULT {
             return Err(());
         }
 
         let new_rect: Option<RectI32> = new_rect.map(|r| r.round().cast());
 
-        if let Some(new_rect) = new_rect {
-            let view_rect = self.scissor_rects[0].rect();
-            if !view_rect.contains_rect(&new_rect) {
-                // TODO: Log warning.
-            }
-        };
+        let i = self.get_scissor_rect_index(scissor_rect_id);
 
-        let scissor_rect = self
-            .scissor_rects
-            .get_mut(usize::from(scissor_rect_id))
-            .ok_or(())?;
-
-        scissor_rect.update(
+        self.scissor_rects[i].update(
             new_rect,
             new_scroll_offset,
             &mut self.context.mod_queue_sender,
@@ -303,20 +284,13 @@ impl<A: Clone + 'static> View<A> {
 
         let flags = element.flags();
 
-        // If the scissoring rectangle ID is invalid, default to the view scissoring rectangle.
-        let scissor_rect_id = if usize::from(scissor_rect_id) >= self.scissor_rects.len() {
-            // TODO: Log warning.
-
-            MAIN_SCISSOR_RECT
-        } else {
-            scissor_rect_id
-        };
+        let scissor_rect_index = self.get_scissor_rect_index(scissor_rect_id);
 
         let mut stack_data = EntryStackData {
-            rect: rect,
+            rect,
             visible_rect: None,
             offset_from_scissor_rect_origin: rect.origin.to_vector(),
-            scissor_rect_id,
+            scissor_rect_index,
             z_index,
             flags,
             manually_hidden,
@@ -342,7 +316,7 @@ impl<A: Clone + 'static> View<A> {
 
         let element_entry = self.element_arena.get_mut(element_id.0).unwrap();
 
-        self.scissor_rects[usize::from(scissor_rect_id)]
+        self.scissor_rects[scissor_rect_index]
             .add_element(&mut element_entry.stack_data, element_id);
 
         if element_entry
@@ -372,7 +346,7 @@ impl<A: Clone + 'static> View<A> {
                 element_id,
                 element_entry.stack_data.rect.origin.to_vector(),
                 element_entry.stack_data.z_index,
-                element_entry.stack_data.scissor_rect_id,
+                element_entry.stack_data.scissor_rect_index,
                 element_entry.stack_data.visible(),
             ));
         }
@@ -514,6 +488,18 @@ impl<A: Clone + 'static> View<A> {
                 EventCaptureStatus::NotCaptured
             }
         }
+    }
+
+    fn get_scissor_rect_index(&mut self, scissor_rect_id: ScissorRectID) -> usize {
+        *self
+            .scissor_rect_id_to_index_map
+            .entry(scissor_rect_id)
+            .or_insert_with(|| {
+                let i = self.scissor_rects.len();
+                self.scissor_rects
+                    .push(ScissorRect::new(RectI32::default(), Vector::default()));
+                i
+            })
     }
 
     fn handle_window_shown(&mut self, res: &mut ResourceCtx, clipboard: &mut Clipboard) {
@@ -1827,7 +1813,7 @@ impl<A: Clone + 'static> View<A> {
             }
         }
 
-        self.scissor_rects[usize::from(element_entry.stack_data.scissor_rect_id)]
+        self.scissor_rects[usize::from(element_entry.stack_data.scissor_rect_index)]
             .remove_element(&element_entry.stack_data, &mut self.element_arena);
 
         if let Some(info) = &self.element_with_active_tooltip {
@@ -1912,7 +1898,7 @@ impl<A: Clone + 'static> View<A> {
                 }
 
                 vg.set_z_index(cache.z_index);
-                vg.set_scissor_rect(self.scissor_rects[cache.scissor_rect_id as usize].rect());
+                vg.set_scissor_rect(self.scissor_rects[cache.scissor_rect_index].rect());
                 vg.add_group_with_offset(&cache.primitives, cache.offset);
             }
         }
@@ -1972,7 +1958,7 @@ struct EntryStackData {
     visible_rect: Option<Rect>,
     offset_from_scissor_rect_origin: Vector,
 
-    scissor_rect_id: ScissorRectID,
+    scissor_rect_index: usize,
     z_index: ZIndex,
 
     class: ClassID,
@@ -1990,7 +1976,7 @@ struct EntryStackData {
 impl EntryStackData {
     #[inline]
     fn update_layout(&mut self, scissor_rects: &[ScissorRect]) {
-        let scissor_rect = &scissor_rects[self.scissor_rect_id as usize];
+        let scissor_rect = &scissor_rects[self.scissor_rect_index];
         let scissor_rect_origin: Point = scissor_rect.origin().cast();
 
         self.rect.origin = scissor_rect_origin + self.offset_from_scissor_rect_origin
@@ -2005,7 +1991,7 @@ impl EntryStackData {
         {
             None
         } else {
-            let scissor_rect: Rect = scissor_rects[self.scissor_rect_id as usize].rect().cast();
+            let scissor_rect: Rect = scissor_rects[self.scissor_rect_index].rect().cast();
             scissor_rect.intersection(&self.rect)
         };
     }
