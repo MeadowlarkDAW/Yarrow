@@ -327,8 +327,7 @@ impl Elements {
             }
             Action::ScrollOffsetChanged(scroll_offset) => {
                 cx.view
-                    .update_scissor_rect(SCROLL_AREA_SRECT, None, Some(scroll_offset))
-                    .unwrap();
+                    .update_scissor_rect(SCROLL_AREA_SRECT, None, Some(scroll_offset));
             }
         }
 
@@ -345,8 +344,7 @@ impl Elements {
 
         self.scroll_area.el.set_rect(content_rect);
         cx.view
-            .update_scissor_rect(SCROLL_AREA_SRECT, Some(self.scroll_area.el.rect()), None)
-            .unwrap();
+            .update_scissor_rect(SCROLL_AREA_SRECT, Some(self.scroll_area.el.rect()), None);
 
         let start_pos = Point::new(style.content_padding, style.content_padding);
 
