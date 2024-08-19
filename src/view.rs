@@ -233,25 +233,45 @@ impl<A: Clone + 'static> View<A> {
         self.hide_tooltip_action = Some(Box::new(on_hide_tooltip));
     }
 
+    /// Get the current rectangle of the given scissoring rectangle.
+    ///
+    /// If a scissoring rectangle with the given ID does not exist, then
+    /// one will be created.
     pub fn scissor_rect(&mut self, scissor_rect_id: ScissorRectID) -> RectI32 {
         let i = self.get_scissor_rect_index(scissor_rect_id);
         self.scissor_rects[i].rect()
     }
 
+    /// Get the current scroll offset vector of the given scissoring rectangle.
+    ///
+    /// If a scissoring rectangle with the given ID does not exist, then
+    /// one will be created.
     pub fn scissor_rect_scroll_offset(&mut self, scissor_rect_id: ScissorRectID) -> Vector {
         let i = self.get_scissor_rect_index(scissor_rect_id);
         self.scissor_rects[i].scroll_offset()
     }
 
-    // TODO: Custom error type.
+    /// Update the given scissoring rectangle with the given values.
+    ///
+    /// If `new_rect` or `new_scroll_offset` is `None`, then the
+    /// current respecting value will not be changed.
+    ///
+    /// This will *NOT* trigger an update unless the value has changed,
+    /// so this method is relatively cheap to call frequently.
+    ///
+    /// If a scissoring rectangle with the given ID does not exist, then
+    /// one will be created.
+    ///
+    /// If `scissor_rect_id == ScissorRectID::DEFAULT`, then this
+    /// will do nothing.
     pub fn update_scissor_rect(
         &mut self,
         scissor_rect_id: ScissorRectID,
         new_rect: Option<Rect>,
         new_scroll_offset: Option<Vector>,
-    ) -> Result<(), ()> {
+    ) {
         if scissor_rect_id == ScissorRectID::DEFAULT {
-            return Err(());
+            return;
         }
 
         let new_rect: Option<RectI32> = new_rect.map(|r| r.round().cast());
@@ -263,8 +283,6 @@ impl<A: Clone + 'static> View<A> {
             new_scroll_offset,
             &mut self.context.mod_queue_sender,
         );
-
-        Ok(())
     }
 
     pub fn add_element(
