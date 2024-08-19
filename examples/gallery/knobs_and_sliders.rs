@@ -10,7 +10,6 @@ pub enum Action {
     ShowParamTooltip(ParamElementTooltipInfo),
     OpenTextInput(ParamOpenTextEntryInfo),
     FloatingTextInput(Option<String>),
-    ScrollOffsetChanged(Vector),
 }
 
 pub struct Elements {
@@ -39,7 +38,7 @@ pub struct Elements {
 impl Elements {
     pub fn new(style: &MyStyle, cx: &mut WindowContext<'_, MyAction>) -> Self {
         let scroll_area = ScrollArea::builder()
-            .on_scrolled(|scroll_offset| Action::ScrollOffsetChanged(scroll_offset).into())
+            .control_scissor_rect(SCROLL_AREA_SRECT)
             .z_index(RIGHT_CLICK_AREA_Z_INDEX)
             .build(cx);
 
@@ -219,10 +218,6 @@ impl Elements {
                     }
                 }
             }
-            Action::ScrollOffsetChanged(scroll_offset) => {
-                cx.view
-                    .update_scissor_rect(SCROLL_AREA_SRECT, None, Some(scroll_offset));
-            }
         }
 
         needs_layout
@@ -274,8 +269,6 @@ impl Elements {
         cx: &mut WindowContext<'_, MyAction>,
     ) {
         self.scroll_area.el.set_rect(content_rect);
-        cx.view
-            .update_scissor_rect(SCROLL_AREA_SRECT, Some(self.scroll_area.el.rect()), None);
 
         let start_pos = Point::new(style.content_padding, style.content_padding);
 

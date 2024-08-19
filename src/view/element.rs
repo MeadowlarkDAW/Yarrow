@@ -18,6 +18,7 @@ mod handle;
 
 use std::any::Any;
 
+use context::UpdateScissorRectRequest;
 pub use context::{ElementContext, RenderContext};
 pub use flags::ElementFlags;
 pub use handle::ElementHandle;
@@ -161,6 +162,7 @@ pub(super) enum ElementModificationType {
         align: Align2,
         auto_hide: bool,
     },
+    UpdateScissorRect(UpdateScissorRectRequest),
 }
 
 // I get a warning about leaking `ElementID` if I make `ElementHandle::new()`

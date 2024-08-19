@@ -1164,6 +1164,13 @@ impl<A: Clone + 'static> View<A> {
                         auto_hide,
                     );
                 }
+                ElementModificationType::UpdateScissorRect(req) => {
+                    self.update_scissor_rect(
+                        req.scissor_rect_id,
+                        req.new_rect,
+                        req.new_scroll_offset,
+                    );
+                }
             }
         }
 
@@ -2146,6 +2153,13 @@ fn send_event_to_element<A: Clone + 'static>(
                 align: req.align,
                 auto_hide: req.auto_hide,
             },
+        });
+    }
+
+    if let Some(req) = el_cx.update_scissor_rect_req {
+        view_cx.mod_queue_sender.send_to_front(ElementModification {
+            element_id,
+            type_: ElementModificationType::UpdateScissorRect(req),
         });
     }
 

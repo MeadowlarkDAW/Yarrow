@@ -6,24 +6,19 @@ use yarrow::prelude::*;
 /// for the "default scissoring rectangle" that covers the whole window).
 pub const CONTENT_SRECT: ScissorRectID = ScissorRectID(0);
 
-#[derive(Clone)]
-pub enum MyAction {
-    ScrollOffsetChanged(Vector),
-}
-
 #[derive(Default)]
 struct MyApp {
     main_window_elements: Option<MainWindowElements>,
 }
 
 impl Application for MyApp {
-    type Action = MyAction;
+    type Action = ();
 
     fn on_window_event(
         &mut self,
         event: AppWindowEvent,
         window_id: WindowID,
-        cx: &mut AppContext<MyAction>,
+        cx: &mut AppContext<()>,
     ) {
         match event {
             AppWindowEvent::WindowOpened => {
@@ -46,22 +41,6 @@ impl Application for MyApp {
             _ => {}
         }
     }
-
-    fn on_action_emitted(&mut self, cx: &mut AppContext<Self::Action>) {
-        let Some(cx) = cx.window_context(MAIN_WINDOW) else {
-            return;
-        };
-
-        while let Ok(action) = cx.action_receiver.try_recv() {
-            match action {
-                MyAction::ScrollOffsetChanged(new_offset) => {
-                    // Update the scroll offset on the scissoring rectangle.
-                    cx.view
-                        .update_scissor_rect(CONTENT_SRECT, None, Some(new_offset));
-                }
-            }
-        }
-    }
 }
 
 pub struct MainWindowElements {
@@ -70,35 +49,31 @@ pub struct MainWindowElements {
 }
 
 impl MainWindowElements {
-    pub fn build(cx: &mut WindowContext<'_, MyAction>) -> Self {
+    pub fn build(cx: &mut WindowContext<'_, ()>) -> Self {
         Self {
             long_boi: TextInput::builder()
                 .text("L0ng b0I")
                 .scissor_rect(CONTENT_SRECT)
                 .build(cx),
             scroll_area: ScrollArea::builder()
-                // Emit an action when the user interacts with the scroll area element.
-                .on_scrolled(|new_offset| MyAction::ScrollOffsetChanged(new_offset))
                 // Set the z index higher than the contents so that it has priority
                 // on mouse events.
                 .z_index(1)
+                // Set the scissoring rectangle that this element should control.
+                .control_scissor_rect(CONTENT_SRECT)
                 // Note, do *NOT* assign the scroll area element itself to the scissoring
-                // rectangle, or it will not function properly.
+                // rectangle it controls, or it will not function properly.
+                .scissor_rect(ScissorRectID::DEFAULT)
                 .build(cx),
         }
     }
 
-    pub fn layout(&mut self, cx: &mut WindowContext<'_, MyAction>) {
+    pub fn layout(&mut self, cx: &mut WindowContext<'_, ()>) {
         // Assign the scroll area element to fill the area we want (in this case the
         // entire window).
         self.scroll_area
             .el
             .set_rect(Rect::from_size(cx.logical_size()));
-
-        // Update the position and size of the scissoring rectangle to match that of
-        // the scroll area element.
-        cx.view
-            .update_scissor_rect(CONTENT_SRECT, Some(self.scroll_area.el.rect()), None);
 
         // Layout the elements like normal.
         //

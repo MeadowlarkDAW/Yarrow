@@ -14,14 +14,14 @@
 
 use std::sync::mpsc;
 
-use rootvg::math::{Point, Size};
+use rootvg::math::{Point, Size, Vector};
 
 use crate::action_queue::ActionSender;
 use crate::clipboard::Clipboard;
 use crate::layout::Align2;
 use crate::math::{Rect, ScaleFactor, ZIndex};
 use crate::prelude::{ClassID, ResourceCtx};
-use crate::{CursorIcon, WindowID};
+use crate::{CursorIcon, ScissorRectID, WindowID};
 
 use super::ElementRenderCache;
 
@@ -36,6 +36,12 @@ pub(crate) struct ShowTooltipRequest {
     pub message: String,
     pub align: Align2,
     pub auto_hide: bool,
+}
+
+pub(crate) struct UpdateScissorRectRequest {
+    pub scissor_rect_id: ScissorRectID,
+    pub new_rect: Option<Rect>,
+    pub new_scroll_offset: Option<Vector>,
 }
 
 /// A context for this element instance. This is used to request actions from the
@@ -70,6 +76,7 @@ pub struct ElementContext<'a, A: Clone + 'static> {
     pub(crate) scale_factor: ScaleFactor,
     pub(crate) window_id: WindowID,
     pub(crate) pointer_lock_request: Option<bool>,
+    pub(crate) update_scissor_rect_req: Option<UpdateScissorRectRequest>,
     pointer_locked: bool,
     class: ClassID,
 }
@@ -114,6 +121,7 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
             requested_rect: None,
             requested_show_tooltip: None,
             change_focus_request: None,
+            update_scissor_rect_req: None,
             class,
             clipboard,
         }
@@ -293,6 +301,32 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
     /// The current class ID.
     pub fn class(&self) -> ClassID {
         self.class
+    }
+
+    /// Update the given scissoring rectangle with the given values.
+    ///
+    /// If `new_rect` or `new_scroll_offset` is `None`, then the
+    /// current respecting value will not be changed.
+    ///
+    /// This will *NOT* trigger an update unless the value has changed,
+    /// so this method is relatively cheap to call frequently.
+    ///
+    /// If a scissoring rectangle with the given ID does not exist, then
+    /// one will be created.
+    ///
+    /// If `scissor_rect_id == ScissorRectID::DEFAULT`, then this
+    /// will do nothing.
+    pub fn update_scissor_rect(
+        &mut self,
+        scissor_rect_id: ScissorRectID,
+        new_rect: Option<Rect>,
+        new_scroll_offset: Option<Vector>,
+    ) {
+        self.update_scissor_rect_req = Some(UpdateScissorRectRequest {
+            scissor_rect_id,
+            new_rect,
+            new_scroll_offset,
+        });
     }
 }
 

@@ -73,7 +73,6 @@ pub enum Action {
         text_input_id: TextInputID,
     },
     TextInputMenuOptionSelected(TextMenuOption),
-    ScrollOffsetChanged(Vector),
 }
 
 pub struct Elements {
@@ -162,7 +161,7 @@ impl Elements {
             .build(cx);
 
         let scroll_area = ScrollArea::builder()
-            .on_scrolled(|scroll_offset| Action::ScrollOffsetChanged(scroll_offset).into())
+            .control_scissor_rect(SCROLL_AREA_SRECT)
             .z_index(SCROLL_AREA_Z_INDEX)
             .build(cx);
 
@@ -325,10 +324,6 @@ impl Elements {
                     }
                 }
             }
-            Action::ScrollOffsetChanged(scroll_offset) => {
-                cx.view
-                    .update_scissor_rect(SCROLL_AREA_SRECT, None, Some(scroll_offset));
-            }
         }
 
         needs_layout
@@ -343,8 +338,6 @@ impl Elements {
         self.right_click_area.el.set_rect(content_rect);
 
         self.scroll_area.el.set_rect(content_rect);
-        cx.view
-            .update_scissor_rect(SCROLL_AREA_SRECT, Some(self.scroll_area.el.rect()), None);
 
         let start_pos = Point::new(style.content_padding, style.content_padding);
 

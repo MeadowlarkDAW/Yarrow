@@ -100,6 +100,7 @@ impl ElementStyle for ScrollBarStyle {
 
 pub struct ScrollAreaBuilder<A: Clone + 'static> {
     pub scrolled_action: Option<Box<dyn FnMut(Vector) -> A>>,
+    pub control_scissor_rect: Option<ScissorRectID>,
     pub bounds: Rect,
     pub content_size: Size,
     pub scroll_offset: Vector,
@@ -120,6 +121,7 @@ impl<A: Clone + 'static> ScrollAreaBuilder<A> {
     pub fn new() -> Self {
         Self {
             scrolled_action: None,
+            control_scissor_rect: None,
             bounds: Rect::default(),
             content_size: Size::default(),
             scroll_offset: Vector::default(),
@@ -143,6 +145,15 @@ impl<A: Clone + 'static> ScrollAreaBuilder<A> {
 
     pub fn on_scrolled<F: FnMut(Vector) -> A + 'static>(mut self, f: F) -> Self {
         self.scrolled_action = Some(Box::new(f));
+        self
+    }
+
+    /// Set the scissoring rectangle that this element will control.
+    ///
+    /// If `scissor_rect_id == ScissorRectID::DEFAULT`, then this will
+    /// be ignored.
+    pub const fn control_scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
+        self.control_scissor_rect = Some(scissor_rect_id);
         self
     }
 
@@ -243,6 +254,8 @@ struct DragState {
 pub struct ScrollAreaElement<A: Clone + 'static> {
     shared_state: Rc<RefCell<SharedState>>,
 
+    control_scissor_rect: Option<ScissorRectID>,
+
     scrolled_action: Option<Box<dyn FnMut(Vector) -> A>>,
 
     scroll_horizontally: bool,
@@ -265,6 +278,7 @@ impl<A: Clone + 'static> ScrollAreaElement<A> {
     pub fn create(builder: ScrollAreaBuilder<A>, cx: &mut WindowContext<'_, A>) -> ScrollArea {
         let ScrollAreaBuilder {
             scrolled_action,
+            control_scissor_rect,
             bounds,
             content_size,
             scroll_offset,
@@ -307,9 +321,20 @@ impl<A: Clone + 'static> ScrollAreaElement<A> {
             disabled,
         }));
 
+        let control_scissor_rect = if let Some(id) = control_scissor_rect {
+            if id == ScissorRectID::DEFAULT {
+                None
+            } else {
+                Some(id)
+            }
+        } else {
+            None
+        };
+
         let element_builder = ElementBuilder {
             element: Box::new(Self {
                 shared_state: Rc::clone(&shared_state),
+                control_scissor_rect,
                 scrolled_action,
                 scroll_horizontally,
                 scroll_vertically,
@@ -345,6 +370,8 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
             | ElementFlags::LISTENS_TO_POINTER_OUTSIDE_BOUNDS_WHEN_FOCUSED
             | ElementFlags::LISTENS_TO_FOCUS_CHANGE
             | ElementFlags::LISTENS_TO_SIZE_CHANGE
+            | ElementFlags::LISTENS_TO_POSITION_CHANGE
+            | ElementFlags::LISTENS_TO_INIT
     }
 
     fn on_event(
@@ -355,6 +382,15 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         match event {
+            ElementEvent::Init => {
+                if let Some(scissor_rect) = self.control_scissor_rect {
+                    cx.update_scissor_rect(
+                        scissor_rect,
+                        Some(cx.rect()),
+                        Some(shared_state.scroll_offset),
+                    );
+                }
+            }
             ElementEvent::CustomStateChanged => {
                 cx.request_repaint();
 
@@ -372,6 +408,19 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                     self.drag_state = None;
                     self.vertical_state = ScrollBarState::Idle;
                     self.horizontal_state = ScrollBarState::Idle;
+                }
+
+                if let Some(scissor_rect) = self.control_scissor_rect {
+                    cx.update_scissor_rect(scissor_rect, None, Some(shared_state.scroll_offset));
+                }
+            }
+            ElementEvent::PositionChanged => {
+                if let Some(scissor_rect) = self.control_scissor_rect {
+                    cx.update_scissor_rect(
+                        scissor_rect,
+                        Some(cx.rect()),
+                        Some(shared_state.scroll_offset),
+                    );
                 }
             }
             ElementEvent::StyleChanged | ElementEvent::SizeChanged => {
@@ -400,6 +449,14 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                         cx.send_action((action)(shared_state.scroll_offset))
                             .unwrap();
                     }
+                }
+
+                if let Some(scissor_rect) = self.control_scissor_rect {
+                    cx.update_scissor_rect(
+                        scissor_rect,
+                        Some(cx.rect()),
+                        Some(shared_state.scroll_offset),
+                    );
                 }
             }
             ElementEvent::Pointer(PointerEvent::Moved { position, .. }) => {
@@ -459,6 +516,14 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                         }
 
                         cx.request_repaint();
+
+                        if let Some(scissor_rect) = self.control_scissor_rect {
+                            cx.update_scissor_rect(
+                                scissor_rect,
+                                None,
+                                Some(shared_state.scroll_offset),
+                            );
+                        }
                     }
 
                     return EventCaptureStatus::Captured;
@@ -578,6 +643,14 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                             }
 
                             cx.request_repaint();
+
+                            if let Some(scissor_rect) = self.control_scissor_rect {
+                                cx.update_scissor_rect(
+                                    scissor_rect,
+                                    None,
+                                    Some(shared_state.scroll_offset),
+                                );
+                            }
                         }
 
                         return EventCaptureStatus::Captured;
@@ -631,6 +704,14 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                             }
 
                             cx.request_repaint();
+
+                            if let Some(scissor_rect) = self.control_scissor_rect {
+                                cx.update_scissor_rect(
+                                    scissor_rect,
+                                    None,
+                                    Some(shared_state.scroll_offset),
+                                );
+                            }
                         }
 
                         return EventCaptureStatus::Captured;
@@ -739,6 +820,14 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                     }
 
                     cx.request_repaint();
+
+                    if let Some(scissor_rect) = self.control_scissor_rect {
+                        cx.update_scissor_rect(
+                            scissor_rect,
+                            None,
+                            Some(shared_state.scroll_offset),
+                        );
+                    }
                 }
 
                 if self.capture_scroll_wheel {
