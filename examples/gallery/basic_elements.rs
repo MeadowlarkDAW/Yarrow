@@ -99,7 +99,6 @@ pub struct Elements {
     separator_1: Separator,
     separator_2: Separator,
     active_text_input_menu: Option<TextInputID>,
-    progress_bar: ProgressBar,
 }
 
 impl Elements {
@@ -271,8 +270,6 @@ impl Elements {
                 right_click_area,
                 right_click_menu,
                 scroll_area,
-
-                progress_bar: ProgressBar::builder().percentage(0.25).build(cx),
 
                 active_text_input_menu: None,
             }
@@ -481,17 +478,9 @@ impl Elements {
             style.text_input_size,
         ));
 
-        self.progress_bar.el.set_rect(Rect::new(
-            Point::new(
-                start_pos.x,
-                self.search_text_input.el.rect().max_y() + style.element_padding,
-            ),
-            Size::new(100.0, 22.0),
-        ));
-
         self.scroll_area.set_content_size(Size::new(
             self.icon_label.el.rect().max_x() + style.content_padding,
-            self.progress_bar.el.rect().max_y() + style.content_padding,
+            self.search_text_input.el.rect().max_y() + style.content_padding,
         ));
     }
 
@@ -518,7 +507,7 @@ impl Elements {
             scroll_area,
             separator_1,
             separator_2,
-            progress_bar,
+
             active_text_input_menu: _,
         } = self;
 
@@ -542,6 +531,5 @@ impl Elements {
         scroll_area.el.set_hidden(hidden);
         separator_1.el.set_hidden(hidden);
         separator_2.el.set_hidden(hidden);
-        progress_bar.el.set_hidden(hidden);
     }
 }

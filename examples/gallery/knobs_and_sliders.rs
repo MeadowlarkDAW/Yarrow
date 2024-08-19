@@ -1,5 +1,6 @@
 use crate::style::MyStyle;
 use crate::{MyAction, OVERLAY_Z_INDEX, RIGHT_CLICK_AREA_Z_INDEX};
+use yarrow::elements::progress_bar::ProgressBar;
 use yarrow::prelude::*;
 
 const SCROLL_AREA_SRECT: ScissorRectID = ScissorRectID(1);
@@ -27,6 +28,8 @@ pub struct Elements {
     slider_4: Slider,
     slider_5: Slider,
     slider_6: Slider,
+
+    progress_bar: ProgressBar,
 
     separator: Separator,
 
@@ -133,6 +136,8 @@ impl Elements {
 
             separator: Separator::builder().build(cx),
 
+            progress_bar: ProgressBar::builder().build(cx),
+
             scroll_area,
             floating_text_input,
 
@@ -152,6 +157,11 @@ impl Elements {
         match action {
             Action::ParamUpdate(info) => {
                 self.show_param_tooltip(info.param_info, info.is_gesturing(), cx);
+
+                if info.param_info.id == 0 {
+                    self.progress_bar
+                        .set_percent(info.param_info.normal_value as f32);
+                }
 
                 if !info.is_gesturing() {
                     // Set the tooltip to auto-hide when gesturing is finished.
@@ -369,9 +379,17 @@ impl Elements {
             Size::new(100.0, 22.0),
         ));
 
+        self.progress_bar.el.set_rect(Rect::new(
+            Point::new(
+                start_pos.x,
+                self.slider_4.el.rect().max_y() + style.element_padding,
+            ),
+            Size::new(200.0, 22.0),
+        ));
+
         self.scroll_area.set_content_size(Size::new(
             self.slider_6.el.rect().max_x() + style.content_padding,
-            self.slider_4.el.rect().max_y() + style.content_padding,
+            self.progress_bar.el.rect().max_y() + style.content_padding,
         ));
     }
 
@@ -391,6 +409,7 @@ impl Elements {
             scroll_area,
             floating_text_input,
             separator,
+            progress_bar,
             text_input_param_id: _,
         } = self;
 
@@ -406,6 +425,7 @@ impl Elements {
         slider_6.el.set_hidden(hidden);
         scroll_area.el.set_hidden(hidden);
         separator.el.set_hidden(hidden);
+        progress_bar.el.set_hidden(hidden);
         floating_text_input.hide();
     }
 }

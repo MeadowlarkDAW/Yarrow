@@ -27,7 +27,7 @@ impl Default for ProgressBarStyle {
     fn default() -> Self {
         Self {
             back_quad: QuadStyle::new(
-                Background::Solid(Rgba::new(0, 0, 0, 255)),
+                Background::Solid(Rgba::new(255, 0, 0, 255)),
                 BorderStyle::from_radius(Radius::all_same(1.5)),
             ),
             fill_quad: QuadStyle::new(
@@ -152,19 +152,18 @@ impl<A: Clone + 'static> Element<A> for ProgressBarElement {
         cx: crate::view::element::RenderContext<'_>,
         primitives: &mut rootvg::PrimitiveGroup,
     ) {
+        println!("render called");
         let percentage = self.shared_state.borrow().percentage;
 
         let progress_bar_style = cx.res.style_system.get::<ProgressBarStyle>(cx.class);
 
         // TODO: figure out how to construct a proper rect
+        //
+        let rect = Rect::from_size(cx.bounds_size);
 
-        primitives.add(
-            progress_bar_style
-                .back_quad
-                .create_primitive(cx.visible_bounds),
-        );
+        primitives.add(progress_bar_style.back_quad.create_primitive(rect));
         primitives.set_z_index(1);
-        let mut progress_rect = cx.visible_bounds;
+        let mut progress_rect = rect;
         progress_rect.size.width *= percentage;
         primitives.add(progress_bar_style.fill_quad.create_primitive(progress_rect))
     }
