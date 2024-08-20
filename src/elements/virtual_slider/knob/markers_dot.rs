@@ -99,6 +99,7 @@ impl KnobMarkersDotStyle {
 
             match quad_style.create_primitive(bounds) {
                 QuadPrimitive::Solid(s) => primitives.add_solid_quad(s),
+                #[cfg(feature = "gradient")]
                 QuadPrimitive::Gradient(s) => primitives.add_gradient_quad(s),
             }
         });

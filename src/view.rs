@@ -1937,6 +1937,7 @@ impl<A: Clone + 'static> View<A> {
             &view,
             self.physical_size,
             &mut res.font_system,
+            #[cfg(feature = "svg-icons")]
             &mut res.svg_icon_system,
         )
         .unwrap(); // TODO: handle this error properly.

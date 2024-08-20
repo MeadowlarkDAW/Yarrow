@@ -2,14 +2,14 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use rootvg::quad::QuadPrimitive;
-use rootvg::text::{CustomGlyphDesc, CustomGlyphID, TextPrimitive};
+use rootvg::text::{CustomGlyphDesc, TextPrimitive};
 use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::{Align2, Padding};
 use crate::math::{Point, Rect, Size, Vector, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::{ClassID, QuadStyle};
+use crate::style::{ClassID, IconID, QuadStyle};
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
@@ -98,14 +98,14 @@ pub struct IconInner {
     /// An offset that can be used mainly to correct the position of icon glyphs.
     /// This does not effect the position of the background quad.
     pub offset: Vector,
-    pub icon_id: CustomGlyphID,
+    pub icon_id: IconID,
     pub scale: f32,
     desired_size: Size,
     size_needs_calculated: bool,
 }
 
 impl IconInner {
-    pub fn new(icon_id: CustomGlyphID, scale: f32, offset: Vector) -> Self {
+    pub fn new(icon_id: IconID, scale: f32, offset: Vector) -> Self {
         Self {
             offset,
             icon_id,
@@ -179,7 +179,7 @@ impl IconInner {
 }
 
 pub struct IconBuilder {
-    pub icon: CustomGlyphID,
+    pub icon: IconID,
     pub scale: f32,
     pub offset: Vector,
     pub class: Option<ClassID>,
@@ -192,7 +192,7 @@ pub struct IconBuilder {
 impl IconBuilder {
     pub fn new() -> Self {
         Self {
-            icon: CustomGlyphID::MAX,
+            icon: IconID::MAX,
             scale: 1.0,
             offset: Vector::default(),
             class: None,
@@ -207,7 +207,7 @@ impl IconBuilder {
         IconElement::create(self, cx)
     }
 
-    pub fn icon(mut self, id: impl Into<CustomGlyphID>) -> Self {
+    pub fn icon(mut self, id: impl Into<IconID>) -> Self {
         self.icon = id.into();
         self
     }
@@ -383,8 +383,8 @@ impl Icon {
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
     /// so this method is relatively cheap to call frequently.
-    pub fn set_icon(&mut self, icon_id: impl Into<CustomGlyphID>) -> bool {
-        let icon_id: CustomGlyphID = icon_id.into();
+    pub fn set_icon(&mut self, icon_id: impl Into<IconID>) -> bool {
+        let icon_id: IconID = icon_id.into();
 
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -397,7 +397,7 @@ impl Icon {
         }
     }
 
-    pub fn icon_id(&self) -> CustomGlyphID {
+    pub fn icon_id(&self) -> IconID {
         RefCell::borrow(&self.shared_state).inner.icon_id
     }
 

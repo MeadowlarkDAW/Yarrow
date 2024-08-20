@@ -1,18 +1,20 @@
 use rootvg::{
     color::RGBA8,
-    gradient::Gradient,
     math::{Point, Rect, Size, Transform},
-    mesh::{GradientMeshPrimitive, MeshPrimitive, SolidMeshPrimitive},
+    mesh::{MeshPrimitive, SolidMeshPrimitive},
 };
 
-use crate::{
-    elements::virtual_slider::VirtualSliderState,
-    layout::SizeType,
-    style::{DisabledColor, DisabledGradient},
-};
+#[cfg(feature = "gradient")]
+use rootvg::{gradient::Gradient, mesh::GradientMeshPrimitive};
+
+use crate::{elements::virtual_slider::VirtualSliderState, layout::SizeType, style::DisabledColor};
+
+#[cfg(feature = "gradient")]
+use crate::style::DisabledGradient;
 
 use super::KnobAngleRange;
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub enum KnobNotchStyleLineBg {
     Solid {
@@ -21,6 +23,7 @@ pub enum KnobNotchStyleLineBg {
         gesturing: Option<RGBA8>,
         disabled: DisabledColor,
     },
+    #[cfg(feature = "gradient")]
     Gradient {
         idle: Gradient,
         hovered: Option<Gradient>,
@@ -139,6 +142,7 @@ impl KnobNotchLinePrimitives {
                     disabled: MeshPrimitive::Solid(disabled_mesh),
                 }
             }
+            #[cfg(feature = "gradient")]
             KnobNotchStyleLineBg::Gradient {
                 idle,
                 hovered,

@@ -189,6 +189,7 @@ pub fn text_input(config: &Config) -> TextInputStyle {
     }
 }
 
+#[cfg(feature = "svg-icons")]
 pub fn icon_text_input(config: &Config) -> IconTextInputStyle {
     IconTextInputStyle {
         text_input: text_input(config),
@@ -347,6 +348,7 @@ pub fn slider_style_modern(
     }
 }
 
+#[allow(unused)]
 pub fn knob_style(
     accent_color: RGBA8,
     accent_color_hover: RGBA8,
@@ -364,15 +366,26 @@ pub fn knob_style(
             ..Default::default()
         }),
         notch: if use_line_notch {
-            KnobNotchStyle::Line(KnobNotchStyleLine {
-                bg: KnobNotchStyleLineBg::Solid {
-                    idle: TEXT_COLOR,
-                    hovered: Some(TEXT_COLOR_BRIGHT),
-                    gesturing: None,
-                    disabled: Default::default(),
-                },
-                ..Default::default()
-            })
+            #[cfg(feature = "mesh")]
+            {
+                KnobNotchStyle::Line(KnobNotchStyleLine {
+                    bg: KnobNotchStyleLineBg::Solid {
+                        idle: TEXT_COLOR,
+                        hovered: Some(TEXT_COLOR_BRIGHT),
+                        gesturing: None,
+                        disabled: Default::default(),
+                    },
+                    ..Default::default()
+                })
+            }
+            #[cfg(not(feature = "mesh"))]
+            {
+                KnobNotchStyle::Quad(KnobNotchStyleQuad {
+                    bg: background(TEXT_COLOR),
+                    bg_hover: Some(background(TEXT_COLOR_BRIGHT)),
+                    ..Default::default()
+                })
+            }
         } else {
             KnobNotchStyle::Quad(KnobNotchStyleQuad {
                 bg: background(TEXT_COLOR),
@@ -390,12 +403,20 @@ pub fn knob_style(
                 ..Default::default()
             })
         } else {
-            KnobMarkersStyle::Arc(KnobMarkersArcStyle {
-                fill_bg: background(accent_color),
-                fill_bg_hover: Some(background(accent_color_hover)),
-                back_bg: background(KNOB_ARC_TRACK_COLOR),
-                ..Default::default()
-            })
+            #[cfg(feature = "tessellation")]
+            {
+                KnobMarkersStyle::Arc(KnobMarkersArcStyle {
+                    fill_bg: background(accent_color),
+                    fill_bg_hover: Some(background(accent_color_hover)),
+                    back_bg: background(KNOB_ARC_TRACK_COLOR),
+                    ..Default::default()
+                })
+            }
+
+            #[cfg(not(feature = "tessellation"))]
+            {
+                KnobMarkersStyle::None
+            }
         },
         ..Default::default()
     }
@@ -438,8 +459,6 @@ pub fn load(config: Config, res: &mut ResourceCtx) {
     res.style_system.add(ClassID::default(), true, scroll_bar());
     res.style_system
         .add(ClassID::default(), true, text_input(&config));
-    res.style_system
-        .add(ClassID::default(), true, icon_text_input(&config));
     res.style_system.add(ClassID::default(), true, tab(&config));
     res.style_system
         .add(ClassID::default(), true, tooltip(&config));
@@ -466,4 +485,8 @@ pub fn load(config: Config, res: &mut ResourceCtx) {
         true,
         knob_style(config.accent_color, config.accent_color_hover, false, false),
     );
+
+    #[cfg(feature = "svg-icons")]
+    res.style_system
+        .add(ClassID::default(), true, icon_text_input(&config));
 }

@@ -3,7 +3,6 @@ use std::rc::Rc;
 
 use rootvg::color::{self, RGBA8};
 use rootvg::math::Size;
-use rootvg::text::CustomGlyphID;
 use rootvg::PrimitiveGroup;
 
 use crate::elements::icon::{IconInner, IconStyle};
@@ -12,7 +11,7 @@ use crate::event::{ElementEvent, EventCaptureStatus, PointerEvent};
 use crate::layout::{Align2, Padding, StartEndAlign};
 use crate::math::{Point, Rect, Vector, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::{ClassID, DisabledColor, QuadStyle};
+use crate::style::{ClassID, DisabledColor, IconID, QuadStyle};
 use crate::theme::DEFAULT_ICON_SIZE;
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
@@ -123,7 +122,7 @@ pub struct IconTextInputBuilder<A: Clone + 'static> {
     pub placeholder_text: String,
     pub text: String,
     pub text_offset: Vector,
-    pub icon: CustomGlyphID,
+    pub icon: IconID,
     pub icon_scale: f32,
     pub icon_offset: Vector,
     pub select_all_when_focused: bool,
@@ -147,7 +146,7 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
             placeholder_text: String::new(),
             text: String::new(),
             text_offset: Vector::default(),
-            icon: CustomGlyphID::MAX,
+            icon: IconID::MAX,
             icon_scale: 1.0,
             icon_offset: Vector::default(),
             select_all_when_focused: false,
@@ -199,7 +198,7 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
         self
     }
 
-    pub fn icon(mut self, id: impl Into<CustomGlyphID>) -> Self {
+    pub fn icon(mut self, id: impl Into<IconID>) -> Self {
         self.icon = id.into();
         self
     }

@@ -1407,6 +1407,7 @@ impl TextInputInner {
                     Point::new(scroll_x, 0.0) + bounds.origin.to_vector(),
                     self.text_bounds_rect.size,
                 )),
+                #[cfg(feature = "svg-icons")]
                 icons: SmallVec::new(),
             });
         } else if !self.placeholder_text.is_empty() {
@@ -1432,6 +1433,7 @@ impl TextInputInner {
                     pos: self.text_bounds_rect.origin + text_offset + bounds.origin.to_vector(),
                     color,
                     clipping_bounds: Some(Rect::new(bounds.origin, self.text_bounds_rect.size)),
+                    #[cfg(feature = "svg-icons")]
                     icons: SmallVec::new(),
                 });
             }

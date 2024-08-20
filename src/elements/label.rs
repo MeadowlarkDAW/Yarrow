@@ -2,16 +2,17 @@ use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
 use rootvg::quad::QuadPrimitive;
-use rootvg::text::{
-    CustomGlyphDesc, CustomGlyphID, FontSystem, RcTextBuffer, TextPrimitive, TextProperties,
-};
+use rootvg::text::{FontSystem, RcTextBuffer, TextPrimitive, TextProperties};
 use rootvg::PrimitiveGroup;
+
+#[cfg(feature = "svg-icons")]
+use rootvg::text::CustomGlyphDesc;
 
 use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::{Align, Align2, Padding};
 use crate::math::{Point, Rect, Size, Vector, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::{ClassID, QuadStyle};
+use crate::style::{ClassID, IconID, QuadStyle};
 use crate::theme::DEFAULT_ICON_SIZE;
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
@@ -153,7 +154,6 @@ pub struct LabelInner {
     /// This does not effect the position of the background quad.
     pub icon_offset: Vector,
     pub icon_scale: f32,
-    icon: Option<CustomGlyphID>,
     text_inner: Option<TextInner>,
     unclipped_text_size: Size,
     text_size_needs_calculated: bool,
@@ -163,12 +163,13 @@ pub struct LabelInner {
     padded_size: Size,
     padded_size_needs_calculated: bool,
     text_icon_layout: TextIconLayout,
+    icon: Option<IconID>,
 }
 
 impl LabelInner {
     pub fn new(
         text: Option<impl Into<String>>,
-        icon: Option<CustomGlyphID>,
+        icon: Option<IconID>,
         text_offset: Vector,
         icon_offset: Vector,
         icon_scale: f32,
@@ -340,7 +341,7 @@ impl LabelInner {
         self.text_inner.as_ref().map(|i| i.text.as_str())
     }
 
-    pub fn set_icon(&mut self, icon: Option<CustomGlyphID>) -> bool {
+    pub fn set_icon(&mut self, icon: Option<IconID>) -> bool {
         if self.icon == icon {
             false
         } else {
@@ -354,7 +355,7 @@ impl LabelInner {
         }
     }
 
-    pub fn icon(&self) -> Option<CustomGlyphID> {
+    pub fn icon(&self) -> Option<IconID> {
         self.icon
     }
 
@@ -428,6 +429,7 @@ impl LabelInner {
             None
         };
 
+        #[cfg(feature = "svg-icons")]
         let icon = if let Some(icon) = self.icon {
             let (size, offset) = if self.icon_scale != 1.0 {
                 (
@@ -459,6 +461,9 @@ impl LabelInner {
             None
         };
 
+        #[cfg(not(feature = "svg-icons"))]
+        let icon = None;
+
         let bg_quad = if !style.back_quad.is_transparent() {
             Some(style.back_quad.create_primitive(bounds))
         } else {
@@ -475,7 +480,7 @@ impl LabelInner {
 
 pub struct LabelBuilder {
     pub text: Option<String>,
-    pub icon: Option<CustomGlyphID>,
+    pub icon: Option<IconID>,
     pub icon_scale: f32,
     pub text_offset: Vector,
     pub icon_offset: Vector,
@@ -522,7 +527,7 @@ impl LabelBuilder {
     ///
     /// If this method isn't used, then the label will have no icon (unless
     /// [`LabelBulder::icon_optional`] is used).
-    pub fn icon(mut self, icon: impl Into<CustomGlyphID>) -> Self {
+    pub fn icon(mut self, icon: impl Into<IconID>) -> Self {
         self.icon = Some(icon.into());
         self
     }
@@ -538,7 +543,7 @@ impl LabelBuilder {
     /// The optional icon of the label
     ///
     /// If this is set to `None`, then the label will have no icon.
-    pub fn icon_optional(mut self, icon: Option<impl Into<CustomGlyphID>>) -> Self {
+    pub fn icon_optional(mut self, icon: Option<impl Into<IconID>>) -> Self {
         self.icon = icon.map(|i| i.into());
         self
     }
@@ -782,8 +787,8 @@ impl Label {
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
     /// so this method is relatively cheap to call frequently.
-    pub fn set_icon(&mut self, icon: Option<impl Into<CustomGlyphID>>) -> bool {
-        let icon: Option<CustomGlyphID> = icon.map(|i| i.into());
+    pub fn set_icon(&mut self, icon: Option<impl Into<IconID>>) -> bool {
+        let icon: Option<IconID> = icon.map(|i| i.into());
 
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -799,7 +804,7 @@ impl Label {
         Ref::filter_map(RefCell::borrow(&self.shared_state), |s| s.inner.text()).ok()
     }
 
-    pub fn icon(&self) -> Option<CustomGlyphID> {
+    pub fn icon(&self) -> Option<IconID> {
         RefCell::borrow(&self.shared_state).inner.icon
     }
 
@@ -914,7 +919,7 @@ struct LayoutResult {
 fn layout(
     bounds_size: Size,
     unclipped_text_size: Size,
-    icon: Option<CustomGlyphID>,
+    icon: Option<IconID>,
     text_icon_layout: TextIconLayout,
     style: &LabelStyle,
 ) -> LayoutResult {

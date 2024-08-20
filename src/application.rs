@@ -95,6 +95,7 @@ impl Default for AppConfig {
 pub struct ResourceCtx {
     pub style_system: StyleSystem,
     pub font_system: FontSystem,
+    #[cfg(feature = "svg-icons")]
     pub svg_icon_system: rootvg::text::svg::SvgIconSystem,
 }
 
@@ -200,6 +201,7 @@ impl<A: Clone + 'static> AppContext<A> {
             res: ResourceCtx {
                 style_system: StyleSystem::new(use_dark_theme),
                 font_system: FontSystem::new(),
+                #[cfg(feature = "svg-icons")]
                 svg_icon_system: Default::default(),
             },
             linux_backend_type: None,

@@ -4,6 +4,7 @@ pub use crate::cursor_icon::*;
 pub use crate::elements::button::{Button, ButtonStyle};
 pub use crate::elements::click_area::ClickArea;
 pub use crate::elements::drop_down_menu::{DropDownMenu, DropDownMenuStyle, MenuEntry};
+#[cfg(feature = "svg-icons")]
 pub use crate::elements::icon::{Icon, IconStyle};
 pub use crate::elements::label::{Label, LabelStyle, TextIconLayout};
 pub use crate::elements::paragraph::{Paragraph, ParagraphStyle};
@@ -15,15 +16,21 @@ pub use crate::elements::separator::{Separator, SeparatorSizeType, SeparatorStyl
 pub use crate::elements::switch::{Switch, SwitchStyle};
 pub use crate::elements::tab::{IndicatorLinePlacement, Tab, TabGroup, TabGroupOption, TabStyle};
 pub use crate::elements::text_input::{
-    FloatingTextInput, IconTextInput, IconTextInputStyle, TextInput, TextInputAction,
-    TextInputStyle,
+    FloatingTextInput, TextInput, TextInputAction, TextInputStyle,
 };
+#[cfg(feature = "svg-icons")]
+pub use crate::elements::text_input::{IconTextInput, IconTextInputStyle};
 pub use crate::elements::toggle_button::{ToggleButton, ToggleButtonStyle};
 pub use crate::elements::tooltip::{Tooltip, TooltipStyle};
+#[cfg(feature = "tessellation")]
+pub use crate::elements::virtual_slider::knob::KnobMarkersArcStyle;
 pub use crate::elements::virtual_slider::knob::{
-    Knob, KnobAngleRange, KnobBackStyle, KnobBackStyleQuad, KnobMarkersArcStyle,
-    KnobMarkersDotStyle, KnobMarkersStyle, KnobNotchLinePrimitives, KnobNotchStyle,
-    KnobNotchStyleLine, KnobNotchStyleLineBg, KnobNotchStyleQuad, KnobStyle,
+    Knob, KnobAngleRange, KnobBackStyle, KnobBackStyleQuad, KnobMarkersDotStyle, KnobMarkersStyle,
+    KnobNotchStyle, KnobNotchStyleQuad, KnobStyle,
+};
+#[cfg(feature = "mesh")]
+pub use crate::elements::virtual_slider::knob::{
+    KnobNotchLinePrimitives, KnobNotchStyleLine, KnobNotchStyleLineBg,
 };
 pub use crate::elements::virtual_slider::slider::{
     Slider, SliderFillMode, SliderStyle, SliderStyleModern,
@@ -50,8 +57,7 @@ pub use crate::vg::quad::{radius, QuadFlags, Radius};
 pub use crate::vg::text::glyphon::fontdb::Source as FontSource;
 pub use crate::vg::text::glyphon::FontSystem;
 pub use crate::vg::text::{
-    Align as TextAlign, Attrs, ContentType as IconContentType, CustomGlyphID as IconID, Family,
-    TextProperties, Weight,
+    Align as TextAlign, Attrs, ContentType as IconContentType, Family, TextProperties, Weight,
 };
 pub use crate::view::{
     element::{ElementHandle, ElementStyle},

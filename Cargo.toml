@@ -16,12 +16,48 @@ readme = "README.md"
 maintenance = { status = "actively-developed" }
 
 [features]
-default = ["winit", "x11", "wayland", "winit-wayland-dlopen", "winit-wayland-csd-adwaita"]
+default = [
+    "gradient",
+    "mesh",
+    "tessellation",
+    "msaa",
+    "svg-icons",
+    "web-colors",
+    "winit",
+    "x11",
+    "wayland",
+    "winit-wayland-csd-adwaita"
+]
+# Enables gradient support
+# If your app doesn't use gradients, then disabling this may slightly improve performance and memory usage.
+gradient = ["rootvg/gradient"]
+# Enables drawing of images/textures (required by some elements)
+image = ["rootvg/image"]
+# Enables drawing meshes of triangles (required by some elements)
+mesh = ["rootvg/mesh"]
+# Enables using the lyon crate to tessellate vector shapes into a mesh for rendering (required by some elements)
+tessellation = ["mesh", "rootvg/tessellation"]
+# Enables anti-aliasing of mesh primitives using MSAA. Note this only affects mesh primitives, so consider
+# disabling this if your app does not use them.
+msaa = ["rootvg/msaa"]
+# Enables rendering svg icons (required by some elements)
+svg-icons = ["rootvg/svg-icons"]
+# Enables broken "sRGB linear" blending to reproduce color management of the Web.
+# Recommended for better text legibility.
+# See: https://github.com/iced-rs/iced/pull/1888
+#      https://github.com/pop-os/cosmic-text/issues/195
+web-colors = ["rootvg/web-colors"]
+# Enables X11 support on Linux platforms
 x11 = ["winit?/x11"]
+# Enables Wayland support on Linux platforms
 wayland = ["winit?/wayland"]
-winit-wayland-dlopen = ["winit?/wayland-dlopen"]
+# Enables adwaita client-side window decorations when using winit and Wayland
 winit-wayland-csd-adwaita = ["winit?/wayland-csd-adwaita"]
+# Enables serde support for some types
 serde = ["dep:serde", "rootvg/serde"]
+
+[package.metadata.docs.rs]
+all-features = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -40,8 +76,7 @@ wgpu = { version = "22", default-features = false, features = ["wgsl"] }
 window_clipboard = "0.4.1"
 thiserror = "1.0.61"
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
-rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "d05de6f0da1412603404ab0d43d2935a160b8cd0" }
-#rootvg = { path = "../rootvg" }
+rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "a98b6addb26f68345330cbb1f80313f5571ba9a1", default-features = false, features = ["quad", "text", "default-surface"] }
 
 [dev-dependencies]
 wgpu = { version = "22", default-features = true }

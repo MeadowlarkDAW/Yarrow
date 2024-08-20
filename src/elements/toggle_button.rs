@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use rootvg::math::Point;
 use rootvg::quad::{QuadFlags, Radius};
-use rootvg::text::{CustomGlyphID, FontSystem, TextProperties};
+use rootvg::text::{FontSystem, TextProperties};
 use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
@@ -11,7 +11,7 @@ use crate::layout::{Align, Align2, Padding};
 use crate::math::{Rect, Size, Vector, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
 use crate::style::{
-    Background, BorderStyle, ClassID, DisabledBackground, DisabledColor, QuadStyle,
+    Background, BorderStyle, ClassID, DisabledBackground, DisabledColor, IconID, QuadStyle,
 };
 use crate::theme::DEFAULT_ICON_SIZE;
 use crate::vg::color::{self, RGBA8};
@@ -526,7 +526,7 @@ pub struct ToggleButtonInner {
 impl ToggleButtonInner {
     pub fn new(
         text: Option<impl Into<String>>,
-        icon_id: Option<CustomGlyphID>,
+        icon_id: Option<IconID>,
         text_offset: Vector,
         icon_offset: Vector,
         icon_scale: f32,
@@ -598,11 +598,11 @@ impl ToggleButtonInner {
         self.label_inner.text()
     }
 
-    pub fn set_icon(&mut self, icon: Option<CustomGlyphID>) -> bool {
+    pub fn set_icon(&mut self, icon: Option<IconID>) -> bool {
         self.label_inner.set_icon(icon)
     }
 
-    pub fn icon(&self) -> Option<CustomGlyphID> {
+    pub fn icon(&self) -> Option<IconID> {
         self.label_inner.icon()
     }
 
@@ -674,7 +674,7 @@ pub struct ToggleButtonBuilder<A: Clone + 'static> {
     pub tooltip_align: Align2,
     pub toggled: bool,
     pub text: Option<String>,
-    pub icon: Option<CustomGlyphID>,
+    pub icon: Option<IconID>,
     pub icon_scale: f32,
     pub text_offset: Vector,
     pub icon_offset: Vector,
@@ -742,7 +742,7 @@ impl<A: Clone + 'static> ToggleButtonBuilder<A> {
     ///
     /// If this method isn't used, then the label will have no icon (unless
     /// [`LabelBulder::icon_optional`] is used).
-    pub fn icon(mut self, icon: impl Into<CustomGlyphID>) -> Self {
+    pub fn icon(mut self, icon: impl Into<IconID>) -> Self {
         self.icon = Some(icon.into());
         self
     }
@@ -758,7 +758,7 @@ impl<A: Clone + 'static> ToggleButtonBuilder<A> {
     /// The optional icon of the label
     ///
     /// If this is set to `None`, then the label will have no icon.
-    pub fn icon_optional(mut self, icon: Option<impl Into<CustomGlyphID>>) -> Self {
+    pub fn icon_optional(mut self, icon: Option<impl Into<IconID>>) -> Self {
         self.icon = icon.map(|i| i.into());
         self
     }
@@ -1141,8 +1141,8 @@ impl ToggleButton {
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
     /// so this method is relatively cheap to call frequently.
-    pub fn set_icon(&mut self, icon: Option<impl Into<CustomGlyphID>>) -> bool {
-        let icon: Option<CustomGlyphID> = icon.map(|i| i.into());
+    pub fn set_icon(&mut self, icon: Option<impl Into<IconID>>) -> bool {
+        let icon: Option<IconID> = icon.map(|i| i.into());
 
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -1158,7 +1158,7 @@ impl ToggleButton {
         Ref::filter_map(RefCell::borrow(&self.shared_state), |s| s.inner.text()).ok()
     }
 
-    pub fn icon(&self) -> Option<CustomGlyphID> {
+    pub fn icon(&self) -> Option<IconID> {
         RefCell::borrow(&self.shared_state).inner.icon()
     }
 

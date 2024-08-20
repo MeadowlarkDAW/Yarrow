@@ -2,14 +2,13 @@ use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
 use rootvg::math::Point;
-use rootvg::text::CustomGlyphID;
 use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
 use crate::layout::{Align2, LayoutDirection};
 use crate::math::{Rect, Size, Vector, ZIndex};
 use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::{ClassID, QuadStyle};
+use crate::style::{ClassID, IconID, QuadStyle};
 use crate::view::element::{
     Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
 };
@@ -70,7 +69,7 @@ pub struct TabBuilder<A: Clone + 'static> {
     pub tooltip_align: Align2,
     pub toggled: bool,
     pub text: Option<String>,
-    pub icon: Option<CustomGlyphID>,
+    pub icon: Option<IconID>,
     pub icon_scale: f32,
     pub text_offset: Vector,
     pub icon_offset: Vector,
@@ -146,7 +145,7 @@ impl<A: Clone + 'static> TabBuilder<A> {
     ///
     /// If this method isn't used, then the label will have no icon (unless
     /// [`LabelBulder::icon_optional`] is used).
-    pub fn icon(mut self, icon: impl Into<CustomGlyphID>) -> Self {
+    pub fn icon(mut self, icon: impl Into<IconID>) -> Self {
         self.icon = Some(icon.into());
         self
     }
@@ -162,7 +161,7 @@ impl<A: Clone + 'static> TabBuilder<A> {
     /// The optional icon of the label
     ///
     /// If this is set to `None`, then the label will have no icon.
-    pub fn icon_optional(mut self, icon: Option<impl Into<CustomGlyphID>>) -> Self {
+    pub fn icon_optional(mut self, icon: Option<impl Into<IconID>>) -> Self {
         self.icon = icon.map(|i| i.into());
         self
     }
@@ -600,8 +599,8 @@ impl Tab {
     ///
     /// This size is automatically cached, so it should be relatively
     /// inexpensive to call.
-    pub fn set_icon(&mut self, icon: Option<impl Into<CustomGlyphID>>) -> bool {
-        let icon: Option<CustomGlyphID> = icon.map(|i| i.into());
+    pub fn set_icon(&mut self, icon: Option<impl Into<IconID>>) -> bool {
+        let icon: Option<IconID> = icon.map(|i| i.into());
 
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
@@ -617,7 +616,7 @@ impl Tab {
         Ref::filter_map(RefCell::borrow(&self.shared_state), |s| s.inner.text()).ok()
     }
 
-    pub fn icon(&self) -> Option<CustomGlyphID> {
+    pub fn icon(&self) -> Option<IconID> {
         RefCell::borrow(&self.shared_state).inner.icon()
     }
 
@@ -750,7 +749,7 @@ impl Tab {
 #[derive(Default, Debug, Clone)]
 pub struct TabGroupOption {
     pub text: Option<String>,
-    pub icon: Option<CustomGlyphID>,
+    pub icon: Option<IconID>,
     pub tooltip_message: String,
     pub text_offset: Vector,
     pub icon_offset: Vector,
@@ -761,7 +760,7 @@ pub struct TabGroupOption {
 impl TabGroupOption {
     pub fn new(
         text: Option<String>,
-        icon: Option<CustomGlyphID>,
+        icon: Option<IconID>,
         tooltip_message: impl Into<String>,
     ) -> Self {
         Self {

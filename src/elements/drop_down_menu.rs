@@ -3,14 +3,14 @@ use std::rc::Rc;
 
 use rootvg::math::Point;
 use rootvg::quad::{SolidQuadBuilder, SolidQuadPrimitive};
-use rootvg::text::{CustomGlyphID, FontSystem, TextPrimitive, TextProperties};
+use rootvg::text::{FontSystem, TextPrimitive, TextProperties};
 use rootvg::PrimitiveGroup;
 
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
 use crate::layout::Padding;
 use crate::math::{Rect, Size, Vector, ZIndex};
 use crate::prelude::ElementStyle;
-use crate::style::{ClassID, QuadStyle};
+use crate::style::{ClassID, IconID, QuadStyle};
 use crate::theme::DEFAULT_ICON_SIZE;
 use crate::vg::color::{self, RGBA8};
 use crate::view::element::{
@@ -34,7 +34,7 @@ use super::label::{LabelInner, LabelPaddingInfo, LabelStyle};
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MenuEntry {
     Option {
-        left_icon: Option<CustomGlyphID>,
+        left_icon: Option<IconID>,
         icon_scale: f32,
         left_text: String,
         right_text: Option<String>,
@@ -71,7 +71,7 @@ impl MenuEntry {
 
     pub fn option_with_icon(
         text: impl Into<String>,
-        icon_id: Option<impl Into<CustomGlyphID>>,
+        icon_id: Option<impl Into<IconID>>,
         icon_scale: f32,
         unique_id: usize,
     ) -> Self {
