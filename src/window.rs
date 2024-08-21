@@ -1,4 +1,5 @@
 use keyboard_types::{CompositionEvent, Modifiers};
+
 use raw_window_handle_06::{
     AppKitDisplayHandle, AppKitWindowHandle, Win32WindowHandle, WindowsDisplayHandle,
     XcbDisplayHandle, XcbWindowHandle, XlibDisplayHandle, XlibWindowHandle,
@@ -17,10 +18,13 @@ use crate::event::{
     CanvasEvent, EventCaptureStatus, KeyboardEvent, PointerButton, PointerEvent, PointerType,
     WheelDeltaType,
 };
-use crate::math::{PhysicalSizeI32, ScaleFactor, Size};
-use crate::prelude::ResourceCtx;
+use crate::math::{
+    to_logical_size_i32, PhysicalPoint, PhysicalSizeI32, Point, ScaleFactor, Size, Vector, ZIndex,
+};
+use crate::prelude::{ActionReceiver, ResourceCtx};
+use crate::style::ClassID;
 use crate::{view::ViewConfig, View};
-use crate::{CursorIcon, ScissorRectID, MAIN_SCISSOR_RECT};
+use crate::{CursorIcon, ScissorRectID};
 
 #[cfg(feature = "winit")]
 mod winit_backend;
@@ -357,7 +361,7 @@ impl<A: Clone + 'static> WindowState<A> {
             // avoid sending a duplicate.
             None
         } else if let Some(prev_pos) = self.prev_pointer_pos {
-            Some(new_pos - prev_pos.to_vector())
+            Some(new_pos.to_vector() - prev_pos.to_vector())
         } else {
             None
         };
@@ -377,7 +381,7 @@ impl<A: Clone + 'static> WindowState<A> {
         );
     }
 
-    pub fn handle_locked_pointer_delta(&mut self, delta: Point, res: &mut ResourceCtx) {
+    pub fn handle_locked_pointer_delta(&mut self, delta: Vector, res: &mut ResourceCtx) {
         self.view.handle_event(
             &CanvasEvent::Pointer(PointerEvent::Moved {
                 position: self.prev_pointer_pos.unwrap_or_default(),
@@ -499,13 +503,21 @@ impl<A: Clone + 'static> WindowState<A> {
         self.logical_size
     }
 
-    pub fn context<'b>(&'b mut self, res: &'b mut ResourceCtx) -> WindowContext<'b, A> {
+    pub fn context<'b>(
+        &'b mut self,
+        res: &'b mut ResourceCtx,
+        action_sender: &'b mut ActionSender<A>,
+        action_receiver: &'b mut ActionReceiver<A>,
+    ) -> WindowContext<'b, A> {
         WindowContext {
             view: &mut self.view,
             res,
             clipboard: &mut self.clipboard,
+            action_sender,
+            action_receiver,
             z_index_stack: Vec::new(),
             scissor_rect_id_stack: Vec::new(),
+            class_id_stack: Vec::new(),
             logical_size: self.logical_size,
             physical_size: self.physical_size,
             scale_factor: self.scale_factor,
@@ -525,6 +537,10 @@ impl<A: Clone + 'static> WindowState<A> {
 
     pub fn new_pointer_lock_request(&mut self) -> Option<bool> {
         self.view.pointer_lock_request()
+    }
+
+    pub fn on_theme_changed(&mut self, res: &mut ResourceCtx) {
+        self.view.on_theme_changed(res, &mut self.clipboard);
     }
 }
 
@@ -589,8 +605,13 @@ pub struct WindowContext<'a, A: Clone + 'static> {
     pub view: &'a mut View<A>,
     pub res: &'a mut ResourceCtx,
     pub clipboard: &'a mut Clipboard,
+    /// The sending end of the action queue.
+    pub action_sender: &'a mut ActionSender<A>,
+    /// The receiving end of the action queue.
+    pub action_receiver: &'a mut ActionReceiver<A>,
     z_index_stack: Vec<ZIndex>,
     scissor_rect_id_stack: Vec<ScissorRectID>,
+    class_id_stack: Vec<ClassID>,
     logical_size: Size,
     physical_size: PhysicalSizeI32,
     scale_factor: ScaleFactor,
@@ -629,7 +650,12 @@ impl<'a, A: Clone + 'static> WindowContext<'a, A> {
         self.scissor_rect_id_stack
             .last()
             .copied()
-            .unwrap_or(MAIN_SCISSOR_RECT)
+            .unwrap_or_default()
+    }
+
+    /// Get the current style class ID from the stack (peek)
+    pub fn class(&self) -> ClassID {
+        self.class_id_stack.last().map(|s| *s).unwrap_or_default()
     }
 
     /// Push a z index onto the stack
@@ -647,6 +673,11 @@ impl<'a, A: Clone + 'static> WindowContext<'a, A> {
         self.scissor_rect_id_stack.push(scissor_rect_id);
     }
 
+    /// Push a style class ID onto the stack
+    pub fn push_class(&mut self, class: ClassID) {
+        self.class_id_stack.push(class);
+    }
+
     /// Pop a z index from the stack
     pub fn pop_z_index(&mut self) -> Option<ZIndex> {
         self.z_index_stack.pop()
@@ -655,6 +686,11 @@ impl<'a, A: Clone + 'static> WindowContext<'a, A> {
     /// Pop a scissor rect ID from the stack
     pub fn pop_scissor_rect(&mut self) -> Option<ScissorRectID> {
         self.scissor_rect_id_stack.pop()
+    }
+
+    /// Pop a style class ID from the stack
+    pub fn pop_class(&mut self) -> Option<ClassID> {
+        self.class_id_stack.pop()
     }
 
     /// Reset the z index stack.
@@ -667,15 +703,17 @@ impl<'a, A: Clone + 'static> WindowContext<'a, A> {
         self.scissor_rect_id_stack.clear();
     }
 
-    /// Returns the z index and scissor rect ID from the given builder values.
-    pub fn z_index_and_scissor_rect_id(
+    /// Returns the z index, scissor rect ID, and class ID from the given builder values.
+    pub fn builder_values(
         &self,
         z_index: Option<ZIndex>,
         scissor_rect_id: Option<ScissorRectID>,
-    ) -> (ZIndex, ScissorRectID) {
+        class: Option<ClassID>,
+    ) -> (ZIndex, ScissorRectID, ClassID) {
         (
             z_index.unwrap_or_else(|| self.z_index()),
             scissor_rect_id.unwrap_or_else(|| self.scissor_rect_id()),
+            class.unwrap_or_else(|| self.class()),
         )
     }
 

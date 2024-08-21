@@ -2,32 +2,36 @@
 //! the same style, use a render cache to re-use expensive mesh primitives
 //! across instances.
 
-use std::{any::Any, hash::Hash, rc::Rc};
+use std::{any::Any, hash::Hash};
 
-use rootvg::{math::Rect, mesh::MeshPrimitive};
 use rustc_hash::FxHashMap;
 
-use crate::{
-    elements::knob::KnobMarkersStyle, prelude::KnobNotchStyle, view::element::ElementRenderCache,
-};
+#[cfg(feature = "tessellation")]
+use rootvg::mesh::MeshPrimitive;
 
-use super::{KnobNotchLinePrimitives, KnobStyle};
+use crate::style::ClassID;
+use crate::view::element::ElementRenderCache;
+
+use super::{KnobNotchLinePrimitives, KnobNotchStyle, KnobStyle};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct KnobNotchLineCacheKey {
-    style_ptr: usize,
+    class: ClassID,
     back_size: i32,
 }
 
+#[cfg(feature = "tessellation")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct KnobMarkersArcCacheKey {
-    style_ptr: usize,
+    class: ClassID,
     back_size: i32,
+    disabled: bool,
 }
 
 #[derive(Default)]
 pub struct KnobRenderCacheInner {
     notch_line_meshes: FxHashMap<KnobNotchLineCacheKey, (KnobNotchLinePrimitives, bool)>,
+    #[cfg(feature = "tessellation")]
     marker_arc_meshes: FxHashMap<KnobMarkersArcCacheKey, (MeshPrimitive, bool)>,
 }
 
@@ -36,6 +40,7 @@ impl KnobRenderCacheInner {
         for entry in self.notch_line_meshes.values_mut() {
             entry.1 = false;
         }
+        #[cfg(feature = "tessellation")]
         for entry in self.marker_arc_meshes.values_mut() {
             entry.1 = false;
         }
@@ -43,12 +48,14 @@ impl KnobRenderCacheInner {
 
     pub fn post_render(&mut self) {
         self.notch_line_meshes.retain(|_, (_, active)| *active);
+        #[cfg(feature = "tessellation")]
         self.marker_arc_meshes.retain(|_, (_, active)| *active);
     }
 
     pub fn notch_line_mesh(
         &mut self,
-        style: &Rc<KnobStyle>,
+        class: ClassID,
+        style: &KnobStyle,
         back_size: f32,
     ) -> Option<&KnobNotchLinePrimitives> {
         let KnobNotchStyle::Line(notch_style) = &style.notch else {
@@ -56,7 +63,7 @@ impl KnobRenderCacheInner {
         };
 
         let key = KnobNotchLineCacheKey {
-            style_ptr: Rc::as_ptr(style) as usize,
+            class,
             back_size: back_size.round() as i32,
         };
 
@@ -71,23 +78,29 @@ impl KnobRenderCacheInner {
         Some(&entry.0)
     }
 
+    #[cfg(feature = "tessellation")]
     pub fn marker_arc_back_mesh(
         &mut self,
-        style: &Rc<KnobStyle>,
-        back_bounds: Rect,
+        class: ClassID,
+        style: &KnobStyle,
+        back_bounds: crate::math::Rect,
+        disabled: bool,
     ) -> Option<MeshPrimitive> {
+        use super::KnobMarkersStyle;
+
         let KnobMarkersStyle::Arc(arc_style) = &style.markers else {
             return None;
         };
 
         let key = KnobMarkersArcCacheKey {
-            style_ptr: Rc::as_ptr(style) as usize,
+            class,
             back_size: back_bounds.width().round() as i32,
+            disabled,
         };
 
         let entry = self.marker_arc_meshes.entry(key).or_insert_with(|| {
             (
-                arc_style.create_back_primitive(back_bounds.width(), style.angle_range),
+                arc_style.create_back_primitive(back_bounds.width(), style.angle_range, disabled),
                 true,
             )
         });
@@ -96,7 +109,7 @@ impl KnobRenderCacheInner {
         entry.1 = true;
 
         let mut mesh = entry.0.clone();
-        mesh.set_offset(back_bounds.origin);
+        mesh.set_offset(back_bounds.origin.to_vector());
 
         Some(mesh)
     }

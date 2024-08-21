@@ -3,6 +3,36 @@ use crate::math::{Point, Rect, SideOffsets, Size};
 pub type Padding = SideOffsets;
 pub type Margin = SideOffsets;
 
+/// An alias for `SideOffsets2D::new(top, right, bottom, left)`
+pub const fn padding(top: f32, right: f32, bottom: f32, left: f32) -> Padding {
+    Padding::new(top, right, bottom, left)
+}
+
+/// An alias for `SideOffsets2D::new(vertical, horizontal, vertical, horizontal)`
+pub const fn padding_vh(vertical: f32, horizontal: f32) -> Padding {
+    Padding::new(vertical, horizontal, vertical, horizontal)
+}
+
+/// An alias for `SideOffsets2D::new(val, val, val, val)`
+pub const fn padding_all_same(val: f32) -> Padding {
+    Padding::new(val, val, val, val)
+}
+
+/// An alias for `SideOffsets2D::new(top, right, bottom, left)`
+pub const fn margin(top: f32, right: f32, bottom: f32, left: f32) -> Margin {
+    Margin::new(top, right, bottom, left)
+}
+
+/// An alias for `SideOffsets2D::new(vertical, horizontal, vertical, horizontal)`
+pub const fn margin_vh(vertical: f32, horizontal: f32) -> Margin {
+    Margin::new(vertical, horizontal, vertical, horizontal)
+}
+
+/// An alias for `SideOffsets2D::new(val, val, val, val)`
+pub const fn margin_all_same(val: f32) -> Margin {
+    Margin::new(val, val, val, val)
+}
+
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum LayoutDirection {

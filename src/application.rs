@@ -4,6 +4,8 @@ use std::{error::Error, time::Duration};
 
 use crate::{
     event::{AppWindowEvent, KeyboardEvent},
+    prelude::{ActionReceiver, ActionSender},
+    style::StyleSystem,
     window::{
         LinuxBackendType, ScaleFactorConfig, WindowCloseRequest, WindowConfig, WindowContext,
         WindowID, WindowState,
@@ -75,6 +77,7 @@ pub struct AppConfig {
     pub tick_timer_interval: TimerInterval,
     pub pointer_debounce_interval: TimerInterval,
     pub pointer_locking_enabled: bool,
+    pub use_dark_theme: bool,
 }
 
 impl Default for AppConfig {
@@ -83,13 +86,16 @@ impl Default for AppConfig {
             tick_timer_interval: TimerInterval::PercentageOfFrameRate(1.0),
             pointer_debounce_interval: TimerInterval::PercentageOfFrameRate(2.0),
             pointer_locking_enabled: true,
+            use_dark_theme: true,
         }
     }
 }
 
 /// A context for globally-shared resources
 pub struct ResourceCtx {
+    pub style_system: StyleSystem,
     pub font_system: FontSystem,
+    #[cfg(feature = "svg-icons")]
     pub svg_icon_system: rootvg::text::svg::SvgIconSystem,
 }
 
@@ -100,13 +106,22 @@ pub struct AppContext<A: Clone + 'static> {
     pub(crate) linux_backend_type: Option<LinuxBackendType>,
     /// The global resource context
     pub res: ResourceCtx,
+
+    /// The sending end of the action queue.
+    pub action_sender: ActionSender<A>,
+    /// The receiving end of the action queue.
+    pub action_receiver: ActionReceiver<A>,
 }
 
 impl<A: Clone + 'static> AppContext<A> {
     pub fn window_context<'a>(&'a mut self, window_id: WindowID) -> Option<WindowContext<'a, A>> {
-        self.window_map
-            .get_mut(&window_id)
-            .map(|w| w.context(&mut self.res))
+        self.window_map.get_mut(&window_id).map(|w| {
+            w.context(
+                &mut self.res,
+                &mut self.action_sender,
+                &mut self.action_receiver,
+            )
+        })
     }
 
     pub fn resize_window(&mut self, window_id: WindowID, logical_size: Size) {
@@ -158,19 +173,40 @@ impl<A: Clone + 'static> AppContext<A> {
     pub fn linux_backend_type(&self) -> Option<LinuxBackendType> {
         self.linux_backend_type
     }
+
+    pub fn use_dark_theme(&mut self, use_dark_theme: bool) {
+        if self.res.style_system.use_dark_theme != use_dark_theme {
+            self.res.style_system.use_dark_theme = use_dark_theme;
+
+            for window_id in self.window_map.keys() {
+                self.window_requests
+                    .push((*window_id, WindowRequest::NotifyThemeChange));
+            }
+        }
+    }
 }
 
 impl<A: Clone + 'static> AppContext<A> {
-    pub fn new(config: AppConfig) -> Self {
+    pub fn new(
+        config: AppConfig,
+        action_sender: ActionSender<A>,
+        action_receiver: ActionReceiver<A>,
+    ) -> Self {
+        let use_dark_theme = config.use_dark_theme;
+
         Self {
             config,
             window_requests: Vec::new(),
             window_map: FxHashMap::default(),
             res: ResourceCtx {
+                style_system: StyleSystem::new(use_dark_theme),
                 font_system: FontSystem::new(),
+                #[cfg(feature = "svg-icons")]
                 svg_icon_system: Default::default(),
             },
             linux_backend_type: None,
+            action_sender,
+            action_receiver,
         }
     }
 }
@@ -184,4 +220,5 @@ pub(crate) enum WindowRequest {
     SetTitle(String),
     SetScaleFactor(ScaleFactorConfig),
     Create(WindowConfig),
+    NotifyThemeChange,
 }

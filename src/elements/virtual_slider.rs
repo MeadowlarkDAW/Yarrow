@@ -6,7 +6,7 @@ use std::{
 
 use keyboard_types::Modifiers;
 use rootvg::{
-    math::{Point, Rect, ZIndex},
+    math::{Point, Rect, Size, ZIndex},
     PrimitiveGroup,
 };
 use smallvec::SmallVec;
@@ -14,11 +14,12 @@ use smallvec::SmallVec;
 use crate::{
     event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent},
     layout::Align2,
+    style::ClassID,
     view::element::{
         Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, ElementRenderCache,
         RenderContext,
     },
-    ScissorRectID, WindowContext,
+    CursorIcon, ScissorRectID, WindowContext,
 };
 
 mod inner;
@@ -26,6 +27,9 @@ mod renderer;
 
 pub use inner::*;
 pub use renderer::*;
+
+pub mod knob;
+pub mod slider;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ParamOpenTextEntryInfo {
@@ -189,6 +193,21 @@ pub struct VirtualSliderConfig {
     /// By default this is set to `true`.
     pub open_text_entry_on_right_click: bool,
 
+    /// The cursor icon to show when the user hovers over this element.
+    ///
+    /// If this is `None`, then the cursor icon will not be changed.
+    ///
+    /// By default this is set to `None`.
+    pub cursor_icon_hover: Option<CursorIcon>,
+
+    /// The cursor icon to show when the user is gesturing (dragging)
+    /// this element.
+    ///
+    /// If this is `None`, then the cursor icon will not be changed.
+    ///
+    /// By default this is set to `None`.
+    pub cursor_icon_gesturing: Option<CursorIcon>,
+
     /// Whether or not to disabled locking the pointer in place while
     /// dragging this element.
     ///
@@ -208,6 +227,8 @@ impl Default for VirtualSliderConfig {
             open_text_entry_modifier: Some(Modifiers::CONTROL),
             open_text_entry_on_middle_click: true,
             open_text_entry_on_right_click: true,
+            cursor_icon_hover: None,
+            cursor_icon_gesturing: None,
             disable_pointer_locking: false,
         }
     }
@@ -216,7 +237,7 @@ impl Default for VirtualSliderConfig {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParamElementTooltipInfo {
     pub param_info: ParamInfo,
-    pub bounding_rect: Rect,
+    pub rect: Rect,
     pub tooltip_align: Align2,
 }
 
@@ -226,12 +247,12 @@ pub struct ParamRightClickInfo {
     pub pointer_pos: Point,
 }
 
-pub struct VirtualSliderBuilder<A: Clone + 'static, R: VirtualSliderRenderer> {
+pub struct VirtualSliderBuilder<A: Clone + 'static> {
     pub on_gesture: Option<Box<dyn FnMut(ParamUpdate) -> A>>,
     pub on_right_click: Option<Box<dyn FnMut(ParamRightClickInfo) -> A>>,
     pub on_open_text_entry: Option<Box<dyn FnMut(ParamOpenTextEntryInfo) -> A>>,
     pub on_tooltip_request: Option<Box<dyn FnMut(ParamElementTooltipInfo) -> A>>,
-    pub style: Rc<R::Style>,
+    pub class: Option<ClassID>,
     pub tooltip_align: Align2,
     pub param_id: u32,
     pub normal_value: f64,
@@ -244,20 +265,20 @@ pub struct VirtualSliderBuilder<A: Clone + 'static, R: VirtualSliderRenderer> {
     pub scroll_horizontally: bool,
     pub horizontal: bool,
     pub z_index: Option<ZIndex>,
-    pub bounding_rect: Rect,
+    pub rect: Rect,
     pub manually_hidden: bool,
     pub disabled: bool,
     pub scissor_rect_id: Option<ScissorRectID>,
 }
 
-impl<A: Clone + 'static, R: VirtualSliderRenderer> VirtualSliderBuilder<A, R> {
-    pub fn new(param_id: u32, style: &Rc<R::Style>) -> Self {
+impl<A: Clone + 'static> VirtualSliderBuilder<A> {
+    pub fn new(param_id: u32) -> Self {
         Self {
             on_gesture: None,
             on_right_click: None,
             on_open_text_entry: None,
             on_tooltip_request: None,
-            style: Rc::clone(style),
+            class: None,
             tooltip_align: Align2::TOP_CENTER,
             param_id,
             normal_value: 0.0,
@@ -270,14 +291,17 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer> VirtualSliderBuilder<A, R> {
             scroll_horizontally: false,
             horizontal: false,
             z_index: None,
-            bounding_rect: Rect::default(),
+            rect: Rect::default(),
             manually_hidden: false,
             disabled: false,
             scissor_rect_id: None,
         }
     }
 
-    pub fn build(self, cx: &mut WindowContext<'_, A>) -> VirtualSlider<R> {
+    pub fn build<R: VirtualSliderRenderer>(
+        self,
+        cx: &mut WindowContext<'_, A>,
+    ) -> VirtualSlider<R> {
         VirtualSliderElement::create(self, cx)
     }
 
@@ -354,26 +378,53 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer> VirtualSliderBuilder<A, R> {
         self
     }
 
+    /// The style class ID
+    ///
+    /// If this method is not used, then the current class from the window context will
+    /// be used.
+    pub const fn class(mut self, class: ClassID) -> Self {
+        self.class = Some(class);
+        self
+    }
+
+    /// The z index of the element
+    ///
+    /// If this method is not used, then the current z index from the window context will
+    /// be used.
     pub const fn z_index(mut self, z_index: ZIndex) -> Self {
         self.z_index = Some(z_index);
         self
     }
 
-    pub const fn bounding_rect(mut self, rect: Rect) -> Self {
-        self.bounding_rect = rect;
+    /// The bounding rectangle of the element
+    ///
+    /// If this method is not used, then the element will have a size and position of
+    /// zero and will not be visible until its bounding rectangle is set.
+    pub const fn rect(mut self, rect: Rect) -> Self {
+        self.rect = rect;
         self
     }
 
+    /// Whether or not this element is manually hidden
+    ///
+    /// By default this is set to `false`.
     pub const fn hidden(mut self, hidden: bool) -> Self {
         self.manually_hidden = hidden;
         self
     }
 
+    /// Whether or not this element is in the disabled state
+    ///
+    /// By default this is set to `false`.
     pub const fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
         self
     }
 
+    /// The ID of the scissoring rectangle this element belongs to.
+    ///
+    /// If this method is not used, then the current scissoring rectangle ID from the
+    /// window context will be used.
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
         self.scissor_rect_id = Some(scissor_rect_id);
         self
@@ -390,14 +441,14 @@ pub struct VirtualSliderElement<A: Clone + 'static, R: VirtualSliderRenderer + '
     tooltip_align: Align2,
     horizontal: bool,
 
-    renderer: R,
     hovered: bool,
     state: VirtualSliderState,
+    global_render_cache_id: Option<u32>,
 }
 
 impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElement<A, R> {
     pub fn create(
-        builder: VirtualSliderBuilder<A, R>,
+        builder: VirtualSliderBuilder<A>,
         cx: &mut WindowContext<'_, A>,
     ) -> VirtualSlider<R> {
         let VirtualSliderBuilder {
@@ -405,7 +456,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
             on_right_click,
             on_open_text_entry,
             on_tooltip_request,
-            style,
+            class,
             tooltip_align,
             param_id,
             normal_value,
@@ -418,13 +469,17 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
             scroll_horizontally,
             horizontal,
             z_index,
-            bounding_rect,
+            rect,
             manually_hidden,
             disabled,
             scissor_rect_id,
         } = builder;
 
-        let (z_index, scissor_rect_id) = cx.z_index_and_scissor_rect_id(z_index, scissor_rect_id);
+        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
+        let style = cx.res.style_system.get_rc::<R::Style>(class);
+
+        let renderer = R::new(style);
+        let global_render_cache_id = renderer.global_render_cache_id();
 
         let shared_state = Rc::new(RefCell::new(SharedState {
             inner: VirtualSliderInner::new(
@@ -436,7 +491,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
                 drag_horizontally,
                 scroll_horizontally,
             ),
-            style,
+            renderer,
             automation_info: AutomationInfo::default(),
             markers,
             bipolar,
@@ -455,18 +510,19 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
                 on_tooltip_request,
                 tooltip_align,
                 horizontal,
-                renderer: R::default(),
                 hovered: false,
                 state: if disabled {
                     VirtualSliderState::Disabled
                 } else {
                     VirtualSliderState::Idle
                 },
+                global_render_cache_id,
             }),
             z_index,
-            bounding_rect,
+            rect,
             manually_hidden,
             scissor_rect_id,
+            class,
         };
 
         let el = cx
@@ -485,7 +541,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
             | ElementFlags::LISTENS_TO_POINTER_OUTSIDE_BOUNDS_WHEN_FOCUSED
             | ElementFlags::LISTENS_TO_FOCUS_CHANGE;
 
-        if self.renderer.does_paint() {
+        if RefCell::borrow(&self.shared_state).renderer.does_paint() {
             flags.insert(ElementFlags::PAINTS);
         }
 
@@ -500,7 +556,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
         let SharedState {
             inner,
-            style,
+            renderer,
             automation_info,
             markers,
             bipolar,
@@ -514,7 +570,6 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
             |param_update: InnerParamUpdate,
              cx: &mut ElementContext<'_, A>,
              renderer: &mut R,
-             style: &Rc<R::Style>,
              prev_state: Option<VirtualSliderState>,
              state: VirtualSliderState,
              on_gesture: &mut Option<Box<dyn FnMut(ParamUpdate) -> A>>| {
@@ -527,7 +582,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                 }
 
                 if let Some(prev_state) = prev_state {
-                    let res = renderer.on_state_changed(prev_state, state, style);
+                    let res = renderer.on_state_changed(prev_state, state);
                     cx.set_animating(res.animating);
                 }
 
@@ -542,7 +597,6 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
              hovered: bool,
              state: &mut VirtualSliderState,
              renderer: &mut R,
-             style: &Rc<R::Style>,
              disabled: bool,
              on_gesture: &mut Option<Box<dyn FnMut(ParamUpdate) -> A>>| {
                 if let Some(param_update) = inner.finish_gesture() {
@@ -562,15 +616,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                         None
                     };
 
-                    send_param_update(
-                        param_update,
-                        cx,
-                        renderer,
-                        style,
-                        prev_state,
-                        *state,
-                        on_gesture,
-                    );
+                    send_param_update(param_update, cx, renderer, prev_state, *state, on_gesture);
                 }
             };
 
@@ -581,9 +627,8 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                     return EventCaptureStatus::NotCaptured;
                 }
 
-                let res = self.renderer.on_animation(
+                let res = renderer.on_animation(
                     delta_seconds,
-                    style,
                     VirtualSliderRenderInfo {
                         normal_value: inner.normal_value(),
                         default_normal: inner.default_normal(),
@@ -609,9 +654,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                 if *automation_info_changed {
                     *automation_info_changed = false;
 
-                    let repaint = self
-                        .renderer
-                        .on_automation_info_update(automation_info, style);
+                    let repaint = renderer.on_automation_info_update(automation_info);
                     if repaint {
                         cx.request_repaint();
                     }
@@ -625,8 +668,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                         cx,
                         self.hovered,
                         &mut self.state,
-                        &mut self.renderer,
-                        style,
+                        renderer,
                         *disabled,
                         &mut self.on_gesture,
                     );
@@ -634,11 +676,8 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                     cx.set_animating(false);
                 } else if self.state == VirtualSliderState::Disabled {
                     self.state = VirtualSliderState::Idle;
-                    let res = self.renderer.on_state_changed(
-                        VirtualSliderState::Disabled,
-                        VirtualSliderState::Idle,
-                        style,
-                    );
+                    let res = renderer
+                        .on_state_changed(VirtualSliderState::Disabled, VirtualSliderState::Idle);
                     if res.repaint {
                         cx.request_repaint();
                     }
@@ -651,8 +690,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                             send_param_update(
                                 param_update,
                                 cx,
-                                &mut self.renderer,
-                                style,
+                                renderer,
                                 None,
                                 self.state,
                                 &mut self.on_gesture,
@@ -660,6 +698,10 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                         }
                     }
                 }
+            }
+            ElementEvent::StyleChanged => {
+                let new_style = cx.res.style_system.get_rc::<R::Style>(cx.class());
+                renderer.style_changed(new_style);
             }
             ElementEvent::Pointer(PointerEvent::Moved {
                 position,
@@ -674,6 +716,16 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
 
                 let hovered = cx.rect().contains(position);
 
+                if hovered {
+                    if inner.is_gesturing() {
+                        if let Some(cursor_icon) = inner.config.cursor_icon_gesturing {
+                            cx.cursor_icon = cursor_icon;
+                        }
+                    } else if let Some(cursor_icon) = inner.config.cursor_icon_hover {
+                        cx.cursor_icon = cursor_icon;
+                    }
+                }
+
                 if self.hovered != hovered {
                     self.hovered = hovered;
 
@@ -684,9 +736,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                         } else {
                             VirtualSliderState::Idle
                         };
-                        let res = self
-                            .renderer
-                            .on_state_changed(prev_state, self.state, style);
+                        let res = renderer.on_state_changed(prev_state, self.state);
                         if res.repaint {
                             cx.request_repaint();
                         }
@@ -715,8 +765,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                             pointer_lock_request: None,
                         },
                         cx,
-                        &mut self.renderer,
-                        style,
+                        renderer,
                         None,
                         self.state,
                         &mut self.on_gesture,
@@ -732,9 +781,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                             let prev_state = self.state;
                             self.state = VirtualSliderState::Idle;
 
-                            let res = self
-                                .renderer
-                                .on_state_changed(prev_state, self.state, style);
+                            let res = renderer.on_state_changed(prev_state, self.state);
                             if res.repaint {
                                 cx.request_repaint();
                             }
@@ -772,8 +819,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                             cx,
                             self.hovered,
                             &mut self.state,
-                            &mut self.renderer,
-                            style,
+                            renderer,
                             *disabled,
                             &mut self.on_gesture,
                         );
@@ -807,8 +853,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                             cx,
                             self.hovered,
                             &mut self.state,
-                            &mut self.renderer,
-                            style,
+                            renderer,
                             *disabled,
                             &mut self.on_gesture,
                         );
@@ -830,8 +875,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                     cx,
                     self.hovered,
                     &mut self.state,
-                    &mut self.renderer,
-                    style,
+                    renderer,
                     *disabled,
                     &mut self.on_gesture,
                 );
@@ -844,8 +888,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                         send_param_update(
                             param_update,
                             cx,
-                            &mut self.renderer,
-                            style,
+                            renderer,
                             prev_state,
                             self.state,
                             &mut self.on_gesture,
@@ -871,8 +914,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                         send_param_update(
                             param_update,
                             cx,
-                            &mut self.renderer,
-                            style,
+                            renderer,
                             prev_state,
                             self.state,
                             &mut self.on_gesture,
@@ -914,7 +956,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                     if let Some(f) = self.on_tooltip_request.as_mut() {
                         cx.send_action((f)(ParamElementTooltipInfo {
                             param_info: inner.param_info(),
-                            bounding_rect: cx.rect(),
+                            rect: cx.rect(),
                             tooltip_align: self.tooltip_align,
                         }))
                         .unwrap();
@@ -941,8 +983,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                             pointer_lock_request: None,
                         },
                         cx,
-                        &mut self.renderer,
-                        style,
+                        renderer,
                         prev_state,
                         self.state,
                         &mut self.on_gesture,
@@ -959,8 +1000,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                             pointer_lock_request: None,
                         },
                         cx,
-                        &mut self.renderer,
-                        style,
+                        renderer,
                         None,
                         self.state,
                         &mut self.on_gesture,
@@ -981,8 +1021,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
                         cx,
                         self.hovered,
                         &mut self.state,
-                        &mut self.renderer,
-                        style,
+                        renderer,
                         *disabled,
                         &mut self.on_gesture,
                     );
@@ -995,18 +1034,25 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
     }
 
     fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
-        let shared_state = RefCell::borrow(&self.shared_state);
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+        let SharedState {
+            inner,
+            renderer,
+            automation_info,
+            markers,
+            bipolar,
+            ..
+        } = &mut *shared_state;
 
-        self.renderer.render_primitives(
-            &shared_state.style,
+        renderer.render_primitives(
             VirtualSliderRenderInfo {
-                normal_value: shared_state.inner.normal_value(),
-                default_normal: shared_state.inner.default_normal(),
-                automation_info: shared_state.automation_info.clone(),
-                stepped_value: shared_state.inner.stepped_value(),
+                normal_value: inner.normal_value(),
+                default_normal: inner.default_normal(),
+                automation_info: automation_info.clone(),
+                stepped_value: inner.stepped_value(),
                 state: self.state,
-                bipolar: shared_state.bipolar,
-                markers: &shared_state.markers,
+                bipolar: *bipolar,
+                markers: markers,
                 horizontal: self.horizontal,
             },
             cx,
@@ -1015,11 +1061,13 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
     }
 
     fn global_render_cache_id(&self) -> Option<u32> {
-        self.renderer.global_render_cache_id()
+        self.global_render_cache_id
     }
 
     fn global_render_cache(&self) -> Option<Box<dyn ElementRenderCache>> {
-        self.renderer.global_render_cache()
+        RefCell::borrow(&self.shared_state)
+            .renderer
+            .global_render_cache()
     }
 }
 
@@ -1042,9 +1090,9 @@ impl AutomationInfo {
     }
 }
 
-struct SharedState<R: VirtualSliderRenderer> {
+struct SharedState<R: VirtualSliderRenderer + 'static> {
     inner: VirtualSliderInner,
-    style: Rc<R::Style>,
+    renderer: R,
     automation_info: AutomationInfo,
     markers: ParamMarkersConfig,
     bipolar: bool,
@@ -1061,77 +1109,136 @@ pub struct VirtualSlider<R: VirtualSliderRenderer> {
 }
 
 impl<R: VirtualSliderRenderer> VirtualSlider<R> {
-    pub fn builder<A: Clone + 'static>(
-        param_id: u32,
-        style: &Rc<R::Style>,
-    ) -> VirtualSliderBuilder<A, R> {
-        VirtualSliderBuilder::new(param_id, style)
+    pub fn builder<A: Clone + 'static>(param_id: u32) -> VirtualSliderBuilder<A> {
+        VirtualSliderBuilder::new(param_id)
     }
 
-    pub fn set_normal_value(&mut self, new_normal: f64) {
+    /// Returns the desired size for the element (if the renderer provides one).
+    ///
+    /// This method is relatively inexpensive to call.
+    pub fn desired_size(&self) -> Option<Size> {
+        RefCell::borrow(&self.shared_state).renderer.desired_size()
+    }
+
+    /// Set the normalized value of the parameter.
+    ///
+    /// Returns `true` if the value has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively inexpensive to call.
+    pub fn set_normal_value(&mut self, new_normal: f64) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.normal_value() != new_normal {
             shared_state.queued_new_val = Some(ParamValue::Normal(new_normal));
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
-    pub fn set_stepped_value(&mut self, new_val: u32) {
+    /// Set the stepped value of the parameter. This does nothing if the parameter
+    /// is not stepped.
+    ///
+    /// Returns `true` if the value has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively inexpensive to call.
+    pub fn set_stepped_value(&mut self, new_val: u32) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if let Some(stepped_value) = shared_state.inner.stepped_value() {
             if stepped_value.value != new_val {
                 shared_state.queued_new_val = Some(ParamValue::Stepped(new_val));
-                self.el.notify_custom_state_change();
+                self.el._notify_custom_state_change();
+                return true;
             }
         }
+
+        false
     }
 
-    pub fn set_value(&mut self, new_val: ParamValue) {
+    /// Set the value of the parameter. This does nothing if the parameter
+    /// is stepped.
+    ///
+    /// Returns `true` if the value has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively inexpensive to call.
+    pub fn set_value(&mut self, new_val: ParamValue) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.value() != new_val {
             if let ParamValue::Stepped(_) = new_val {
                 if shared_state.inner.stepped_value().is_none() {
-                    return;
+                    return false;
                 }
             }
 
             shared_state.queued_new_val = Some(new_val);
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
-    pub fn set_default_normal(&mut self, new_normal: f64) {
+    /// Set the default normalized value of the parameter.
+    ///
+    /// Returns `true` if the value has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively inexpensive to call.
+    pub fn set_default_normal(&mut self, new_normal: f64) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         let state_changed = shared_state.inner.set_default_normal(new_normal);
         if state_changed {
             shared_state.needs_repaint = true;
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
-    pub fn set_automation_info(&mut self, mut info: AutomationInfo) {
+    /// Set the automation information of the parameter.
+    ///
+    /// Returns `true` if the state has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the state has changed,
+    /// so this method is relatively inexpensive to call.
+    pub fn set_automation_info(&mut self, mut info: AutomationInfo) -> bool {
         info.clamp();
 
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
         if shared_state.automation_info != info {
             shared_state.automation_info = info;
             shared_state.automation_info_changed = true;
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
     /// Reset the parameter to the default value.
-    pub fn reset_to_default(&mut self) {
+    ///
+    /// Returns `true` if the value has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively inexpensive to call.
+    pub fn reset_to_default(&mut self) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.normal_value() != shared_state.inner.default_normal() {
             shared_state.queued_new_val =
                 Some(ParamValue::Normal(shared_state.inner.default_normal()));
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
@@ -1158,13 +1265,22 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
             .value()
     }
 
-    pub fn set_markers(&mut self, markers: ParamMarkersConfig) {
+    /// Set the markers config for the element.
+    ///
+    /// Returns `true` if the value has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively inexpensive to call.
+    pub fn set_markers(&mut self, markers: ParamMarkersConfig) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.markers != markers {
             shared_state.markers = markers;
             shared_state.needs_repaint = true;
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
@@ -1172,13 +1288,22 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
         Ref::map(RefCell::borrow(&self.shared_state), |s| &s.markers)
     }
 
-    pub fn set_bipolar(&mut self, bipolar: bool) {
+    /// Set the whether or not this parameter is bipolar.
+    ///
+    /// Returns `true` if the value has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively inexpensive to call.
+    pub fn set_bipolar(&mut self, bipolar: bool) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.bipolar != bipolar {
             shared_state.bipolar = bipolar;
             shared_state.needs_repaint = true;
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
@@ -1186,27 +1311,31 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
         RefCell::borrow(&self.shared_state).bipolar
     }
 
-    pub fn set_style(&mut self, style: &Rc<R::Style>) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
-        if !Rc::ptr_eq(&shared_state.style, style) {
-            shared_state.style = Rc::clone(style);
-            shared_state.needs_repaint = true;
-            self.el.notify_custom_state_change();
+    /// Set the class of the element.
+    ///
+    /// Returns `true` if the class has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively inexpensive to call.
+    pub fn set_class(&mut self, class: ClassID) {
+        if self.el.class() != class {
+            self.el._notify_class_change(class);
         }
     }
 
-    pub fn style(&self) -> Rc<R::Style> {
-        Rc::clone(&RefCell::borrow(&self.shared_state).style)
-    }
-
+    /// Set the disabled state of this element.
+    ///
+    /// Returns `true` if the disabled state has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the state has changed,
+    /// so this method is relatively inexpensive to call.
     pub fn set_disabled(&mut self, disabled: bool) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.disabled != disabled {
             shared_state.disabled = disabled;
             shared_state.needs_repaint = true;
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
         }
     }
 

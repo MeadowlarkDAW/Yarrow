@@ -22,13 +22,14 @@ pub mod layout;
 pub mod prelude;
 pub(crate) mod stmpsc_queue;
 pub mod style;
+pub mod theme;
 pub(crate) mod view;
 pub mod window;
 
 pub use action_queue::action_channel;
 pub use application::{AppConfig, AppContext, Application};
 pub use cursor_icon::CursorIcon;
-pub use view::{ScissorRectID, TooltipInfo, View, MAIN_SCISSOR_RECT};
+pub use view::{ScissorRectID, TooltipInfo, View};
 pub use window::{WindowContext, WindowID, MAIN_WINDOW};
 
 pub use rootvg as vg;

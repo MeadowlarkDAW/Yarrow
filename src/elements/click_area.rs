@@ -7,6 +7,7 @@ use crate::math::{Rect, ZIndex};
 use crate::view::element::{Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle};
 use crate::view::ScissorRectID;
 use crate::window::WindowContext;
+use crate::CursorIcon;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ClickAreaInfo {
@@ -21,8 +22,9 @@ pub struct ClickAreaBuilder<A: Clone + 'static> {
     pub button: PointerButton,
     pub modifiers: Option<Modifiers>,
     pub click_count: usize,
+    pub cursor_icon: Option<CursorIcon>,
     pub pointer_type: Option<PointerType>,
-    pub bounding_rect: Rect,
+    pub rect: Rect,
     pub z_index: Option<ZIndex>,
     pub disabled: bool,
     pub scissor_rect_id: Option<ScissorRectID>,
@@ -37,8 +39,9 @@ impl<A: Clone + 'static> ClickAreaBuilder<A> {
             button: PointerButton::Primary,
             modifiers: None,
             click_count: 0,
+            cursor_icon: None,
             pointer_type: None,
-            bounding_rect: Rect::default(),
+            rect: Rect::default(),
             z_index: None,
             disabled: false,
             scissor_rect_id: None,
@@ -75,6 +78,11 @@ impl<A: Clone + 'static> ClickAreaBuilder<A> {
         self
     }
 
+    pub const fn cursor_icon(mut self, icon: CursorIcon) -> Self {
+        self.cursor_icon = Some(icon);
+        self
+    }
+
     pub const fn pointer_type(mut self, pointer_type: PointerType) -> Self {
         self.pointer_type = Some(pointer_type);
         self
@@ -85,8 +93,8 @@ impl<A: Clone + 'static> ClickAreaBuilder<A> {
         self
     }
 
-    pub const fn bounding_rect(mut self, rect: Rect) -> Self {
-        self.bounding_rect = rect;
+    pub const fn rect(mut self, rect: Rect) -> Self {
+        self.rect = rect;
         self
     }
 
@@ -108,6 +116,7 @@ pub struct ClickAreaElement<A: Clone + 'static> {
     button: PointerButton,
     modifiers: Option<Modifiers>,
     click_count: usize,
+    cursor_icon: Option<CursorIcon>,
     pointer_type: Option<PointerType>,
 }
 
@@ -120,14 +129,16 @@ impl<A: Clone + 'static> ClickAreaElement<A> {
             button,
             modifiers,
             click_count,
+            cursor_icon,
             pointer_type,
-            bounding_rect,
+            rect,
             z_index,
             disabled,
             scissor_rect_id,
         } = builder;
 
-        let (z_index, scissor_rect_id) = cx.z_index_and_scissor_rect_id(z_index, scissor_rect_id);
+        let z_index = z_index.unwrap_or_else(|| cx.z_index());
+        let scissor_rect_id = scissor_rect_id.unwrap_or_else(|| cx.scissor_rect_id());
 
         let element_builder = ElementBuilder {
             element: Box::new(Self {
@@ -137,12 +148,14 @@ impl<A: Clone + 'static> ClickAreaElement<A> {
                 button,
                 modifiers,
                 click_count,
+                cursor_icon,
                 pointer_type,
             }),
             z_index,
-            bounding_rect,
+            rect,
             manually_hidden: disabled,
             scissor_rect_id,
+            class: Default::default(),
         };
 
         let el = cx
@@ -164,9 +177,19 @@ impl<A: Clone + 'static> Element<A> for ClickAreaElement<A> {
         cx: &mut ElementContext<'_, A>,
     ) -> EventCaptureStatus {
         match event {
-            ElementEvent::Pointer(PointerEvent::Moved { just_entered, .. }) => {
+            ElementEvent::Pointer(PointerEvent::Moved {
+                just_entered,
+                position,
+                ..
+            }) => {
                 if just_entered && self.tooltip_message.is_some() {
                     cx.start_hover_timeout();
+                }
+
+                if let Some(icon) = self.cursor_icon {
+                    if cx.rect().contains(position) {
+                        cx.cursor_icon = icon;
+                    }
                 }
             }
             ElementEvent::Pointer(PointerEvent::ButtonJustPressed {
@@ -228,7 +251,13 @@ impl ClickArea {
         ClickAreaBuilder::new()
     }
 
-    pub fn set_disabled(&mut self, disabled: bool) {
-        self.el.set_hidden(disabled);
+    /// Set the disabled state of this element.
+    ///
+    /// Returns `true` if the disabled state has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call frequently.
+    pub fn set_disabled(&mut self, disabled: bool) -> bool {
+        self.el.set_hidden(disabled)
     }
 }

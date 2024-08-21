@@ -192,7 +192,7 @@ impl VirtualSliderInner {
     pub fn handle_pointer_moved(
         &mut self,
         pointer_pos: Point,
-        pointer_delta: Option<Point>,
+        pointer_delta: Option<Vector>,
         modifiers: Modifiers,
     ) -> Option<ParamUpdate> {
         if let Some(BeginGestureType::Dragging {

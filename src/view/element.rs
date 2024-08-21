@@ -18,18 +18,20 @@ mod handle;
 
 use std::any::Any;
 
+use context::UpdateScissorRectRequest;
 pub use context::{ElementContext, RenderContext};
 pub use flags::ElementFlags;
 pub use handle::ElementHandle;
 use rootvg::math::Point;
 use rootvg::PrimitiveGroup;
 
-use super::{ScissorRectID, MAIN_SCISSOR_RECT};
+use super::ScissorRectID;
 use crate::action_queue::ActionSender;
 use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::layout::Align2;
 use crate::math::{Rect, Size, ZIndex};
 use crate::stmpsc_queue;
+use crate::style::ClassID;
 
 pub(crate) use context::ChangeFocusRequest;
 
@@ -80,9 +82,10 @@ pub trait ElementRenderCache {
 pub struct ElementBuilder<A: Clone + 'static> {
     pub element: Box<dyn Element<A>>,
     pub z_index: ZIndex,
-    pub bounding_rect: Rect,
+    pub rect: Rect,
     pub manually_hidden: bool,
     pub scissor_rect_id: ScissorRectID,
+    pub class: ClassID,
 }
 
 impl<A: Clone + 'static> ElementBuilder<A> {
@@ -90,10 +93,16 @@ impl<A: Clone + 'static> ElementBuilder<A> {
         Self {
             element,
             z_index: 0,
-            bounding_rect: Rect::new(Point::new(0.0, 0.0), Size::new(0.0, 0.0)),
+            rect: Rect::new(Point::new(0.0, 0.0), Size::new(0.0, 0.0)),
             manually_hidden: false,
-            scissor_rect_id: MAIN_SCISSOR_RECT,
+            scissor_rect_id: ScissorRectID::DEFAULT,
+            class: 0,
         }
+    }
+
+    pub const fn class(mut self, class: ClassID) -> Self {
+        self.class = class;
+        self
     }
 
     pub const fn z_index(mut self, z_index: ZIndex) -> Self {
@@ -101,8 +110,8 @@ impl<A: Clone + 'static> ElementBuilder<A> {
         self
     }
 
-    pub const fn bounding_rect(mut self, rect: Rect) -> Self {
-        self.bounding_rect = rect;
+    pub const fn rect(mut self, rect: Rect) -> Self {
+        self.rect = rect;
         self
     }
 
@@ -114,6 +123,18 @@ impl<A: Clone + 'static> ElementBuilder<A> {
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
         self.scissor_rect_id = scissor_rect_id;
         self
+    }
+}
+
+pub trait ElementStyle: Default + Any {
+    const ID: &'static str;
+
+    fn default_dark_style() -> Self {
+        Self::default()
+    }
+
+    fn default_light_style() -> Self {
+        Self::default()
     }
 }
 
@@ -129,6 +150,7 @@ pub(super) enum ElementModificationType {
     ScissorRectChanged,
     ZIndexChanged(ZIndex),
     ExplicitlyHiddenChanged(bool),
+    ClassChanged(ClassID),
     SetAnimating(bool),
     ChangeFocus(ChangeFocusRequest),
     HandleDropped,
@@ -140,6 +162,7 @@ pub(super) enum ElementModificationType {
         align: Align2,
         auto_hide: bool,
     },
+    UpdateScissorRect(UpdateScissorRectRequest),
 }
 
 // I get a warning about leaking `ElementID` if I make `ElementHandle::new()`
@@ -150,6 +173,14 @@ pub(super) fn new_element_handle(
     rect: Rect,
     z_index: ZIndex,
     manually_hidden: bool,
+    class: ClassID,
 ) -> ElementHandle {
-    ElementHandle::new(element_id, mod_queue_sender, rect, z_index, manually_hidden)
+    ElementHandle::new(
+        element_id,
+        mod_queue_sender,
+        rect,
+        z_index,
+        manually_hidden,
+        class,
+    )
 }

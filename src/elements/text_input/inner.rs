@@ -1,52 +1,81 @@
 use std::time::{Duration, Instant};
 
 use keyboard_types::{Code, CompositionEvent, KeyState, Modifiers};
-use rootvg::quad::{QuadPrimitive, SolidQuadBuilder, SolidQuadPrimitive};
+use rootvg::quad::{QuadFlags, QuadPrimitive, Radius, SolidQuadBuilder, SolidQuadPrimitive};
 use rootvg::text::glyphon::cosmic_text::{Motion, Selection};
 use rootvg::text::glyphon::{Action, Affinity, Cursor, Edit};
 use rootvg::text::{
-    Attrs, EditorBorrowStatus, Family, RcTextBuffer, Shaping, TextPrimitive, TextProperties, Wrap,
+    Attrs, EditorBorrowStatus, Family, FontSystem, RcTextBuffer, Shaping, TextPrimitive,
+    TextProperties, Wrap,
 };
 use smallvec::SmallVec;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::clipboard::{Clipboard, ClipboardKind};
 use crate::event::{EventCaptureStatus, KeyboardEvent, PointerButton};
-use crate::layout::{Align, Padding};
-use crate::math::{Point, Rect, Size};
-use crate::prelude::ResourceCtx;
-use crate::style::{
-    Background, BorderStyle, QuadStyle, DEFAULT_ACCENT_COLOR, DEFAULT_TEXT_ATTRIBUTES,
-};
+use crate::layout::Padding;
+use crate::math::{Point, Rect, Size, Vector};
+use crate::prelude::ElementStyle;
+use crate::style::{Background, BorderStyle, DisabledBackground, DisabledColor, QuadStyle};
+
+use crate::theme::DEFAULT_ACCENT_COLOR;
 use crate::vg::color::{self, RGBA8};
 
 /// The style of a [`TextInput`] element
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextInputStyle {
     /// The text properties.
-    pub properties: TextProperties,
+    pub text_properties: TextProperties,
 
-    pub placeholder_text_attrs: Attrs<'static>,
+    /// The attritbutes of the placeholder text
+    ///
+    /// If this is `None`, then the attributes from `text_properties` will be used.
+    ///
+    /// By default this is set to `None`.
+    pub placeholder_text_attrs: Option<Attrs<'static>>,
 
     /// The color of the font
     ///
     /// By default this is set to `color::WHITE`.
-    pub font_color: RGBA8,
-
+    pub text_color: RGBA8,
     /// The color of the placeholder font
     ///
-    /// By default this is set to `RGBA8::new(150, 150, 150, 255)`.
-    pub font_color_placeholder: RGBA8,
-
-    /// The color of the font when disabled
+    /// If this is `None`, then `text_color` will be used.
     ///
     /// By default this is set to `RGBA8::new(150, 150, 150, 255)`.
-    pub font_color_disabled: RGBA8,
-
+    pub text_color_placeholder: Option<RGBA8>,
+    /// The color of the font when hovered and not focused
+    ///
+    /// If this is `None`, then `text_color` will be used.
+    ///
+    /// By default this is set to `None`.
+    pub text_color_hover: Option<RGBA8>,
+    pub text_color_disabled: DisabledColor,
+    /// The color of the placeholder font when hovered and not focused
+    ///
+    /// If this is `None`, then `text_color` will be used.
+    ///
+    /// By default this is set to `None`.
+    pub text_color_placeholder_hover: Option<RGBA8>,
+    pub text_color_placeholder_disabled: DisabledColor,
+    /// The color of the font when focused
+    ///
+    /// If this is `None`, then `text_color` will be used.
+    ///
+    /// By default this is set to `None`.
+    pub text_color_focused: Option<RGBA8>,
+    /// The color of the placeholder font when focused
+    ///
+    /// If this is `None`, then `text_color` will be used.
+    ///
+    /// By default this is set to `None`.
+    pub text_color_placeholder_focused: Option<RGBA8>,
     /// The color of the font when highlighted
     ///
-    /// By default this is set to `color::WHITE`.
-    pub font_color_highlighted: RGBA8,
+    /// If this is `None`, then `text_color_focused` will be used.
+    ///
+    /// By default this is set to `None`.
+    pub text_color_highlighted: Option<RGBA8>,
 
     /// The color of the font background when highlighted
     ///
@@ -55,23 +84,15 @@ pub struct TextInputStyle {
 
     /// The width of the text cursor
     ///
-    /// By default this is set to `2.0`
+    /// By default this is set to `1.0`
     pub cursor_width: f32,
 
     /// The color of the text cursor
     ///
-    /// By default this is set to `color::WHITE`
-    pub cursor_color: RGBA8,
-
-    /// The vertical alignment of the text.
+    /// If this is `None`, then `text_color_focused` will be used.
     ///
-    /// By default this is set to `Align::Center`.
-    pub vertical_align: Align,
-
-    /// The minimum size of the clipped text area.
-    ///
-    /// By default this is set to `Size::new(5.0, 5.0)`.
-    pub min_clipped_size: Size,
+    /// By default this is set to `None`.
+    pub cursor_color: Option<RGBA8>,
 
     /// The padding between the text and the bounding rectangle.
     ///
@@ -80,83 +101,118 @@ pub struct TextInputStyle {
 
     /// The padding between the text and the highlight background.
     ///
-    /// By default this is set to `Padding::new(3.0, 0.0, 1.0, 0.0)`.
+    /// By default this is set to `Padding::new(1.0, 0.0, 0.0, 0.0)`.
     pub highlight_padding: Padding,
 
-    /// The style of the padded background rectangle behind the text when
-    /// the element does not have focus.
+    /// The background of the background quad.
+    pub back_bg: Background,
+    /// The background of the background quad when the element is hovered.
     ///
-    /// Set to `QuadStyle::TRANSPARENT` for no background rectangle.
-    pub back_quad_unfocused: QuadStyle,
+    /// If this is `None`, then `back_bg` will be used.
+    ///
+    /// By default this is set to `None`.
+    pub back_bg_hover: Option<Background>,
+    /// The background of the background quad when the button is focused.
+    ///
+    /// If this is `None`, then `back_bg` will be used.
+    ///
+    /// By default this is set to `None`.
+    pub back_bg_focused: Option<Background>,
+    pub back_bg_disabled: DisabledBackground,
 
-    /// The style of the padded background rectangle behind the text when
-    /// the element has focus.
+    /// The color of the border on the background quad.
+    pub back_border_color: RGBA8,
+    /// The color of the border on the background quad when the element is hovered.
     ///
-    /// Set to `QuadStyle::TRANSPARENT` for no background rectangle.
-    pub back_quad_focused: QuadStyle,
+    /// If this is `None`, then `back_border_color` will be used.
+    ///
+    /// By default this is set to `None`.
+    pub back_border_color_hover: Option<RGBA8>,
+    /// The color of the border on the background quad when the element is focused.
+    ///
+    /// If this is `None`, then `back_border_color` will be used.
+    ///
+    /// By default this is set to `None`.
+    pub back_border_color_focused: Option<RGBA8>,
+    pub back_border_color_disabled: DisabledColor,
 
-    /// The style of the padded background rectangle behind the text when
-    /// disabled.
+    /// The width of the border on the background quad.
+    pub back_border_width: f32,
+    /// The width of the border on the background quad when the element is hovered.
     ///
-    /// Set to `QuadStyle::TRANSPARENT` for no background rectangle.
-    pub back_quad_disabled: QuadStyle,
+    /// If this is `None`, then `back_border_width` will be used.
+    ///
+    /// By default this is set to `None`.
+    pub back_border_width_hover: Option<f32>,
+    /// The width of the border on the background quad when the element is focused.
+    ///
+    /// If this is `None`, then `back_border_width` will be used.
+    ///
+    /// By default this is set to `None`.
+    pub back_border_width_focused: Option<f32>,
+
+    /// The border radius of the background quad.
+    pub back_border_radius: Radius,
 
     /// The interval at which the text cursor blinks.
     ///
     /// By default this is set to half a second.
     pub cursor_blink_interval: Duration,
+
+    /// Additional flags for the quad primitives.
+    ///
+    /// By default this is set to `QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL`.
+    pub quad_flags: QuadFlags,
 }
 
 impl Default for TextInputStyle {
     fn default() -> Self {
         Self {
-            properties: TextProperties {
-                attrs: DEFAULT_TEXT_ATTRIBUTES,
-                ..Default::default()
-            },
-            placeholder_text_attrs: Attrs {
-                style: rootvg::text::Style::Italic,
-                ..DEFAULT_TEXT_ATTRIBUTES
-            },
-            font_color: color::WHITE,
-            font_color_placeholder: RGBA8::new(120, 120, 120, 255),
-            font_color_disabled: RGBA8::new(120, 120, 120, 255),
-            font_color_highlighted: color::WHITE,
+            text_properties: Default::default(),
+            placeholder_text_attrs: None,
+            text_color: color::WHITE,
+            text_color_placeholder: None,
+            text_color_hover: None,
+            text_color_placeholder_hover: None,
+            text_color_disabled: Default::default(),
+            text_color_placeholder_disabled: Default::default(),
+            text_color_focused: None,
+            text_color_placeholder_focused: None,
+            text_color_highlighted: None,
             highlight_bg_color: DEFAULT_ACCENT_COLOR,
             cursor_width: 1.0,
-            cursor_color: color::WHITE,
-            vertical_align: Align::Center,
-            min_clipped_size: Size::new(5.0, 5.0),
-            padding: Padding::new(6.0, 6.0, 6.0, 6.0),
-            highlight_padding: Padding::new(1.0, 0.0, 0.0, 0.0),
-            back_quad_unfocused: QuadStyle {
-                bg: Background::Solid(RGBA8::new(30, 30, 30, 255)),
-                border: BorderStyle {
-                    radius: 4.0.into(),
-                    color: RGBA8::new(105, 105, 105, 255),
-                    width: 1.0,
-                    ..Default::default()
-                },
-            },
-            back_quad_focused: QuadStyle {
-                bg: Background::Solid(RGBA8::new(30, 30, 30, 255)),
-                border: BorderStyle {
-                    radius: 4.0.into(),
-                    color: RGBA8::new(170, 170, 170, 255),
-                    width: 1.0,
-                    ..Default::default()
-                },
-            },
-            back_quad_disabled: QuadStyle {
-                bg: Background::Solid(RGBA8::new(30, 30, 30, 255)),
-                border: BorderStyle {
-                    radius: 4.0.into(),
-                    color: RGBA8::new(65, 65, 65, 255),
-                    width: 1.0,
-                    ..Default::default()
-                },
-            },
+            cursor_color: None,
+            padding: Padding::default(),
+            highlight_padding: Padding::default(),
+            back_bg: Background::TRANSPARENT,
+            back_bg_hover: None,
+            back_bg_focused: None,
+            back_bg_disabled: Default::default(),
+            back_border_color: color::TRANSPARENT,
+            back_border_color_hover: None,
+            back_border_color_focused: None,
+            back_border_color_disabled: Default::default(),
+            back_border_width: 0.0,
+            back_border_width_hover: None,
+            back_border_width_focused: None,
+            back_border_radius: Radius::default(),
             cursor_blink_interval: Duration::from_millis(500),
+            quad_flags: QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL,
+        }
+    }
+}
+
+impl ElementStyle for TextInputStyle {
+    const ID: &'static str = "txtinpt";
+
+    fn default_dark_style() -> Self {
+        Self::default()
+    }
+
+    fn default_light_style() -> Self {
+        Self {
+            text_color: color::BLACK,
+            ..Default::default()
         }
     }
 }
@@ -168,7 +224,7 @@ pub struct TextInputUpdateResult {
     pub right_clicked_at: Option<Point>,
     pub set_focus: Option<bool>,
     pub capture_status: EventCaptureStatus,
-    pub set_cursor_icon: bool,
+    pub hovered: bool,
     pub start_hover_timeout: bool,
     pub listen_to_pointer_clicked_off: bool,
     pub set_animating: Option<bool>,
@@ -197,6 +253,7 @@ pub struct TextInputInner {
     dragging: bool,
     cursor_blink_state_on: bool,
     cursor_blink_last_toggle_instant: Instant,
+    cursor_blink_interval: Duration,
     pointer_hovered: bool,
     select_all_when_focused: bool,
 }
@@ -212,7 +269,7 @@ impl TextInputInner {
         has_tooltip_message: bool,
         select_all_when_focused: bool,
         style: &TextInputStyle,
-        res: &mut ResourceCtx,
+        font_system: &mut FontSystem,
     ) -> Self {
         if text.len() > max_characters {
             text = String::from(&text[0..max_characters]);
@@ -224,53 +281,52 @@ impl TextInputInner {
         let text_bounds_rect = layout_text_bounds(
             bounds_size,
             style.padding,
-            style.min_clipped_size,
-            style.vertical_align,
-            style.properties.metrics.font_size,
-            style.properties.metrics.line_height,
+            style.text_properties.metrics.line_height,
         );
 
-        let mut properties = style.properties;
-        properties.wrap = Wrap::None;
-        properties.shaping = Shaping::Advanced;
+        let mut text_properties = style.text_properties;
+        text_properties.wrap = Wrap::None;
+        text_properties.shaping = Shaping::Advanced;
 
         if password_mode {
-            properties.attrs.family = Family::Monospace;
+            text_properties.attrs.family = Family::Monospace;
         }
 
         let buffer = RcTextBuffer::new(
             &text,
-            properties,
+            text_properties,
             Some(text_bounds_rect.width()),
             None,
             true,
-            &mut res.font_system,
+            font_system,
         );
 
         let placeholder_buffer = if placeholder_text.is_empty() {
             None
         } else {
-            let mut placeholder_properties = properties.clone();
-            placeholder_properties.attrs = style.placeholder_text_attrs;
+            let mut placeholder_properties = text_properties.clone();
+            placeholder_properties.attrs = style
+                .placeholder_text_attrs
+                .unwrap_or(text_properties.attrs);
 
             Some(RcTextBuffer::new(
                 &placeholder_text,
                 placeholder_properties,
                 Some(text_bounds_rect.width()),
                 None,
-                true,
-                &mut res.font_system,
+                false,
+                font_system,
             ))
         };
 
         let password_buffer = if password_mode {
             Some(RcTextBuffer::new(
                 &text_to_password_text(&buffer),
-                properties,
+                text_properties,
                 Some(text_bounds_rect.width()),
                 None,
                 false,
-                &mut res.font_system,
+                font_system,
             ))
         } else {
             None
@@ -296,6 +352,7 @@ impl TextInputInner {
             dragging: false,
             cursor_blink_state_on: false,
             cursor_blink_last_toggle_instant: Instant::now(),
+            cursor_blink_interval: style.cursor_blink_interval,
             pointer_hovered: false,
             has_tooltip_message,
             select_all_when_focused,
@@ -305,7 +362,7 @@ impl TextInputInner {
     pub fn set_text(
         &mut self,
         text: &str,
-        res: &mut ResourceCtx,
+        font_system: &mut FontSystem,
         select_all: bool,
     ) -> TextInputUpdateResult {
         let mut result = TextInputUpdateResult::default();
@@ -346,10 +403,10 @@ impl TextInputInner {
                     has_text: !self.text.is_empty(),
                 }
             },
-            &mut res.font_system,
+            font_system,
         );
 
-        self.layout_contents(res);
+        self.layout_contents(font_system);
 
         result
     }
@@ -358,11 +415,11 @@ impl TextInputInner {
         &self.text
     }
 
-    pub fn set_placeholder_text(
+    pub fn set_placeholder_text<F: FnOnce() -> TextInputStyle>(
         &mut self,
         mut text: &str,
-        res: &mut ResourceCtx,
-        style: &TextInputStyle,
+        font_system: &mut FontSystem,
+        get_style: F,
     ) -> TextInputUpdateResult {
         let mut result = TextInputUpdateResult::default();
 
@@ -377,10 +434,14 @@ impl TextInputInner {
         self.placeholder_text = String::from(text);
 
         if let Some(buffer) = self.placeholder_buffer.as_mut() {
-            buffer.set_text(text, &mut res.font_system);
+            buffer.set_text(text, font_system);
         } else {
-            let mut placeholder_properties = style.properties.clone();
-            placeholder_properties.attrs = style.placeholder_text_attrs;
+            let style = (get_style)();
+
+            let mut placeholder_properties = style.text_properties.clone();
+            placeholder_properties.attrs = style
+                .placeholder_text_attrs
+                .unwrap_or(placeholder_properties.attrs);
 
             self.placeholder_buffer = Some(RcTextBuffer::new(
                 text,
@@ -388,7 +449,7 @@ impl TextInputInner {
                 Some(self.text_bounds_rect.width()),
                 None,
                 false,
-                &mut res.font_system,
+                font_system,
             ));
         }
 
@@ -405,45 +466,49 @@ impl TextInputInner {
         self.max_characters
     }
 
-    pub fn set_style(&mut self, style: &TextInputStyle, res: &mut ResourceCtx) {
-        let mut properties = style.properties;
-        properties.wrap = Wrap::None;
-        properties.shaping = Shaping::Advanced;
+    pub fn sync_new_style(&mut self, style: &TextInputStyle, font_system: &mut FontSystem) {
+        let mut text_properties = style.text_properties;
+        text_properties.wrap = Wrap::None;
+        text_properties.shaping = Shaping::Advanced;
 
         if self.password_buffer.is_some() {
-            properties.attrs.family = Family::Monospace;
+            text_properties.attrs.family = Family::Monospace;
         }
 
         self.buffer
-            .set_text_and_props(&self.text, style.properties, &mut res.font_system);
+            .set_text_and_props(&self.text, text_properties, font_system);
 
         if let Some(placeholder_buffer) = self.placeholder_buffer.as_mut() {
-            let mut placeholder_properties = style.properties.clone();
-            placeholder_properties.attrs = style.placeholder_text_attrs;
+            let mut placeholder_properties = text_properties.clone();
+            placeholder_properties.attrs = style
+                .placeholder_text_attrs
+                .unwrap_or(placeholder_properties.attrs);
             placeholder_buffer.set_text_and_props(
                 &self.placeholder_text,
                 placeholder_properties,
-                &mut res.font_system,
+                font_system,
             );
         }
 
         if let Some(password_buffer) = self.password_buffer.as_mut() {
             password_buffer.set_text_and_props(
                 &text_to_password_text(&self.buffer),
-                properties,
-                &mut res.font_system,
+                text_properties,
+                font_system,
             );
         }
+
+        self.cursor_blink_interval = style.cursor_blink_interval;
     }
 
-    pub fn on_animation(&mut self, style: &TextInputStyle) -> TextInputUpdateResult {
+    pub fn on_animation(&mut self) -> TextInputUpdateResult {
         let mut res = TextInputUpdateResult::default();
 
         if !self.focused {
             return res;
         }
 
-        if self.cursor_blink_last_toggle_instant.elapsed() >= style.cursor_blink_interval {
+        if self.cursor_blink_last_toggle_instant.elapsed() >= self.cursor_blink_interval {
             self.cursor_blink_state_on = !self.cursor_blink_state_on;
             self.cursor_blink_last_toggle_instant = Instant::now();
             res.needs_repaint = true;
@@ -455,14 +520,14 @@ impl TextInputInner {
     pub fn on_custom_state_changed(
         &mut self,
         clipboard: &mut Clipboard,
-        res: &mut ResourceCtx,
+        font_system: &mut FontSystem,
     ) -> TextInputUpdateResult {
         let mut result = TextInputUpdateResult::default();
 
-        self.drain_actions(clipboard, res, &mut result);
+        self.drain_actions(clipboard, font_system, &mut result);
 
         if result.needs_repaint {
-            self.layout_contents(res);
+            self.layout_contents(font_system);
         }
 
         if self.focused && self.disabled {
@@ -483,7 +548,7 @@ impl TextInputInner {
         &mut self,
         bounds_size: Size,
         style: &TextInputStyle,
-        res: &mut ResourceCtx,
+        font_system: &mut FontSystem,
     ) {
         if self.prev_bounds_size == bounds_size {
             return;
@@ -493,42 +558,28 @@ impl TextInputInner {
         self.text_bounds_rect = layout_text_bounds(
             bounds_size,
             style.padding,
-            style.min_clipped_size,
-            style.vertical_align,
-            style.properties.metrics.font_size,
-            style.properties.metrics.line_height,
+            style.text_properties.metrics.line_height,
         );
 
-        self.buffer.set_bounds(
-            Some(self.text_bounds_rect.width()),
-            None,
-            &mut res.font_system,
-        );
+        self.buffer
+            .set_bounds(Some(self.text_bounds_rect.width()), None, font_system);
 
         if let Some(buffer) = self.placeholder_buffer.as_mut() {
-            buffer.set_bounds(
-                Some(self.text_bounds_rect.width()),
-                None,
-                &mut res.font_system,
-            );
+            buffer.set_bounds(Some(self.text_bounds_rect.width()), None, font_system);
         }
 
         if let Some(buffer) = self.password_buffer.as_mut() {
-            buffer.set_bounds(
-                Some(self.text_bounds_rect.width()),
-                None,
-                &mut res.font_system,
-            );
+            buffer.set_bounds(Some(self.text_bounds_rect.width()), None, font_system);
         }
 
-        self.layout_contents(res);
+        self.layout_contents(font_system);
     }
 
     pub fn on_pointer_moved(
         &mut self,
         position: Point,
         bounds: Rect,
-        res: &mut ResourceCtx,
+        font_system: &mut FontSystem,
     ) -> TextInputUpdateResult {
         let mut result = TextInputUpdateResult::default();
 
@@ -540,6 +591,9 @@ impl TextInputInner {
 
         if pointer_in_bounds && !self.pointer_hovered && self.has_tooltip_message {
             result.start_hover_timeout = true;
+        }
+        if !self.pointer_hovered && pointer_in_bounds {
+            result.needs_repaint = true;
         }
         self.pointer_hovered = pointer_in_bounds;
 
@@ -555,19 +609,19 @@ impl TextInputInner {
                         has_text: !self.text.is_empty(),
                     }
                 },
-                &mut res.font_system,
+                font_system,
             );
 
-            result.set_cursor_icon = true;
+            result.hovered = true;
             result.needs_repaint = true;
             result.capture_status = EventCaptureStatus::Captured;
         } else if pointer_in_bounds {
-            result.set_cursor_icon = true;
+            result.hovered = true;
             result.capture_status = EventCaptureStatus::Captured;
         }
 
         if result.needs_repaint {
-            self.layout_contents(res);
+            self.layout_contents(font_system);
         }
 
         result
@@ -579,7 +633,7 @@ impl TextInputInner {
         button: PointerButton,
         click_count: usize,
         bounds: Rect,
-        res: &mut ResourceCtx,
+        font_system: &mut FontSystem,
     ) -> TextInputUpdateResult {
         let mut result = TextInputUpdateResult::default();
 
@@ -627,11 +681,11 @@ impl TextInputInner {
                     has_text: !self.text.is_empty(),
                 }
             },
-            &mut res.font_system,
+            font_system,
         );
 
         result.needs_repaint = true;
-        self.layout_contents(res);
+        self.layout_contents(font_system);
 
         result
     }
@@ -655,15 +709,20 @@ impl TextInputInner {
         result
     }
 
-    pub fn on_pointer_left(&mut self) {
+    pub fn on_pointer_left(&mut self) -> TextInputUpdateResult {
         self.pointer_hovered = false;
+        TextInputUpdateResult {
+            hovered: false,
+            needs_repaint: true,
+            ..Default::default()
+        }
     }
 
     pub fn on_keyboard_event(
         &mut self,
         event: &KeyboardEvent,
         clipboard: &mut Clipboard,
-        res: &mut ResourceCtx,
+        font_system: &mut FontSystem,
     ) -> TextInputUpdateResult {
         let mut result = TextInputUpdateResult::default();
 
@@ -699,7 +758,7 @@ impl TextInputInner {
                             has_text: !self.text.is_empty(),
                         }
                     },
-                    &mut res.font_system,
+                    font_system,
                 );
 
                 if text_changed {
@@ -720,7 +779,7 @@ impl TextInputInner {
                             has_text: !self.text.is_empty(),
                         }
                     },
-                    &mut res.font_system,
+                    font_system,
                 );
 
                 result.needs_repaint = true;
@@ -752,7 +811,7 @@ impl TextInputInner {
                             has_text: !self.text.is_empty(),
                         }
                     },
-                    &mut res.font_system,
+                    font_system,
                 );
 
                 if text_changed {
@@ -776,7 +835,7 @@ impl TextInputInner {
                             has_text: !self.text.is_empty(),
                         }
                     },
-                    &mut res.font_system,
+                    font_system,
                 );
 
                 result.needs_repaint = true;
@@ -797,7 +856,7 @@ impl TextInputInner {
                             has_text: !self.text.is_empty(),
                         }
                     },
-                    &mut res.font_system,
+                    font_system,
                 );
 
                 result.needs_repaint = true;
@@ -843,10 +902,10 @@ impl TextInputInner {
             _ => {}
         }
 
-        self.drain_actions(clipboard, res, &mut result);
+        self.drain_actions(clipboard, font_system, &mut result);
 
         if result.needs_repaint {
-            self.layout_contents(res);
+            self.layout_contents(font_system);
         }
 
         result
@@ -855,7 +914,7 @@ impl TextInputInner {
     pub fn on_text_composition_event(
         &mut self,
         event: &CompositionEvent,
-        res: &mut ResourceCtx,
+        font_system: &mut FontSystem,
     ) -> TextInputUpdateResult {
         let mut result = TextInputUpdateResult::default();
 
@@ -899,14 +958,14 @@ impl TextInputInner {
                     has_text: !self.text.is_empty(),
                 }
             },
-            &mut res.font_system,
+            font_system,
         );
 
         if text_changed {
             self.do_send_action = true;
             result.needs_repaint = true;
 
-            self.layout_contents(res);
+            self.layout_contents(font_system);
         }
 
         result
@@ -916,7 +975,7 @@ impl TextInputInner {
         &mut self,
         has_focus: bool,
         clipboard: &mut Clipboard,
-        res: &mut ResourceCtx,
+        font_system: &mut FontSystem,
     ) -> TextInputUpdateResult {
         let mut result = TextInputUpdateResult::default();
 
@@ -930,10 +989,10 @@ impl TextInputInner {
                 self.queue_action(TextInputAction::SelectAll);
             }
 
-            self.drain_actions(clipboard, res, &mut result);
+            self.drain_actions(clipboard, font_system, &mut result);
 
             if result.needs_repaint {
-                self.layout_contents(res);
+                self.layout_contents(font_system);
             }
         } else {
             self.focused = false;
@@ -969,7 +1028,7 @@ impl TextInputInner {
     fn drain_actions(
         &mut self,
         clipboard: &mut Clipboard,
-        res: &mut ResourceCtx,
+        font_system: &mut FontSystem,
         result: &mut TextInputUpdateResult,
     ) {
         for action in self.queued_actions.drain(..) {
@@ -1006,7 +1065,7 @@ impl TextInputInner {
                                 has_text: !self.text.is_empty(),
                             }
                         },
-                        &mut res.font_system,
+                        font_system,
                     );
                 }
                 TextInputAction::Copy => {
@@ -1021,7 +1080,7 @@ impl TextInputInner {
                                 has_text: !self.text.is_empty(),
                             }
                         },
-                        &mut res.font_system,
+                        font_system,
                     );
                 }
                 TextInputAction::Paste => {
@@ -1057,7 +1116,7 @@ impl TextInputInner {
                                         has_text: !self.text.is_empty(),
                                     }
                                 },
-                                &mut res.font_system,
+                                font_system,
                             );
 
                             if text_changed {
@@ -1081,7 +1140,7 @@ impl TextInputInner {
                                 has_text: !self.text.is_empty(),
                             }
                         },
-                        &mut res.font_system,
+                        font_system,
                     );
 
                     result.needs_repaint = true;
@@ -1090,7 +1149,7 @@ impl TextInputInner {
         }
     }
 
-    fn layout_contents(&mut self, res: &mut ResourceCtx) {
+    fn layout_contents(&mut self, font_system: &mut FontSystem) {
         self.cursor_x = 0.0;
         self.select_highlight_range = None;
 
@@ -1100,7 +1159,7 @@ impl TextInputInner {
         }
 
         if let Some(password_buffer) = self.password_buffer.as_mut() {
-            password_buffer.set_text(&text_to_password_text(&self.buffer), &mut res.font_system);
+            password_buffer.set_text(&text_to_password_text(&self.buffer), font_system);
         }
 
         if self.focused {
@@ -1192,7 +1251,8 @@ impl TextInputInner {
         &self,
         style: &TextInputStyle,
         bounds: Rect,
-        text_offset: Point,
+        text_offset: Vector,
+        hovered: bool,
     ) -> TextInputPrimitives {
         let mut primitives = TextInputPrimitives {
             back_quad: None,
@@ -1202,16 +1262,79 @@ impl TextInputInner {
         };
 
         if self.disabled {
-            if !style.back_quad_disabled.is_transparent() {
-                primitives.back_quad = Some(style.back_quad_disabled.create_primitive(bounds));
+            let quad_style = QuadStyle {
+                bg: style.back_bg_disabled.get(style.back_bg),
+                border: BorderStyle {
+                    color: style
+                        .back_border_color_disabled
+                        .get(style.back_border_color),
+                    width: style.back_border_width,
+                    radius: style.back_border_radius,
+                },
+                flags: style.quad_flags,
+            };
+
+            if !quad_style.is_transparent() {
+                primitives.back_quad = Some(quad_style.create_primitive(bounds));
             }
         } else if self.focused {
-            if !style.back_quad_focused.is_transparent() {
-                primitives.back_quad = Some(style.back_quad_focused.create_primitive(bounds));
+            let bg = style.back_bg_focused.unwrap_or(style.back_bg);
+            let border_width = style
+                .back_border_width_focused
+                .unwrap_or(style.back_border_width);
+
+            if !(bg.is_transparent() && border_width == 0.0) {
+                primitives.back_quad = Some(
+                    QuadStyle {
+                        bg,
+                        border: BorderStyle {
+                            color: style
+                                .back_border_color_focused
+                                .unwrap_or(style.back_border_color),
+                            width: border_width,
+                            radius: style.back_border_radius,
+                        },
+                        flags: style.quad_flags,
+                    }
+                    .create_primitive(bounds),
+                );
+            }
+        } else if hovered {
+            let bg = style.back_bg_hover.unwrap_or(style.back_bg);
+            let border_width = style
+                .back_border_width_hover
+                .unwrap_or(style.back_border_width);
+
+            if !(bg.is_transparent() && border_width == 0.0) {
+                primitives.back_quad = Some(
+                    QuadStyle {
+                        bg,
+                        border: BorderStyle {
+                            color: style
+                                .back_border_color_hover
+                                .unwrap_or(style.back_border_color),
+                            width: border_width,
+                            radius: style.back_border_radius,
+                        },
+                        flags: style.quad_flags,
+                    }
+                    .create_primitive(bounds),
+                );
             }
         } else {
-            if !style.back_quad_unfocused.is_transparent() {
-                primitives.back_quad = Some(style.back_quad_unfocused.create_primitive(bounds));
+            if !(style.back_bg.is_transparent() && style.back_border_width == 0.0) {
+                primitives.back_quad = Some(
+                    QuadStyle {
+                        bg: style.back_bg,
+                        border: BorderStyle {
+                            color: style.back_border_color,
+                            width: style.back_border_width,
+                            radius: style.back_border_radius,
+                        },
+                        flags: style.quad_flags,
+                    }
+                    .create_primitive(bounds),
+                );
             }
         }
 
@@ -1233,9 +1356,9 @@ impl TextInputInner {
 
         if self.focused {
             if let Some((start_x, end_x)) = self.select_highlight_range {
-                let start_x = (start_x + style.padding.left - scroll_x)
+                let start_x = (start_x + self.text_bounds_rect.min_x() - scroll_x)
                     .clamp(self.text_bounds_rect.min_x(), self.text_bounds_rect.max_x());
-                let end_x = (end_x + style.padding.left - scroll_x)
+                let end_x = (end_x + self.text_bounds_rect.min_x() - scroll_x)
                     .clamp(self.text_bounds_rect.min_x(), self.text_bounds_rect.max_x());
 
                 if start_x < end_x {
@@ -1246,6 +1369,7 @@ impl TextInputInner {
                                 highlight_y + bounds.min_y(),
                             ))
                             .bg_color(style.highlight_bg_color)
+                            .flags(style.quad_flags)
                             .into(),
                     );
                 }
@@ -1254,9 +1378,13 @@ impl TextInputInner {
 
         if !self.text.is_empty() {
             let color = if self.disabled {
-                style.font_color_disabled
+                style.text_color_disabled.get(style.text_color)
+            } else if self.focused {
+                style.text_color_focused.unwrap_or(style.text_color)
+            } else if self.pointer_hovered {
+                style.text_color_hover.unwrap_or(style.text_color)
             } else {
-                style.font_color
+                style.text_color
             };
 
             let buffer = if let Some(password_buffer) = &self.password_buffer {
@@ -1271,7 +1399,7 @@ impl TextInputInner {
 
             primitives.text = Some(TextPrimitive {
                 buffer: Some(buffer),
-                pos: self.text_bounds_rect.origin + text_offset.to_vector()
+                pos: self.text_bounds_rect.origin + text_offset
                     - Point::new(scroll_x, 0.0).to_vector()
                     + bounds.origin.to_vector(),
                 color,
@@ -1279,17 +1407,33 @@ impl TextInputInner {
                     Point::new(scroll_x, 0.0) + bounds.origin.to_vector(),
                     self.text_bounds_rect.size,
                 )),
+                #[cfg(feature = "svg-icons")]
                 icons: SmallVec::new(),
             });
         } else if !self.placeholder_text.is_empty() {
             if let Some(placeholder_buffer) = &self.placeholder_buffer {
+                let color = if self.disabled {
+                    style.text_color_placeholder_disabled.get(style.text_color)
+                } else if self.focused {
+                    style.text_color_placeholder_focused.unwrap_or(
+                        style
+                            .text_color_placeholder
+                            .unwrap_or(style.text_color_focused.unwrap_or(style.text_color)),
+                    )
+                } else if self.pointer_hovered {
+                    style
+                        .text_color_placeholder_hover
+                        .unwrap_or(style.text_color_placeholder.unwrap_or(style.text_color))
+                } else {
+                    style.text_color_placeholder.unwrap_or(style.text_color)
+                };
+
                 primitives.text = Some(TextPrimitive {
                     buffer: Some(placeholder_buffer.clone()),
-                    pos: self.text_bounds_rect.origin
-                        + text_offset.to_vector()
-                        + bounds.origin.to_vector(),
-                    color: style.font_color_placeholder,
+                    pos: self.text_bounds_rect.origin + text_offset + bounds.origin.to_vector(),
+                    color,
                     clipping_bounds: Some(Rect::new(bounds.origin, self.text_bounds_rect.size)),
+                    #[cfg(feature = "svg-icons")]
                     icons: SmallVec::new(),
                 });
             }
@@ -1306,7 +1450,12 @@ impl TextInputInner {
                         .round(),
                         highlight_y + bounds.min_y(),
                     ))
-                    .bg_color(style.cursor_color)
+                    .bg_color(
+                        style
+                            .cursor_color
+                            .unwrap_or(style.text_color_focused.unwrap_or(style.text_color)),
+                    )
+                    .flags(style.quad_flags)
                     .into(),
             );
         }
@@ -1338,27 +1487,15 @@ pub enum TextInputAction {
     SelectAll,
 }
 
-fn layout_text_bounds(
-    bounds_size: Size,
-    padding: Padding,
-    min_clipped_size: Size,
-    vertical_align: Align,
-    font_size: f32,
-    line_height: f32,
-) -> Rect {
+fn layout_text_bounds(bounds_size: Size, padding: Padding, line_height: f32) -> Rect {
     let content_rect = crate::layout::layout_inner_rect_with_min_size(
         padding,
         Rect::from_size(bounds_size),
-        min_clipped_size,
+        Size::default(),
     );
 
     // We need to vertically align the text ourselves as rootvg/glyphon does not do this.
-    let text_bounds_y = match vertical_align {
-        Align::Start => content_rect.min_y(),
-        Align::Center => content_rect.min_y() + ((content_rect.height() - line_height) / 2.0),
-        //Align::Center => content_rect.min_y() + ((content_rect.height() - font_size) / 2.0) + 1.0,
-        Align::End => content_rect.max_y() - font_size,
-    };
+    let text_bounds_y = content_rect.min_y() + ((content_rect.height() - line_height) / 2.0);
 
     Rect::new(
         Point::new(content_rect.min_x(), text_bounds_y),

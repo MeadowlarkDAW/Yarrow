@@ -1,27 +1,34 @@
 use rootvg::{
     color::RGBA8,
-    gradient::Gradient,
     math::{Point, Rect, Size, Transform},
-    mesh::{GradientMeshPrimitive, MeshPrimitive, SolidMeshPrimitive},
+    mesh::{MeshPrimitive, SolidMeshPrimitive},
 };
 
-use crate::{elements::virtual_slider::VirtualSliderState, layout::SizeType};
+#[cfg(feature = "gradient")]
+use rootvg::{gradient::Gradient, mesh::GradientMeshPrimitive};
+
+use crate::{elements::virtual_slider::VirtualSliderState, layout::SizeType, style::DisabledColor};
+
+#[cfg(feature = "gradient")]
+use crate::style::DisabledGradient;
 
 use super::KnobAngleRange;
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub enum KnobNotchStyleLineBg {
     Solid {
         idle: RGBA8,
-        hovered: RGBA8,
-        gesturing: RGBA8,
-        disabled: RGBA8,
+        hovered: Option<RGBA8>,
+        gesturing: Option<RGBA8>,
+        disabled: DisabledColor,
     },
+    #[cfg(feature = "gradient")]
     Gradient {
-        idle: Box<Gradient>,
-        hovered: Box<Gradient>,
-        gesturing: Box<Gradient>,
-        disabled: Box<Gradient>,
+        idle: Gradient,
+        hovered: Option<Gradient>,
+        gesturing: Option<Gradient>,
+        disabled: DisabledGradient,
     },
 }
 
@@ -29,9 +36,9 @@ impl Default for KnobNotchStyleLineBg {
     fn default() -> Self {
         Self::Solid {
             idle: RGBA8::new(255, 255, 255, 255),
-            hovered: RGBA8::new(255, 255, 255, 255),
-            gesturing: RGBA8::new(255, 255, 255, 255),
-            disabled: RGBA8::new(255, 255, 255, 150),
+            hovered: None,
+            gesturing: None,
+            disabled: Default::default(),
         }
     }
 }
@@ -49,55 +56,6 @@ pub struct KnobNotchStyleLine {
 }
 
 impl KnobNotchStyleLine {
-    pub fn states_differ(&self, a: VirtualSliderState, b: VirtualSliderState) -> bool {
-        match &self.bg {
-            KnobNotchStyleLineBg::Solid {
-                idle,
-                hovered,
-                gesturing,
-                disabled,
-                ..
-            } => {
-                let color_a = match a {
-                    VirtualSliderState::Idle => idle,
-                    VirtualSliderState::Hovered => hovered,
-                    VirtualSliderState::Gesturing => gesturing,
-                    VirtualSliderState::Disabled => disabled,
-                };
-                let color_b = match b {
-                    VirtualSliderState::Idle => idle,
-                    VirtualSliderState::Hovered => hovered,
-                    VirtualSliderState::Gesturing => gesturing,
-                    VirtualSliderState::Disabled => disabled,
-                };
-
-                color_a != color_b
-            }
-            KnobNotchStyleLineBg::Gradient {
-                idle,
-                hovered,
-                gesturing,
-                disabled,
-                ..
-            } => {
-                let gradient_a = match a {
-                    VirtualSliderState::Idle => idle,
-                    VirtualSliderState::Hovered => hovered,
-                    VirtualSliderState::Gesturing => gesturing,
-                    VirtualSliderState::Disabled => disabled,
-                };
-                let gradient_b = match b {
-                    VirtualSliderState::Idle => idle,
-                    VirtualSliderState::Hovered => hovered,
-                    VirtualSliderState::Gesturing => gesturing,
-                    VirtualSliderState::Disabled => disabled,
-                };
-
-                gradient_a != gradient_b
-            }
-        }
-    }
-
     pub fn create_primitives(&self, back_size: f32) -> KnobNotchLinePrimitives {
         KnobNotchLinePrimitives::new(self, back_size)
     }
@@ -154,23 +112,27 @@ impl KnobNotchLinePrimitives {
                 gesturing,
                 disabled,
             } => {
+                let hovered = hovered.unwrap_or(*idle);
+                let gesturing = gesturing.unwrap_or(hovered);
+                let disabled = disabled.get(*idle);
+
                 let idle_mesh = SolidMeshPrimitive::from_rect(rect, *idle);
-                let hovered_mesh = if hovered == idle {
+                let hovered_mesh = if hovered == *idle {
                     idle_mesh.clone()
                 } else {
-                    SolidMeshPrimitive::from_rect(rect, *hovered)
+                    SolidMeshPrimitive::from_rect(rect, hovered)
                 };
-                let gesturing_mesh = if gesturing == idle {
+                let gesturing_mesh = if gesturing == *idle {
                     idle_mesh.clone()
                 } else if gesturing == hovered {
                     hovered_mesh.clone()
                 } else {
-                    SolidMeshPrimitive::from_rect(rect, *gesturing)
+                    SolidMeshPrimitive::from_rect(rect, gesturing)
                 };
-                let disabled_mesh = if disabled == idle {
+                let disabled_mesh = if disabled == *idle {
                     idle_mesh.clone()
                 } else {
-                    SolidMeshPrimitive::from_rect(rect, *disabled)
+                    SolidMeshPrimitive::from_rect(rect, disabled)
                 };
 
                 Self {
@@ -180,29 +142,34 @@ impl KnobNotchLinePrimitives {
                     disabled: MeshPrimitive::Solid(disabled_mesh),
                 }
             }
+            #[cfg(feature = "gradient")]
             KnobNotchStyleLineBg::Gradient {
                 idle,
                 hovered,
                 gesturing,
                 disabled,
             } => {
+                let hovered = hovered.unwrap_or(*idle);
+                let gesturing = gesturing.unwrap_or(hovered);
+                let disabled = disabled.get(*idle);
+
                 let idle_mesh = GradientMeshPrimitive::from_rect(rect, idle);
-                let hovered_mesh = if *hovered == *idle {
+                let hovered_mesh = if hovered == *idle {
                     idle_mesh.clone()
                 } else {
-                    GradientMeshPrimitive::from_rect(rect, hovered)
+                    GradientMeshPrimitive::from_rect(rect, &hovered)
                 };
-                let gesturing_mesh = if gesturing == idle {
+                let gesturing_mesh = if gesturing == *idle {
                     idle_mesh.clone()
                 } else if gesturing == hovered {
                     hovered_mesh.clone()
                 } else {
-                    GradientMeshPrimitive::from_rect(rect, gesturing)
+                    GradientMeshPrimitive::from_rect(rect, &gesturing)
                 };
-                let disabled_mesh = if disabled == idle {
+                let disabled_mesh = if disabled == *idle {
                     idle_mesh.clone()
                 } else {
-                    GradientMeshPrimitive::from_rect(rect, disabled)
+                    GradientMeshPrimitive::from_rect(rect, &disabled)
                 };
 
                 Self {
@@ -233,7 +200,7 @@ impl KnobNotchLinePrimitives {
     ) -> MeshPrimitive {
         let mut mesh = self.mesh(state).clone();
 
-        mesh.set_offset(back_bounds.center());
+        mesh.set_offset(back_bounds.center().to_vector());
 
         let notch_angle = angle_range.min() + (angle_range.span() * normal_val);
 

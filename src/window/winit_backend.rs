@@ -17,7 +17,7 @@ use crate::action_queue::ActionSender;
 use crate::application::{AppContext, Application, TimerInterval, WindowRequest};
 use crate::event::{AppWindowEvent, EventCaptureStatus, PointerButton, WheelDeltaType};
 use crate::math::{PhysicalSizeI32, ScaleFactor};
-use crate::prelude::ResourceCtx;
+use crate::prelude::{ActionReceiver, ResourceCtx};
 use crate::window::{WindowID, MAIN_WINDOW};
 
 use super::{
@@ -30,7 +30,6 @@ mod convert;
 struct AppHandler<A: Application> {
     user_app: A,
     context: AppContext<A::Action>,
-    action_sender: ActionSender<A::Action>,
 
     tick_interval: Duration,
     pointer_debounce_interval: Duration,
@@ -49,6 +48,7 @@ impl<A: Application> AppHandler<A> {
     fn new(
         mut user_app: A,
         action_sender: ActionSender<A::Action>,
+        action_receiver: ActionReceiver<A::Action>,
     ) -> Result<Self, Box<dyn Error>> {
         let config = user_app.init()?;
 
@@ -56,8 +56,7 @@ impl<A: Application> AppHandler<A> {
 
         Ok(Self {
             user_app,
-            action_sender,
-            context: AppContext::new(config),
+            context: AppContext::new(config, action_sender, action_receiver),
             tick_interval: Duration::default(),
             pointer_debounce_interval: Duration::default(),
             prev_tick_instant: now,
@@ -121,7 +120,8 @@ impl<A: Application> AppHandler<A> {
                     let delta = crate::math::to_logical_point_from_recip(
                         PhysicalPoint::new(delta.0 as f32, delta.1 as f32),
                         window_state.scale_factor_recip,
-                    );
+                    )
+                    .to_vector();
 
                     window_state.handle_locked_pointer_delta(delta, &mut self.context.res);
                 }
@@ -164,7 +164,7 @@ impl<A: Application> AppHandler<A> {
     }
 
     fn poll_actions(&mut self) -> bool {
-        let any_actions_processed = self.action_sender.any_action_sent();
+        let any_actions_processed = self.context.action_sender.any_action_sent();
         if any_actions_processed {
             self.user_app.on_action_emitted(&mut self.context);
         }
@@ -274,7 +274,7 @@ impl<A: Application> AppHandler<A> {
                         window_id,
                         config,
                         event_loop,
-                        &self.action_sender,
+                        &self.context.action_sender,
                         &mut self.context.res,
                     ) {
                         Ok((window, window_state)) => {
@@ -285,6 +285,11 @@ impl<A: Application> AppHandler<A> {
                             successful_open_requests.push(window_id);
                         }
                         Err(e) => failed_open_requests.push((window_id, e)),
+                    }
+                }
+                WindowRequest::NotifyThemeChange => {
+                    if let Some(window_state) = self.context.window_map.get_mut(&window_id) {
+                        window_state.on_theme_changed(&mut self.context.res);
                     }
                 }
             }
@@ -426,7 +431,7 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                 MAIN_WINDOW,
                 self.user_app.main_window_config(),
                 event_loop,
-                &self.action_sender,
+                &self.context.action_sender,
                 &mut self.context.res,
             ) {
                 Ok(w) => w,
@@ -858,9 +863,10 @@ pub enum OpenWindowError {
 pub fn run_blocking<A: Application>(
     app: A,
     action_sender: ActionSender<A::Action>,
+    action_receiver: ActionReceiver<A::Action>,
 ) -> Result<(), Box<dyn Error>> {
     let event_loop = EventLoop::new()?;
-    let mut app_handler = AppHandler::new(app, action_sender)?;
+    let mut app_handler = AppHandler::new(app, action_sender, action_receiver)?;
 
     event_loop.run_app(&mut app_handler).map_err(Into::into)
 }

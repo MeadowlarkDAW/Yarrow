@@ -2,7 +2,7 @@ use crate::style::MyStyle;
 use crate::{MyAction, OVERLAY_Z_INDEX, RIGHT_CLICK_AREA_Z_INDEX};
 use yarrow::prelude::*;
 
-pub const SCROLL_AREA_SCISSOR_RECT: ScissorRectID = 2;
+const SCROLL_AREA_SRECT: ScissorRectID = ScissorRectID(1);
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
@@ -10,7 +10,6 @@ pub enum Action {
     ShowParamTooltip(ParamElementTooltipInfo),
     OpenTextInput(ParamOpenTextEntryInfo),
     FloatingTextInput(Option<String>),
-    ScrollOffsetChanged(Point),
 }
 
 pub struct Elements {
@@ -38,19 +37,19 @@ pub struct Elements {
 
 impl Elements {
     pub fn new(style: &MyStyle, cx: &mut WindowContext<'_, MyAction>) -> Self {
-        let scroll_area = ScrollArea::builder(&style.scroll_bar_style)
-            .on_scrolled(|scroll_offset| Action::ScrollOffsetChanged(scroll_offset).into())
+        let scroll_area = ScrollArea::builder()
+            .control_scissor_rect(SCROLL_AREA_SRECT)
             .z_index(RIGHT_CLICK_AREA_Z_INDEX)
             .build(cx);
 
-        let floating_text_input = FloatingTextInput::builder(&style.text_input_style)
+        let floating_text_input = FloatingTextInput::builder()
             .on_result(|new_text| Action::FloatingTextInput(new_text).into())
-            .bounding_rect(Rect::from_size(style.floating_text_input_size))
+            .rect(Rect::from_size(style.floating_text_input_size))
             .z_index(OVERLAY_Z_INDEX)
             .build(cx);
 
-        cx.with_scissor_rect(SCROLL_AREA_SCISSOR_RECT, |cx| Self {
-            knob_0: Knob::builder(0, &style.knob_style_1)
+        cx.with_scissor_rect(SCROLL_AREA_SRECT, |cx| Self {
+            knob_0: Knob::builder(0)
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
                 .on_open_text_entry(|info| Action::OpenTextInput(info).into())
                 .on_tooltip_request(
@@ -58,11 +57,9 @@ impl Elements {
                     Align2::TOP_CENTER,
                 )
                 .build(cx),
-            knob_0_label: Label::builder(&style.label_no_bg_style)
-                .text("Normal")
-                .build(cx),
+            knob_0_label: Label::builder().text("Normal").build(cx),
 
-            knob_1: Knob::builder(1, &style.knob_style_1)
+            knob_1: Knob::builder(1)
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
                 .on_open_text_entry(|info| Action::OpenTextInput(info).into())
                 .on_tooltip_request(
@@ -73,11 +70,10 @@ impl Elements {
                 .normal_value(0.5)
                 .default_normal(0.5)
                 .build(cx),
-            knob_1_label: Label::builder(&style.label_no_bg_style)
-                .text("Bipolar")
-                .build(cx),
+            knob_1_label: Label::builder().text("Bipolar").build(cx),
 
-            knob_2: Knob::builder(2, &style.knob_style_2)
+            knob_2: Knob::builder(2)
+                .class(MyStyle::CLASS_KNOB_2)
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
                 .on_open_text_entry(|info| Action::OpenTextInput(info).into())
                 .on_tooltip_request(
@@ -86,11 +82,9 @@ impl Elements {
                 )
                 .num_quantized_steps(Some(5))
                 .build(cx),
-            knob_2_label: Label::builder(&style.label_no_bg_style)
-                .text("Stepped")
-                .build(cx),
+            knob_2_label: Label::builder().text("Stepped").build(cx),
 
-            slider_3: Slider::builder(3, &style.slider_style_1)
+            slider_3: Slider::builder(3)
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
                 .on_open_text_entry(|info| Action::OpenTextInput(info).into())
                 .on_tooltip_request(
@@ -99,7 +93,7 @@ impl Elements {
                 )
                 .build(cx),
 
-            slider_4: Slider::builder(4, &style.slider_style_1)
+            slider_4: Slider::builder(4)
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
                 .on_open_text_entry(|info| Action::OpenTextInput(info).into())
                 .on_tooltip_request(
@@ -111,7 +105,7 @@ impl Elements {
                 .normal_value(0.5)
                 .build(cx),
 
-            slider_5: Slider::builder(5, &style.slider_style_1)
+            slider_5: Slider::builder(5)
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
                 .on_open_text_entry(|info| Action::OpenTextInput(info).into())
                 .on_tooltip_request(
@@ -122,7 +116,7 @@ impl Elements {
                 .drag_horizontally(true)
                 .build(cx),
 
-            slider_6: Slider::builder(6, &style.slider_style_1)
+            slider_6: Slider::builder(6)
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
                 .on_open_text_entry(|info| Action::OpenTextInput(info).into())
                 .on_tooltip_request(
@@ -136,7 +130,7 @@ impl Elements {
                 .normal_value(0.5)
                 .build(cx),
 
-            separator: Separator::builder(&style.separator_style).build(cx),
+            separator: Separator::builder().build(cx),
 
             scroll_area,
             floating_text_input,
@@ -186,48 +180,43 @@ impl Elements {
                         match param_id {
                             0 => {
                                 if let Ok(v) = new_text.parse::<f64>() {
-                                    self.knob_0.set_normal_value(v)
+                                    self.knob_0.set_normal_value(v);
                                 }
                             }
                             1 => {
                                 if let Ok(v) = new_text.parse::<f64>() {
-                                    self.knob_1.set_normal_value(v)
+                                    self.knob_1.set_normal_value(v);
                                 }
                             }
                             2 => {
                                 if let Ok(v) = new_text.parse::<u32>() {
-                                    self.knob_2.set_stepped_value(v)
+                                    self.knob_2.set_stepped_value(v);
                                 }
                             }
                             3 => {
                                 if let Ok(v) = new_text.parse::<f64>() {
-                                    self.slider_3.set_normal_value(v)
+                                    self.slider_3.set_normal_value(v);
                                 }
                             }
                             4 => {
                                 if let Ok(v) = new_text.parse::<f64>() {
-                                    self.slider_4.set_normal_value(v)
+                                    self.slider_4.set_normal_value(v);
                                 }
                             }
                             5 => {
                                 if let Ok(v) = new_text.parse::<f64>() {
-                                    self.slider_5.set_normal_value(v)
+                                    self.slider_5.set_normal_value(v);
                                 }
                             }
                             6 => {
                                 if let Ok(v) = new_text.parse::<f64>() {
-                                    self.slider_6.set_normal_value(v)
+                                    self.slider_6.set_normal_value(v);
                                 }
                             }
                             _ => {}
                         }
                     }
                 }
-            }
-            Action::ScrollOffsetChanged(scroll_offset) => {
-                cx.view
-                    .update_scissor_rect(SCROLL_AREA_SCISSOR_RECT, None, Some(scroll_offset))
-                    .unwrap();
             }
         }
 
@@ -280,13 +269,6 @@ impl Elements {
         cx: &mut WindowContext<'_, MyAction>,
     ) {
         self.scroll_area.el.set_rect(content_rect);
-        cx.view
-            .update_scissor_rect(
-                SCROLL_AREA_SCISSOR_RECT,
-                Some(self.scroll_area.el.rect()),
-                None,
-            )
-            .unwrap();
 
         let start_pos = Point::new(style.content_padding, style.content_padding);
 
@@ -300,6 +282,7 @@ impl Elements {
                 self.knob_0.el.rect().max_y() + style.param_label_padding,
             ),
             Align2::TOP_CENTER,
+            cx.res,
         );
 
         self.knob_1.el.set_rect(Rect::new(
@@ -315,6 +298,7 @@ impl Elements {
                 self.knob_1.el.rect().max_y() + style.param_label_padding,
             ),
             Align2::TOP_CENTER,
+            cx.res,
         );
 
         self.knob_2.el.set_rect(Rect::new(
@@ -330,6 +314,7 @@ impl Elements {
                 self.knob_2.el.rect().max_y() + style.param_label_padding,
             ),
             Align2::TOP_CENTER,
+            cx.res,
         );
 
         self.separator.el.set_rect(Rect::new(

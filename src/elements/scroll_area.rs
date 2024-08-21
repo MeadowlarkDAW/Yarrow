@@ -1,12 +1,13 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rootvg::color::RGBA8;
+use rootvg::color::{self, RGBA8};
 use rootvg::math::{Point, Rect, Size, Vector, ZIndex};
+use rootvg::quad::{QuadFlags, Radius};
 use rootvg::PrimitiveGroup;
 
-pub use crate::style::QuadStyle;
-use crate::style::{Background, BorderStyle};
+use crate::prelude::ElementStyle;
+use crate::style::{Background, BorderStyle, ClassID, QuadStyle};
 
 use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
 use crate::view::element::{
@@ -18,65 +19,98 @@ use crate::window::WindowContext;
 /// The style of a scroll bar in a [`ScrollArea`] element.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScrollBarStyle {
-    pub back_quad_idle: QuadStyle,
-    pub slider_quad_idle: QuadStyle,
+    pub back_quad_bg: Background,
+    pub back_quad_bg_content_hover: Option<Background>,
+    pub back_quad_bg_slider_hover: Option<Background>,
 
-    pub back_quad_content_hover: QuadStyle,
-    pub slider_content_hover: QuadStyle,
+    pub back_quad_border_color: RGBA8,
+    pub back_quad_border_color_content_hover: Option<RGBA8>,
+    pub back_quad_border_color_slider_hover: Option<RGBA8>,
 
-    pub back_quad_slider_hover: QuadStyle,
-    pub slider_hover: QuadStyle,
+    pub back_quad_border_width: f32,
+    pub back_quad_border_width_content_hover: Option<f32>,
+    pub back_quad_border_width_slider_hover: Option<f32>,
 
-    pub slider_dragging: QuadStyle,
+    pub slider_bg: Background,
+    pub slider_bg_content_hover: Option<Background>,
+    pub slider_bg_slider_hover: Option<Background>,
+    pub slider_bg_slider_dragging: Option<Background>,
+
+    pub slider_border_color: RGBA8,
+    pub slider_border_color_content_hover: Option<RGBA8>,
+    pub slider_border_color_slider_hover: Option<RGBA8>,
+    pub slider_border_color_slider_dragging: Option<RGBA8>,
+
+    pub slider_border_width: f32,
+    pub slider_border_width_content_hover: Option<f32>,
+    pub slider_border_width_slider_hover: Option<f32>,
+    pub slider_border_width_slider_dragging: Option<f32>,
 
     pub slider_width: f32,
+    pub radius: Radius,
+
+    /// Additional flags for the quad primitives.
+    ///
+    /// By default this is set to `QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL`.
+    pub quad_flags: QuadFlags,
 }
 
 impl Default for ScrollBarStyle {
     fn default() -> Self {
-        let slider_hover = QuadStyle {
-            bg: Background::Solid(RGBA8::new(255, 255, 255, 70)),
-            border: BorderStyle {
-                radius: 100.0.into(),
-                ..Default::default()
-            },
-        };
-
         Self {
-            back_quad_idle: QuadStyle::TRANSPARENT,
-            slider_quad_idle: QuadStyle::TRANSPARENT,
-
-            back_quad_content_hover: QuadStyle::TRANSPARENT,
-            slider_content_hover: QuadStyle {
-                bg: Background::Solid(RGBA8::new(255, 255, 255, 40)),
-                ..slider_hover
-            },
-
-            back_quad_slider_hover: QuadStyle::TRANSPARENT,
-            slider_hover: slider_hover.clone(),
-
-            slider_dragging: QuadStyle {
-                bg: Background::Solid(RGBA8::new(255, 255, 255, 100)),
-                ..slider_hover
-            },
-
+            back_quad_bg: Background::TRANSPARENT,
+            back_quad_bg_content_hover: None,
+            back_quad_bg_slider_hover: None,
+            back_quad_border_color: color::TRANSPARENT,
+            back_quad_border_color_content_hover: None,
+            back_quad_border_color_slider_hover: None,
+            back_quad_border_width: 0.0,
+            back_quad_border_width_content_hover: None,
+            back_quad_border_width_slider_hover: None,
+            slider_bg: Background::TRANSPARENT,
+            slider_bg_content_hover: None,
+            slider_bg_slider_hover: None,
+            slider_bg_slider_dragging: None,
+            slider_border_color: color::TRANSPARENT,
+            slider_border_color_content_hover: None,
+            slider_border_color_slider_hover: None,
+            slider_border_color_slider_dragging: None,
+            slider_border_width: 0.0,
+            slider_border_width_content_hover: None,
+            slider_border_width_slider_hover: None,
+            slider_border_width_slider_dragging: None,
             slider_width: 8.0,
+            radius: Radius::default(),
+            quad_flags: QuadFlags::SNAP_ALL_TO_NEAREST_PIXEL,
         }
     }
 }
 
+impl ElementStyle for ScrollBarStyle {
+    const ID: &'static str = "scrlbar";
+
+    fn default_dark_style() -> Self {
+        Self::default()
+    }
+
+    fn default_light_style() -> Self {
+        Self::default()
+    }
+}
+
 pub struct ScrollAreaBuilder<A: Clone + 'static> {
-    pub scrolled_action: Option<Box<dyn FnMut(Point) -> A>>,
+    pub scrolled_action: Option<Box<dyn FnMut(Vector) -> A>>,
+    pub control_scissor_rect: Option<ScissorRectID>,
     pub bounds: Rect,
     pub content_size: Size,
-    pub scroll_offset: Point,
+    pub scroll_offset: Vector,
     pub scroll_horizontally: bool,
     pub scroll_vertically: bool,
     pub scroll_with_scroll_wheel: bool,
     pub show_slider_when_content_fits: bool,
     pub capture_scroll_wheel: bool,
     pub points_per_line: f32,
-    pub style: Rc<ScrollBarStyle>,
+    pub class: Option<ClassID>,
     pub z_index: Option<ZIndex>,
     pub manually_hidden: bool,
     pub disabled: bool,
@@ -84,19 +118,20 @@ pub struct ScrollAreaBuilder<A: Clone + 'static> {
 }
 
 impl<A: Clone + 'static> ScrollAreaBuilder<A> {
-    pub fn new(style: &Rc<ScrollBarStyle>) -> Self {
+    pub fn new() -> Self {
         Self {
             scrolled_action: None,
+            control_scissor_rect: None,
             bounds: Rect::default(),
             content_size: Size::default(),
-            scroll_offset: Point::default(),
+            scroll_offset: Vector::default(),
             scroll_horizontally: true,
             scroll_vertically: true,
             scroll_with_scroll_wheel: true,
             show_slider_when_content_fits: false,
             capture_scroll_wheel: true,
             points_per_line: 24.0,
-            style: Rc::clone(style),
+            class: None,
             z_index: None,
             manually_hidden: false,
             disabled: false,
@@ -108,8 +143,17 @@ impl<A: Clone + 'static> ScrollAreaBuilder<A> {
         ScrollAreaElement::create(self, cx)
     }
 
-    pub fn on_scrolled<F: FnMut(Point) -> A + 'static>(mut self, f: F) -> Self {
+    pub fn on_scrolled<F: FnMut(Vector) -> A + 'static>(mut self, f: F) -> Self {
         self.scrolled_action = Some(Box::new(f));
+        self
+    }
+
+    /// Set the scissoring rectangle that this element will control.
+    ///
+    /// If `scissor_rect_id == ScissorRectID::DEFAULT`, then this will
+    /// be ignored.
+    pub const fn control_scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
+        self.control_scissor_rect = Some(scissor_rect_id);
         self
     }
 
@@ -123,7 +167,7 @@ impl<A: Clone + 'static> ScrollAreaBuilder<A> {
         self
     }
 
-    pub const fn scroll_offset(mut self, offset: Point) -> Self {
+    pub const fn scroll_offset(mut self, offset: Vector) -> Self {
         self.scroll_offset = offset;
         self
     }
@@ -158,21 +202,44 @@ impl<A: Clone + 'static> ScrollAreaBuilder<A> {
         self
     }
 
+    /// The style class ID
+    ///
+    /// If this method is not used, then the current class from the window context will
+    /// be used.
+    pub const fn class(mut self, class: ClassID) -> Self {
+        self.class = Some(class);
+        self
+    }
+
+    /// The z index of the element
+    ///
+    /// If this method is not used, then the current z index from the window context will
+    /// be used.
     pub const fn z_index(mut self, z_index: ZIndex) -> Self {
         self.z_index = Some(z_index);
         self
     }
 
+    /// Whether or not this element is manually hidden
+    ///
+    /// By default this is set to `false`.
     pub const fn hidden(mut self, hidden: bool) -> Self {
         self.manually_hidden = hidden;
         self
     }
 
+    /// Whether or not this element is in the disabled state
+    ///
+    /// By default this is set to `false`.
     pub const fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
         self
     }
 
+    /// The ID of the scissoring rectangle this element belongs to.
+    ///
+    /// If this method is not used, then the current scissoring rectangle ID from the
+    /// window context will be used.
     pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
         self.scissor_rect_id = Some(scissor_rect_id);
         self
@@ -181,13 +248,15 @@ impl<A: Clone + 'static> ScrollAreaBuilder<A> {
 
 struct DragState {
     drag_start_pos: Point,
-    drag_start_scroll_offset: Point,
+    drag_start_scroll_offset: Vector,
 }
 
 pub struct ScrollAreaElement<A: Clone + 'static> {
     shared_state: Rc<RefCell<SharedState>>,
 
-    scrolled_action: Option<Box<dyn FnMut(Point) -> A>>,
+    control_scissor_rect: Option<ScissorRectID>,
+
+    scrolled_action: Option<Box<dyn FnMut(Vector) -> A>>,
 
     scroll_horizontally: bool,
     scroll_vertically: bool,
@@ -201,12 +270,15 @@ pub struct ScrollAreaElement<A: Clone + 'static> {
 
     sliders_state: SlidersState,
     drag_state: Option<DragState>,
+
+    slider_width: f32,
 }
 
 impl<A: Clone + 'static> ScrollAreaElement<A> {
     pub fn create(builder: ScrollAreaBuilder<A>, cx: &mut WindowContext<'_, A>) -> ScrollArea {
         let ScrollAreaBuilder {
             scrolled_action,
+            control_scissor_rect,
             bounds,
             content_size,
             scroll_offset,
@@ -218,35 +290,51 @@ impl<A: Clone + 'static> ScrollAreaElement<A> {
             capture_scroll_wheel,
             points_per_line,
 
-            style,
+            class,
             z_index,
             manually_hidden,
             scissor_rect_id,
             disabled,
         } = builder;
 
-        let (z_index, scissor_rect_id) = cx.z_index_and_scissor_rect_id(z_index, scissor_rect_id);
+        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
+
+        let slider_width = cx
+            .res
+            .style_system
+            .get::<ScrollBarStyle>(class)
+            .slider_width;
 
         let res = update_sliders_state(
             bounds.size,
             content_size,
             scroll_offset,
-            style.slider_width,
+            slider_width,
             scroll_horizontally,
             scroll_vertically,
             show_slider_when_content_fits,
         );
 
         let shared_state = Rc::new(RefCell::new(SharedState {
-            style,
             content_size,
             scroll_offset: res.scroll_offset,
             disabled,
         }));
 
+        let control_scissor_rect = if let Some(id) = control_scissor_rect {
+            if id == ScissorRectID::DEFAULT {
+                None
+            } else {
+                Some(id)
+            }
+        } else {
+            None
+        };
+
         let element_builder = ElementBuilder {
             element: Box::new(Self {
                 shared_state: Rc::clone(&shared_state),
+                control_scissor_rect,
                 scrolled_action,
                 scroll_horizontally,
                 scroll_vertically,
@@ -258,11 +346,13 @@ impl<A: Clone + 'static> ScrollAreaElement<A> {
                 horizontal_state: ScrollBarState::Idle,
                 sliders_state: res,
                 drag_state: None,
+                slider_width,
             }),
             z_index,
-            bounding_rect: bounds,
+            rect: bounds,
             manually_hidden,
             scissor_rect_id,
+            class,
         };
 
         let el = cx
@@ -280,6 +370,8 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
             | ElementFlags::LISTENS_TO_POINTER_OUTSIDE_BOUNDS_WHEN_FOCUSED
             | ElementFlags::LISTENS_TO_FOCUS_CHANGE
             | ElementFlags::LISTENS_TO_SIZE_CHANGE
+            | ElementFlags::LISTENS_TO_POSITION_CHANGE
+            | ElementFlags::LISTENS_TO_INIT
     }
 
     fn on_event(
@@ -290,6 +382,15 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         match event {
+            ElementEvent::Init => {
+                if let Some(scissor_rect) = self.control_scissor_rect {
+                    cx.update_scissor_rect(
+                        scissor_rect,
+                        Some(cx.rect()),
+                        Some(shared_state.scroll_offset),
+                    );
+                }
+            }
             ElementEvent::CustomStateChanged => {
                 cx.request_repaint();
 
@@ -297,7 +398,7 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                     cx.rect().size,
                     shared_state.content_size,
                     shared_state.scroll_offset,
-                    shared_state.style.slider_width,
+                    self.slider_width,
                     self.scroll_horizontally,
                     self.scroll_vertically,
                     self.show_slider_when_content_fits,
@@ -308,15 +409,34 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                     self.vertical_state = ScrollBarState::Idle;
                     self.horizontal_state = ScrollBarState::Idle;
                 }
+
+                if let Some(scissor_rect) = self.control_scissor_rect {
+                    cx.update_scissor_rect(scissor_rect, None, Some(shared_state.scroll_offset));
+                }
             }
-            ElementEvent::SizeChanged => {
+            ElementEvent::PositionChanged => {
+                if let Some(scissor_rect) = self.control_scissor_rect {
+                    cx.update_scissor_rect(
+                        scissor_rect,
+                        Some(cx.rect()),
+                        Some(shared_state.scroll_offset),
+                    );
+                }
+            }
+            ElementEvent::StyleChanged | ElementEvent::SizeChanged => {
+                self.slider_width = cx
+                    .res
+                    .style_system
+                    .get::<ScrollBarStyle>(cx.class())
+                    .slider_width;
+
                 let prev_scroll_offset = self.sliders_state.scroll_offset;
 
                 self.sliders_state = update_sliders_state(
                     cx.rect().size,
                     shared_state.content_size,
                     shared_state.scroll_offset,
-                    shared_state.style.slider_width,
+                    self.slider_width,
                     self.scroll_horizontally,
                     self.scroll_vertically,
                     self.show_slider_when_content_fits,
@@ -329,6 +449,14 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                         cx.send_action((action)(shared_state.scroll_offset))
                             .unwrap();
                     }
+                }
+
+                if let Some(scissor_rect) = self.control_scissor_rect {
+                    cx.update_scissor_rect(
+                        scissor_rect,
+                        Some(cx.rect()),
+                        Some(shared_state.scroll_offset),
+                    );
                 }
             }
             ElementEvent::Pointer(PointerEvent::Moved { position, .. }) => {
@@ -376,7 +504,7 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                             cx.rect().size,
                             shared_state.content_size,
                             shared_state.scroll_offset,
-                            shared_state.style.slider_width,
+                            self.slider_width,
                             self.scroll_horizontally,
                             self.scroll_vertically,
                             self.show_slider_when_content_fits,
@@ -388,6 +516,14 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                         }
 
                         cx.request_repaint();
+
+                        if let Some(scissor_rect) = self.control_scissor_rect {
+                            cx.update_scissor_rect(
+                                scissor_rect,
+                                None,
+                                Some(shared_state.scroll_offset),
+                            );
+                        }
                     }
 
                     return EventCaptureStatus::Captured;
@@ -495,7 +631,7 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                                 cx.rect().size,
                                 shared_state.content_size,
                                 shared_state.scroll_offset,
-                                shared_state.style.slider_width,
+                                self.slider_width,
                                 self.scroll_horizontally,
                                 self.scroll_vertically,
                                 self.show_slider_when_content_fits,
@@ -507,6 +643,14 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                             }
 
                             cx.request_repaint();
+
+                            if let Some(scissor_rect) = self.control_scissor_rect {
+                                cx.update_scissor_rect(
+                                    scissor_rect,
+                                    None,
+                                    Some(shared_state.scroll_offset),
+                                );
+                            }
                         }
 
                         return EventCaptureStatus::Captured;
@@ -548,7 +692,7 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                                 cx.rect().size,
                                 shared_state.content_size,
                                 shared_state.scroll_offset,
-                                shared_state.style.slider_width,
+                                self.slider_width,
                                 self.scroll_horizontally,
                                 self.scroll_vertically,
                                 self.show_slider_when_content_fits,
@@ -560,6 +704,14 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                             }
 
                             cx.request_repaint();
+
+                            if let Some(scissor_rect) = self.control_scissor_rect {
+                                cx.update_scissor_rect(
+                                    scissor_rect,
+                                    None,
+                                    Some(shared_state.scroll_offset),
+                                );
+                            }
                         }
 
                         return EventCaptureStatus::Captured;
@@ -641,7 +793,7 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
 
                 let delta = delta_type.points(self.points_per_line, cx.rect().height());
 
-                let new_scroll_offset = Point::new(
+                let new_scroll_offset = Vector::new(
                     (self.sliders_state.scroll_offset.x + (delta.x))
                         .clamp(0.0, self.sliders_state.max_scroll_offset.x),
                     (self.sliders_state.scroll_offset.y + (delta.y))
@@ -656,7 +808,7 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                         cx.rect().size,
                         shared_state.content_size,
                         shared_state.scroll_offset,
-                        shared_state.style.slider_width,
+                        self.slider_width,
                         self.scroll_horizontally,
                         self.scroll_vertically,
                         self.show_slider_when_content_fits,
@@ -668,6 +820,14 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
                     }
 
                     cx.request_repaint();
+
+                    if let Some(scissor_rect) = self.control_scissor_rect {
+                        cx.update_scissor_rect(
+                            scissor_rect,
+                            None,
+                            Some(shared_state.scroll_offset),
+                        );
+                    }
                 }
 
                 if self.capture_scroll_wheel {
@@ -683,15 +843,55 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
         EventCaptureStatus::NotCaptured
     }
 
-    fn render_primitives(&mut self, _cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
-        let shared_state = RefCell::borrow(&self.shared_state);
+    fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
+        let style = cx.res.style_system.get::<ScrollBarStyle>(cx.class);
+
+        let bg_style = |state| -> QuadStyle {
+            match state {
+                ScrollBarState::Idle => QuadStyle {
+                    bg: style.back_quad_bg,
+                    border: BorderStyle {
+                        color: style.back_quad_border_color,
+                        width: style.back_quad_border_width,
+                        radius: style.radius,
+                    },
+                    flags: style.quad_flags,
+                },
+                ScrollBarState::ContentHovered => QuadStyle {
+                    bg: style
+                        .back_quad_bg_content_hover
+                        .unwrap_or(style.back_quad_bg),
+                    border: BorderStyle {
+                        color: style
+                            .back_quad_border_color_content_hover
+                            .unwrap_or(style.back_quad_border_color),
+                        width: style
+                            .back_quad_border_width_content_hover
+                            .unwrap_or(style.back_quad_border_width),
+                        radius: style.radius,
+                    },
+                    flags: style.quad_flags,
+                },
+                _ => QuadStyle {
+                    bg: style
+                        .back_quad_bg_slider_hover
+                        .unwrap_or(style.back_quad_bg),
+                    border: BorderStyle {
+                        color: style
+                            .back_quad_border_color_slider_hover
+                            .unwrap_or(style.back_quad_border_color),
+                        width: style
+                            .back_quad_border_width_slider_hover
+                            .unwrap_or(style.back_quad_border_width),
+                        radius: style.radius,
+                    },
+                    flags: style.quad_flags,
+                },
+            }
+        };
 
         if self.sliders_state.show_vertical {
-            let bg_style = match self.vertical_state {
-                ScrollBarState::Idle => &shared_state.style.back_quad_idle,
-                ScrollBarState::ContentHovered => &shared_state.style.back_quad_content_hover,
-                _ => &shared_state.style.back_quad_slider_hover,
-            };
+            let bg_style = bg_style(self.vertical_state);
 
             if !bg_style.is_transparent() {
                 primitives.add(bg_style.create_primitive(self.sliders_state.vertical_bg_bounds));
@@ -699,44 +899,102 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
         }
 
         if self.sliders_state.show_horizontal {
-            let bg_style = match self.horizontal_state {
-                ScrollBarState::Idle => &shared_state.style.back_quad_idle,
-                ScrollBarState::ContentHovered => &shared_state.style.back_quad_content_hover,
-                _ => &shared_state.style.back_quad_slider_hover,
-            };
+            let bg_style = bg_style(self.horizontal_state);
 
             if !bg_style.is_transparent() {
                 primitives.add(bg_style.create_primitive(self.sliders_state.horizontal_bg_bounds));
             }
         }
 
-        if self.sliders_state.show_vertical {
-            let bg_style = match self.vertical_state {
-                ScrollBarState::Idle => &shared_state.style.slider_quad_idle,
-                ScrollBarState::ContentHovered => &shared_state.style.slider_content_hover,
-                ScrollBarState::SliderHovered => &shared_state.style.slider_hover,
-                ScrollBarState::Dragging => &shared_state.style.slider_dragging,
-            };
+        let slider_style = |state| -> QuadStyle {
+            match state {
+                ScrollBarState::Idle => QuadStyle {
+                    bg: style.slider_bg,
+                    border: BorderStyle {
+                        color: style.slider_border_color,
+                        width: style.slider_border_width,
+                        radius: style.radius,
+                    },
+                    flags: style.quad_flags,
+                },
+                ScrollBarState::ContentHovered => QuadStyle {
+                    bg: style.slider_bg_content_hover.unwrap_or(style.slider_bg),
+                    border: BorderStyle {
+                        color: style
+                            .slider_border_color_content_hover
+                            .unwrap_or(style.slider_border_color),
+                        width: style
+                            .slider_border_width_content_hover
+                            .unwrap_or(style.slider_border_width),
+                        radius: style.radius,
+                    },
+                    flags: style.quad_flags,
+                },
+                ScrollBarState::SliderHovered => QuadStyle {
+                    bg: style
+                        .slider_bg_slider_hover
+                        .unwrap_or(style.slider_bg_content_hover.unwrap_or(style.slider_bg)),
+                    border: BorderStyle {
+                        color: style.slider_border_color_slider_hover.unwrap_or(
+                            style
+                                .slider_border_color_content_hover
+                                .unwrap_or(style.slider_border_color),
+                        ),
+                        width: style.slider_border_width_slider_hover.unwrap_or(
+                            style
+                                .slider_border_width_content_hover
+                                .unwrap_or(style.slider_border_width),
+                        ),
+                        radius: style.radius,
+                    },
+                    flags: style.quad_flags,
+                },
+                ScrollBarState::Dragging => QuadStyle {
+                    bg: style.slider_bg_slider_dragging.unwrap_or(
+                        style
+                            .slider_bg_slider_hover
+                            .unwrap_or(style.slider_bg_content_hover.unwrap_or(style.slider_bg)),
+                    ),
+                    border: BorderStyle {
+                        color: style.slider_border_color_slider_dragging.unwrap_or(
+                            style.slider_border_color_slider_hover.unwrap_or(
+                                style
+                                    .slider_border_color_content_hover
+                                    .unwrap_or(style.slider_border_color),
+                            ),
+                        ),
+                        width: style.slider_border_width_slider_dragging.unwrap_or(
+                            style.slider_border_width_slider_hover.unwrap_or(
+                                style
+                                    .slider_border_width_content_hover
+                                    .unwrap_or(style.slider_border_width),
+                            ),
+                        ),
+                        radius: style.radius,
+                    },
+                    flags: style.quad_flags,
+                },
+            }
+        };
 
-            if !bg_style.is_transparent() {
+        if self.sliders_state.show_vertical {
+            let slider_style = slider_style(self.vertical_state);
+
+            if !slider_style.is_transparent() {
                 primitives.set_z_index(1);
                 primitives
-                    .add(bg_style.create_primitive(self.sliders_state.vertical_slider_bounds));
+                    .add(slider_style.create_primitive(self.sliders_state.vertical_slider_bounds));
             }
         }
 
         if self.sliders_state.show_horizontal {
-            let bg_style = match self.horizontal_state {
-                ScrollBarState::Idle => &shared_state.style.slider_quad_idle,
-                ScrollBarState::ContentHovered => &shared_state.style.slider_content_hover,
-                ScrollBarState::SliderHovered => &shared_state.style.slider_hover,
-                ScrollBarState::Dragging => &shared_state.style.slider_dragging,
-            };
+            let slider_style = slider_style(self.horizontal_state);
 
-            if !bg_style.is_transparent() {
+            if !slider_style.is_transparent() {
                 primitives.set_z_index(1);
-                primitives
-                    .add(bg_style.create_primitive(self.sliders_state.horizontal_slider_bounds));
+                primitives.add(
+                    slider_style.create_primitive(self.sliders_state.horizontal_slider_bounds),
+                );
             }
         }
     }
@@ -751,9 +1009,8 @@ enum ScrollBarState {
 }
 
 struct SharedState {
-    style: Rc<ScrollBarStyle>,
     content_size: Size,
-    scroll_offset: Point,
+    scroll_offset: Vector,
     disabled: bool,
 }
 
@@ -763,42 +1020,63 @@ pub struct ScrollArea {
 }
 
 impl ScrollArea {
-    pub fn builder<A: Clone + 'static>(style: &Rc<ScrollBarStyle>) -> ScrollAreaBuilder<A> {
-        ScrollAreaBuilder::new(style)
+    pub fn builder<A: Clone + 'static>() -> ScrollAreaBuilder<A> {
+        ScrollAreaBuilder::new()
     }
 
-    pub fn set_style(&mut self, style: &Rc<ScrollBarStyle>) {
-        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
-        if !Rc::ptr_eq(&shared_state.style, style) {
-            shared_state.style = Rc::clone(style);
-            self.el.notify_custom_state_change();
+    /// Set the class of the element.
+    ///
+    /// Returns `true` if the class has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// and the class ID is cached in the handle itself, so this is very
+    /// cheap to call frequently.
+    pub fn set_class(&mut self, class: ClassID) -> bool {
+        if self.el.class() != class {
+            self.el._notify_class_change(class);
+            true
+        } else {
+            false
         }
     }
 
-    pub fn style(&self) -> Rc<ScrollBarStyle> {
-        Rc::clone(&RefCell::borrow(&self.shared_state).style)
-    }
-
-    pub fn set_scroll_offset(&mut self, scroll_offset: Point) {
+    /// Set the scroll offset.
+    ///
+    /// Returns `true` if the offset has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call frequently.
+    pub fn set_scroll_offset(&mut self, scroll_offset: Vector) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.scroll_offset != scroll_offset {
             shared_state.scroll_offset = scroll_offset;
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
-    pub fn scroll_offset(&self) -> Point {
+    pub fn scroll_offset(&self) -> Vector {
         RefCell::borrow(&self.shared_state).scroll_offset
     }
 
-    pub fn set_content_size(&mut self, content_size: Size) {
+    /// Set the content size.
+    ///
+    /// Returns `true` if the content size has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call frequently.
+    pub fn set_content_size(&mut self, content_size: Size) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.content_size != content_size {
             shared_state.content_size = content_size;
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 
@@ -810,12 +1088,21 @@ impl ScrollArea {
         RefCell::borrow(&self.shared_state).disabled
     }
 
-    pub fn set_disabled(&mut self, disabled: bool) {
+    /// Set the disabled state of this element.
+    ///
+    /// Returns `true` if the disabled state has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call frequently.
+    pub fn set_disabled(&mut self, disabled: bool) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.disabled != disabled {
             shared_state.disabled = disabled;
-            self.el.notify_custom_state_change();
+            self.el._notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 }
@@ -827,15 +1114,15 @@ struct SlidersState {
     horizontal_slider_bounds: Rect,
     show_vertical: bool,
     show_horizontal: bool,
-    scroll_offset: Point,
-    max_scroll_offset: Point,
+    scroll_offset: Vector,
+    max_scroll_offset: Vector,
     slider_to_content_ratio: Vector,
 }
 
 fn update_sliders_state(
     bounds_size: Size,
     content_size: Size,
-    scroll_offset: Point,
+    scroll_offset: Vector,
     slider_width: f32,
     scroll_horizontally: bool,
     scroll_vertically: bool,
@@ -936,8 +1223,8 @@ fn update_sliders_state(
         horizontal_slider_bounds,
         show_vertical,
         show_horizontal,
-        scroll_offset: Point::new(scroll_offset_x, scroll_offset_y),
-        max_scroll_offset: Point::new(max_scroll_offset_x, max_scroll_offset_y),
+        scroll_offset: Vector::new(scroll_offset_x, scroll_offset_y),
+        max_scroll_offset: Vector::new(max_scroll_offset_x, max_scroll_offset_y),
         slider_to_content_ratio: Vector::new(slider_to_content_ratio_x, slider_to_content_ratio_y),
     }
 }
