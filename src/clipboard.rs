@@ -1,3 +1,4 @@
+use baseview::Window as BaseviewWindow;
 use std::sync::Arc;
 
 /// The kind of [`Clipboard`].
@@ -16,12 +17,17 @@ pub enum ClipboardKind {
 /// applications.
 pub struct Clipboard {
     state: Option<State>,
-    #[cfg(feature = "winit")]
-    _window: Arc<winit::window::Window>,
+    // TODO: seems like this isnt being used?
+    // #[cfg(feature = "winit")]
+    // _window: Arc<winit::window::Window>,
 }
 
 impl Clipboard {
-    pub(crate) fn new(#[cfg(feature = "winit")] window: &Arc<winit::window::Window>) -> Clipboard {
+    pub(crate) fn new(
+        // TODO:
+        // #[cfg(feature = "winit")] window: &Arc<winit::window::Window>
+        window: &mut BaseviewWindow,
+    ) -> Clipboard {
         // SAFETY:
         // A reference-counted handle to the window is stored in this struct,
         // ensuring that the window will not be dropped before the clipboard
@@ -33,7 +39,7 @@ impl Clipboard {
 
         Clipboard {
             state: Some(state),
-            _window: Arc::clone(window),
+            // _window: Arc::clone(window),
         }
     }
 
