@@ -249,14 +249,16 @@ impl Elements {
     ) {
         self.scroll_area.set_rect(content_rect);
 
-        let start_pos = Point::new(style.content_padding, style.content_padding);
+        let start_pos = point(style.content_padding, style.content_padding);
 
-        self.knob_0.set_rect(Rect::new(
-            start_pos,
-            Size::new(style.knob_size, style.knob_size),
+        self.knob_0.set_rect(rect(
+            start_pos.x,
+            start_pos.y,
+            style.knob_size,
+            style.knob_size,
         ));
         self.knob_0_label.layout_aligned(
-            Point::new(
+            point(
                 self.knob_0.center().x,
                 self.knob_0.max_y() + style.param_label_padding,
             ),
@@ -264,12 +266,14 @@ impl Elements {
             cx.res,
         );
 
-        self.knob_1.set_rect(Rect::new(
-            Point::new(self.knob_0.max_x() + style.param_spacing, start_pos.y),
-            Size::new(style.knob_size, style.knob_size),
+        self.knob_1.set_rect(rect(
+            self.knob_0.max_x() + style.param_spacing,
+            start_pos.y,
+            style.knob_size,
+            style.knob_size,
         ));
         self.knob_1_label.layout_aligned(
-            Point::new(
+            point(
                 self.knob_1.center().x,
                 self.knob_1.max_y() + style.param_label_padding,
             ),
@@ -277,12 +281,14 @@ impl Elements {
             cx.res,
         );
 
-        self.knob_2.set_rect(Rect::new(
-            Point::new(self.knob_1.max_x() + style.param_spacing, start_pos.y),
-            Size::new(style.knob_size, style.knob_size),
+        self.knob_2.set_rect(rect(
+            self.knob_1.max_x() + style.param_spacing,
+            start_pos.y,
+            style.knob_size,
+            style.knob_size,
         ));
         self.knob_2_label.layout_aligned(
-            Point::new(
+            point(
                 self.knob_2.center().x,
                 self.knob_2.max_y() + style.param_label_padding,
             ),
@@ -290,47 +296,42 @@ impl Elements {
             cx.res,
         );
 
-        self.separator.set_rect(Rect::new(
-            Point::new(
-                start_pos.x,
-                self.knob_2_label.max_y() + style.element_padding,
-            ),
-            Size::new(
-                content_rect.width() - style.content_padding - style.content_padding,
-                style.separator_width,
-            ),
+        self.separator.set_rect(rect(
+            start_pos.x,
+            self.knob_2_label.max_y() + style.element_padding,
+            content_rect.width() - style.content_padding - style.content_padding,
+            style.separator_width,
         ));
 
-        self.slider_3.set_rect(Rect::new(
-            Point::new(start_pos.x, self.separator.max_y() + style.element_padding),
-            Size::new(22.0, 100.0),
+        self.slider_3.set_rect(rect(
+            start_pos.x,
+            self.separator.max_y() + style.element_padding,
+            22.0,
+            100.0,
         ));
 
-        self.slider_4.set_rect(Rect::new(
-            Point::new(
-                self.slider_3.max_x() + style.param_spacing,
-                self.slider_3.min_y(),
-            ),
-            Size::new(22.0, 100.0),
+        self.slider_4.set_rect(rect(
+            self.slider_3.max_x() + style.param_spacing,
+            self.slider_3.min_y(),
+            22.0,
+            100.0,
         ));
 
-        self.slider_5.set_rect(Rect::new(
-            Point::new(
-                self.slider_4.max_x() + style.param_spacing,
-                self.slider_4.min_y(),
-            ),
-            Size::new(100.0, 22.0),
+        self.slider_5.set_rect(rect(
+            self.slider_4.max_x() + style.param_spacing,
+            self.slider_4.min_y(),
+            100.0,
+            22.0,
         ));
 
-        self.slider_6.set_rect(Rect::new(
-            Point::new(
-                self.slider_5.min_x(),
-                self.slider_5.max_y() + style.element_padding,
-            ),
-            Size::new(100.0, 22.0),
+        self.slider_6.set_rect(rect(
+            self.slider_5.min_x(),
+            self.slider_5.max_y() + style.element_padding,
+            100.0,
+            22.0,
         ));
 
-        self.scroll_area.set_content_size(Size::new(
+        self.scroll_area.set_content_size(size(
             self.slider_6.max_x() + style.content_padding,
             self.slider_4.max_y() + style.content_padding,
         ));

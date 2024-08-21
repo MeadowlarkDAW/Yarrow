@@ -43,7 +43,7 @@ impl Elements {
             .build(cx);
 
         close_btn.layout_aligned(
-            Point::new(
+            point(
                 window_size.width * 0.5,
                 window_size.height - style.content_padding,
             ),
@@ -52,26 +52,21 @@ impl Elements {
         );
 
         let separator = Separator::builder()
-            .rect(Rect::new(
-                Point::new(
-                    style.content_padding,
-                    close_btn.min_y() - style.element_padding,
-                ),
-                Size::new(
-                    window_size.width - style.content_padding - style.content_padding,
-                    style.separator_width,
-                ),
+            .rect(rect(
+                style.content_padding,
+                close_btn.min_y() - style.element_padding,
+                window_size.width - style.content_padding - style.content_padding,
+                style.separator_width,
             ))
             .build(cx);
 
         let paragraph = Paragraph::builder()
             .text(ABOUT_TEXT)
-            .rect(Rect::new(
-                Point::new(style.content_padding, style.content_padding),
-                Size::new(
-                    window_size.width - style.content_padding - style.content_padding,
-                    separator.min_y() - style.element_padding,
-                ),
+            .rect(rect(
+                style.content_padding,
+                style.content_padding,
+                window_size.width - style.content_padding - style.content_padding,
+                separator.min_y() - style.element_padding,
             ))
             .build(cx);
 

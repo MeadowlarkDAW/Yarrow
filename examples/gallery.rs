@@ -293,45 +293,41 @@ impl MyApp {
 
         let window_size = cx.logical_size();
 
-        elements.top_panel_bg.set_rect(Rect::new(
-            Point::zero(),
-            Size::new(window_size.width, self.style.top_panel_height),
+        elements.top_panel_bg.set_rect(rect(
+            0.0,
+            0.0,
+            window_size.width,
+            self.style.top_panel_height,
         ));
-        elements.top_panel_border.set_rect(Rect::new(
-            Point::new(
-                0.0,
-                self.style.top_panel_height - self.style.panel_border_width,
-            ),
-            Size::new(window_size.width, self.style.panel_border_width),
+        elements.top_panel_border.set_rect(rect(
+            0.0,
+            self.style.top_panel_height - self.style.panel_border_width,
+            window_size.width,
+            self.style.panel_border_width,
         ));
 
         let left_panel_width = elements.left_panel_resize_handle.current_span();
-        elements.left_panel_bg.set_rect(Rect::new(
-            Point::new(0.0, self.style.top_panel_height),
-            Size::new(
-                left_panel_width,
-                window_size.height - self.style.top_panel_height,
-            ),
+        elements.left_panel_bg.set_rect(rect(
+            0.0,
+            self.style.top_panel_height,
+            left_panel_width,
+            window_size.height - self.style.top_panel_height,
         ));
-        elements.left_panel_border.set_rect(Rect::new(
-            Point::new(
-                left_panel_width - self.style.panel_border_width,
-                self.style.top_panel_height,
-            ),
-            Size::new(
-                self.style.panel_border_width,
-                window_size.height - self.style.top_panel_height,
-            ),
+        elements.left_panel_border.set_rect(rect(
+            left_panel_width - self.style.panel_border_width,
+            self.style.top_panel_height,
+            self.style.panel_border_width,
+            window_size.height - self.style.top_panel_height,
         ));
         elements
             .left_panel_resize_handle
             .set_layout(ResizeHandleLayout {
-                anchor: Point::new(0.0, self.style.top_panel_height),
+                anchor: point(0.0, self.style.top_panel_height),
                 length: window_size.height,
             });
 
         elements.menu_btn.layout_aligned(
-            Point::new(
+            point(
                 self.style.menu_btn_padding,
                 self.style.top_panel_height * 0.5,
             ),
@@ -339,13 +335,12 @@ impl MyApp {
             cx.res,
         );
 
-        elements.menu.set_position(Point::new(
-            elements.menu_btn.min_x(),
-            elements.menu_btn.max_y(),
-        ));
+        elements
+            .menu
+            .set_position(point(elements.menu_btn.min_x(), elements.menu_btn.max_y()));
 
         elements.tab_group.layout(
-            Point::new(
+            point(
                 0.0,
                 self.style.top_panel_height + self.style.tab_group_padding,
             ),
@@ -355,12 +350,11 @@ impl MyApp {
             cx.res,
         );
 
-        let content_rect = Rect::new(
-            Point::new(left_panel_width, self.style.top_panel_height),
-            Size::new(
-                window_size.width - left_panel_width,
-                window_size.height - self.style.top_panel_height,
-            ),
+        let content_rect = rect(
+            left_panel_width,
+            self.style.top_panel_height,
+            window_size.width - left_panel_width,
+            window_size.height - self.style.top_panel_height,
         );
 
         match self.current_tab {

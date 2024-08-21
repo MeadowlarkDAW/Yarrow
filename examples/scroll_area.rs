@@ -84,7 +84,7 @@ impl MainWindowElements {
 
         // Set the "content size" of the scroll area. In this case we want it to cover
         // the size of our elements with a bit of padding on the top and bottom.
-        self.scroll_area.set_content_size(Size::new(
+        self.scroll_area.set_content_size(size(
             self.long_boi.max_x() + 20.0,
             self.long_boi.max_y() + 20.0,
         ));
