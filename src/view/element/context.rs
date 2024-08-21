@@ -18,9 +18,8 @@ use rootvg::math::{Point, Size, Vector};
 
 use crate::action_queue::ActionSender;
 use crate::clipboard::Clipboard;
-use crate::layout::Align2;
 use crate::math::{Rect, ScaleFactor, ZIndex};
-use crate::prelude::{ClassID, ResourceCtx};
+use crate::prelude::{ClassID, ResourceCtx, TooltipData};
 use crate::{CursorIcon, ScissorRectID, WindowID};
 
 use super::ElementRenderCache;
@@ -33,8 +32,7 @@ pub(crate) enum ChangeFocusRequest {
 }
 
 pub(crate) struct ShowTooltipRequest {
-    pub message: String,
-    pub align: Align2,
+    pub data: TooltipData,
     pub auto_hide: bool,
 }
 
@@ -270,12 +268,8 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
         self.scroll_wheel_timeout_requested = true;
     }
 
-    pub fn show_tooltip(&mut self, message: String, align: Align2, auto_hide: bool) {
-        self.requested_show_tooltip = Some(ShowTooltipRequest {
-            message,
-            align,
-            auto_hide,
-        });
+    pub fn show_tooltip(&mut self, data: TooltipData, auto_hide: bool) {
+        self.requested_show_tooltip = Some(ShowTooltipRequest { data, auto_hide });
     }
 
     /// The ID of the window this element belongs to.

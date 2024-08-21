@@ -442,8 +442,8 @@ impl<A: Clone + 'static> WindowState<A> {
             action_sender,
             action_receiver,
             z_index_stack: Vec::new(),
-            scissor_rect_id_stack: Vec::new(),
-            class_id_stack: Vec::new(),
+            scissor_rect_stack: Vec::new(),
+            class_stack: Vec::new(),
             logical_size: self.logical_size,
             physical_size: self.physical_size,
             scale_factor: self.scale_factor,
@@ -536,8 +536,8 @@ pub struct WindowContext<'a, A: Clone + 'static> {
     /// The receiving end of the action queue.
     pub action_receiver: &'a mut ActionReceiver<A>,
     z_index_stack: Vec<ZIndex>,
-    scissor_rect_id_stack: Vec<ScissorRectID>,
-    class_id_stack: Vec<ClassID>,
+    scissor_rect_stack: Vec<ScissorRectID>,
+    class_stack: Vec<ClassID>,
     logical_size: Size,
     physical_size: PhysicalSizeI32,
     scale_factor: ScaleFactor,
@@ -572,16 +572,13 @@ impl<'a, A: Clone + 'static> WindowContext<'a, A> {
     }
 
     /// Get the current scissor rect ID from the stack (peek)
-    pub fn scissor_rect_id(&self) -> ScissorRectID {
-        self.scissor_rect_id_stack
-            .last()
-            .copied()
-            .unwrap_or_default()
+    pub fn scissor_rect(&self) -> ScissorRectID {
+        self.scissor_rect_stack.last().copied().unwrap_or_default()
     }
 
     /// Get the current style class ID from the stack (peek)
     pub fn class(&self) -> ClassID {
-        self.class_id_stack.last().map(|s| *s).unwrap_or_default()
+        self.class_stack.last().map(|s| *s).unwrap_or_default()
     }
 
     /// Push a z index onto the stack
@@ -595,13 +592,13 @@ impl<'a, A: Clone + 'static> WindowContext<'a, A> {
     }
 
     /// Push a scissor rect ID onto the stack
-    pub fn push_scissor_rect(&mut self, scissor_rect_id: ScissorRectID) {
-        self.scissor_rect_id_stack.push(scissor_rect_id);
+    pub fn push_scissor_rect(&mut self, scissor_rect: ScissorRectID) {
+        self.scissor_rect_stack.push(scissor_rect);
     }
 
     /// Push a style class ID onto the stack
     pub fn push_class(&mut self, class: ClassID) {
-        self.class_id_stack.push(class);
+        self.class_stack.push(class);
     }
 
     /// Pop a z index from the stack
@@ -611,12 +608,12 @@ impl<'a, A: Clone + 'static> WindowContext<'a, A> {
 
     /// Pop a scissor rect ID from the stack
     pub fn pop_scissor_rect(&mut self) -> Option<ScissorRectID> {
-        self.scissor_rect_id_stack.pop()
+        self.scissor_rect_stack.pop()
     }
 
     /// Pop a style class ID from the stack
     pub fn pop_class(&mut self) -> Option<ClassID> {
-        self.class_id_stack.pop()
+        self.class_stack.pop()
     }
 
     /// Reset the z index stack.
@@ -626,19 +623,19 @@ impl<'a, A: Clone + 'static> WindowContext<'a, A> {
 
     /// Reset the scissor rect ID stack
     pub fn reset_scissor_rect(&mut self) {
-        self.scissor_rect_id_stack.clear();
+        self.scissor_rect_stack.clear();
     }
 
     /// Returns the z index, scissor rect ID, and class ID from the given builder values.
     pub fn builder_values(
         &self,
         z_index: Option<ZIndex>,
-        scissor_rect_id: Option<ScissorRectID>,
+        scissor_rect: Option<ScissorRectID>,
         class: Option<ClassID>,
     ) -> (ZIndex, ScissorRectID, ClassID) {
         (
             z_index.unwrap_or_else(|| self.z_index()),
-            scissor_rect_id.unwrap_or_else(|| self.scissor_rect_id()),
+            scissor_rect.unwrap_or_else(|| self.scissor_rect()),
             class.unwrap_or_else(|| self.class()),
         )
     }
@@ -652,10 +649,10 @@ impl<'a, A: Clone + 'static> WindowContext<'a, A> {
 
     pub fn with_scissor_rect<T, F: FnOnce(&mut Self) -> T>(
         &mut self,
-        scissor_rect_id: ScissorRectID,
+        scissor_rect: ScissorRectID,
         f: F,
     ) -> T {
-        self.push_scissor_rect(scissor_rect_id);
+        self.push_scissor_rect(scissor_rect);
         let r = (f)(self);
         self.pop_scissor_rect();
         r
@@ -664,11 +661,11 @@ impl<'a, A: Clone + 'static> WindowContext<'a, A> {
     pub fn with_z_index_and_scissor_rect<T, F: FnOnce(&mut Self) -> T>(
         &mut self,
         z_index: ZIndex,
-        scissor_rect_id: ScissorRectID,
+        scissor_rect: ScissorRectID,
         f: F,
     ) -> T {
         self.push_z_index(z_index);
-        self.push_scissor_rect(scissor_rect_id);
+        self.push_scissor_rect(scissor_rect);
         let r = (f)(self);
         self.pop_z_index();
         self.pop_scissor_rect();

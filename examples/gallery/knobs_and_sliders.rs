@@ -150,14 +150,14 @@ impl Elements {
 
         match action {
             Action::ParamUpdate(info) => {
-                self.show_param_tooltip(info.param_info, info.is_gesturing(), cx);
+                self.show_param_tooltip(info.param_info, cx);
 
                 if !info.is_gesturing() {
                     // Set the tooltip to auto-hide when gesturing is finished.
                     cx.view.auto_hide_tooltip();
                 }
             }
-            Action::ShowParamTooltip(info) => self.show_param_tooltip(info.param_info, false, cx),
+            Action::ShowParamTooltip(info) => self.show_param_tooltip(info.param_info, cx),
             Action::OpenTextInput(info) => {
                 self.text_input_param_id = Some(info.param_info.id);
                 let text = match info.param_info.value() {
@@ -223,43 +223,22 @@ impl Elements {
         needs_layout
     }
 
-    fn show_param_tooltip(
-        &mut self,
-        param_info: ParamInfo,
-        is_gesturing: bool,
-        cx: &WindowContext<'_, MyAction>,
-    ) {
-        let el = match param_info.id {
-            0 => &mut self.knob_0.el,
-            1 => &mut self.knob_1.el,
-            2 => &mut self.knob_2.el,
-            3 => &mut self.slider_3.el,
-            4 => &mut self.slider_4.el,
-            5 => &mut self.slider_5.el,
-            6 => &mut self.slider_6.el,
-            _ => return,
-        };
-
-        // Don't show if the element is not being gestured and
-        // it is not currently hovered.
-        if !is_gesturing {
-            if !cx.view.element_is_hovered(el) {
-                return;
-            }
-        }
-
-        let message = match param_info.value() {
+    fn show_param_tooltip(&mut self, param_info: ParamInfo, cx: &WindowContext<'_, MyAction>) {
+        let get_text = || match param_info.value() {
             ParamValue::Normal(n) => format!("{:.4}", n),
             ParamValue::Stepped(s) => format!("{}", s),
         };
 
-        el.show_tooltip(
-            message,
-            Align2::TOP_CENTER,
-            // Don't auto-hide the tooltip when gesturing, otherwise
-            // the tooltip may flicker.
-            !is_gesturing,
-        );
+        match param_info.id {
+            0 => self.knob_0.show_tooltip(get_text, Align2::TOP_CENTER, cx),
+            1 => self.knob_1.show_tooltip(get_text, Align2::TOP_CENTER, cx),
+            2 => self.knob_2.show_tooltip(get_text, Align2::TOP_CENTER, cx),
+            3 => self.slider_3.show_tooltip(get_text, Align2::TOP_CENTER, cx),
+            4 => self.slider_4.show_tooltip(get_text, Align2::TOP_CENTER, cx),
+            5 => self.slider_5.show_tooltip(get_text, Align2::TOP_CENTER, cx),
+            6 => self.slider_6.show_tooltip(get_text, Align2::TOP_CENTER, cx),
+            _ => return,
+        };
     }
 
     pub fn layout(
@@ -268,59 +247,53 @@ impl Elements {
         style: &MyStyle,
         cx: &mut WindowContext<'_, MyAction>,
     ) {
-        self.scroll_area.el.set_rect(content_rect);
+        self.scroll_area.set_rect(content_rect);
 
         let start_pos = Point::new(style.content_padding, style.content_padding);
 
-        self.knob_0.el.set_rect(Rect::new(
+        self.knob_0.set_rect(Rect::new(
             start_pos,
             Size::new(style.knob_size, style.knob_size),
         ));
         self.knob_0_label.layout_aligned(
             Point::new(
-                self.knob_0.el.rect().center().x,
-                self.knob_0.el.rect().max_y() + style.param_label_padding,
+                self.knob_0.center().x,
+                self.knob_0.max_y() + style.param_label_padding,
             ),
             Align2::TOP_CENTER,
             cx.res,
         );
 
-        self.knob_1.el.set_rect(Rect::new(
-            Point::new(
-                self.knob_0.el.rect().max_x() + style.param_spacing,
-                start_pos.y,
-            ),
+        self.knob_1.set_rect(Rect::new(
+            Point::new(self.knob_0.max_x() + style.param_spacing, start_pos.y),
             Size::new(style.knob_size, style.knob_size),
         ));
         self.knob_1_label.layout_aligned(
             Point::new(
-                self.knob_1.el.rect().center().x,
-                self.knob_1.el.rect().max_y() + style.param_label_padding,
+                self.knob_1.center().x,
+                self.knob_1.max_y() + style.param_label_padding,
             ),
             Align2::TOP_CENTER,
             cx.res,
         );
 
-        self.knob_2.el.set_rect(Rect::new(
-            Point::new(
-                self.knob_1.el.rect().max_x() + style.param_spacing,
-                start_pos.y,
-            ),
+        self.knob_2.set_rect(Rect::new(
+            Point::new(self.knob_1.max_x() + style.param_spacing, start_pos.y),
             Size::new(style.knob_size, style.knob_size),
         ));
         self.knob_2_label.layout_aligned(
             Point::new(
-                self.knob_2.el.rect().center().x,
-                self.knob_2.el.rect().max_y() + style.param_label_padding,
+                self.knob_2.center().x,
+                self.knob_2.max_y() + style.param_label_padding,
             ),
             Align2::TOP_CENTER,
             cx.res,
         );
 
-        self.separator.el.set_rect(Rect::new(
+        self.separator.set_rect(Rect::new(
             Point::new(
                 start_pos.x,
-                self.knob_2_label.el.rect().max_y() + style.element_padding,
+                self.knob_2_label.max_y() + style.element_padding,
             ),
             Size::new(
                 content_rect.width() - style.content_padding - style.content_padding,
@@ -328,41 +301,38 @@ impl Elements {
             ),
         ));
 
-        self.slider_3.el.set_rect(Rect::new(
+        self.slider_3.set_rect(Rect::new(
+            Point::new(start_pos.x, self.separator.max_y() + style.element_padding),
+            Size::new(22.0, 100.0),
+        ));
+
+        self.slider_4.set_rect(Rect::new(
             Point::new(
-                start_pos.x,
-                self.separator.el.rect().max_y() + style.element_padding,
+                self.slider_3.max_x() + style.param_spacing,
+                self.slider_3.min_y(),
             ),
             Size::new(22.0, 100.0),
         ));
 
-        self.slider_4.el.set_rect(Rect::new(
+        self.slider_5.set_rect(Rect::new(
             Point::new(
-                self.slider_3.el.rect().max_x() + style.param_spacing,
-                self.slider_3.el.rect().min_y(),
-            ),
-            Size::new(22.0, 100.0),
-        ));
-
-        self.slider_5.el.set_rect(Rect::new(
-            Point::new(
-                self.slider_4.el.rect().max_x() + style.param_spacing,
-                self.slider_4.el.rect().min_y(),
+                self.slider_4.max_x() + style.param_spacing,
+                self.slider_4.min_y(),
             ),
             Size::new(100.0, 22.0),
         ));
 
-        self.slider_6.el.set_rect(Rect::new(
+        self.slider_6.set_rect(Rect::new(
             Point::new(
-                self.slider_5.el.rect().min_x(),
-                self.slider_5.el.rect().max_y() + style.element_padding,
+                self.slider_5.min_x(),
+                self.slider_5.max_y() + style.element_padding,
             ),
             Size::new(100.0, 22.0),
         ));
 
         self.scroll_area.set_content_size(Size::new(
-            self.slider_6.el.rect().max_x() + style.content_padding,
-            self.slider_4.el.rect().max_y() + style.content_padding,
+            self.slider_6.max_x() + style.content_padding,
+            self.slider_4.max_y() + style.content_padding,
         ));
     }
 
@@ -385,18 +355,18 @@ impl Elements {
             text_input_param_id: _,
         } = self;
 
-        knob_0.el.set_hidden(hidden);
-        knob_0_label.el.set_hidden(hidden);
-        knob_1.el.set_hidden(hidden);
-        knob_1_label.el.set_hidden(hidden);
-        knob_2.el.set_hidden(hidden);
-        knob_2_label.el.set_hidden(hidden);
-        slider_3.el.set_hidden(hidden);
-        slider_4.el.set_hidden(hidden);
-        slider_5.el.set_hidden(hidden);
-        slider_6.el.set_hidden(hidden);
-        scroll_area.el.set_hidden(hidden);
-        separator.el.set_hidden(hidden);
+        knob_0.set_hidden(hidden);
+        knob_0_label.set_hidden(hidden);
+        knob_1.set_hidden(hidden);
+        knob_1_label.set_hidden(hidden);
+        knob_2.set_hidden(hidden);
+        knob_2_label.set_hidden(hidden);
+        slider_3.set_hidden(hidden);
+        slider_4.set_hidden(hidden);
+        slider_5.set_hidden(hidden);
+        slider_6.set_hidden(hidden);
+        scroll_area.set_hidden(hidden);
+        separator.set_hidden(hidden);
         floating_text_input.hide();
     }
 }

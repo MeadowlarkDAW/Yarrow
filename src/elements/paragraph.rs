@@ -1,23 +1,10 @@
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
-use rootvg::color::{self, RGBA8};
-use rootvg::text::{FontSystem, RcTextBuffer, TextPrimitive, TextProperties};
-use rootvg::PrimitiveGroup;
-
-use crate::event::{ElementEvent, EventCaptureStatus};
-use crate::layout::{Align, Align2, Padding};
-use crate::math::{Point, Rect, Size, Vector, ZIndex};
-use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::ClassID;
-use crate::view::element::{
-    Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
-};
-use crate::view::ScissorRectID;
-use crate::window::WindowContext;
+use crate::prelude::*;
+use crate::vg::text::{RcTextBuffer, TextPrimitive};
 
 use super::label::LabelPrimitives;
-use super::quad::QuadStyle;
 
 // TODO: Add ability to select, copy, and right-click text.
 
@@ -273,31 +260,18 @@ impl ParagraphInner {
     }
 }
 
+#[element_builder]
+#[element_builder_class]
+#[element_builder_rect]
+#[element_builder_hidden]
+#[derive(Default)]
 pub struct ParagraphBuilder {
     pub text: String,
     pub text_offset: Vector,
     pub bounds_width: Option<f32>,
-    pub class: Option<ClassID>,
-    pub z_index: Option<ZIndex>,
-    pub rect: Rect,
-    pub manually_hidden: bool,
-    pub scissor_rect_id: Option<ScissorRectID>,
 }
 
 impl ParagraphBuilder {
-    pub fn new() -> Self {
-        Self {
-            text: String::new(),
-            text_offset: Vector::default(),
-            bounds_width: None,
-            class: None,
-            z_index: None,
-            rect: Rect::default(),
-            manually_hidden: false,
-            scissor_rect_id: None,
-        }
-    }
-
     pub fn build<A: Clone + 'static>(self, cx: &mut WindowContext<'_, A>) -> Paragraph {
         ParagraphElement::create(self, cx)
     }
@@ -325,50 +299,6 @@ impl ParagraphBuilder {
         self.text_offset = offset;
         self
     }
-
-    /// The style class ID
-    ///
-    /// If this method is not used, then the current class from the window context will
-    /// be used.
-    pub const fn class(mut self, class: ClassID) -> Self {
-        self.class = Some(class);
-        self
-    }
-
-    /// The z index of the element
-    ///
-    /// If this method is not used, then the current z index from the window context will
-    /// be used.
-    pub const fn z_index(mut self, z_index: ZIndex) -> Self {
-        self.z_index = Some(z_index);
-        self
-    }
-
-    /// The bounding rectangle of the element
-    ///
-    /// If this method is not used, then the element will have a size and position of
-    /// zero and will not be visible until its bounding rectangle is set.
-    pub const fn rect(mut self, rect: Rect) -> Self {
-        self.rect = rect;
-        self
-    }
-
-    /// Whether or not this element is manually hidden
-    ///
-    /// By default this is set to `false`.
-    pub const fn hidden(mut self, hidden: bool) -> Self {
-        self.manually_hidden = hidden;
-        self
-    }
-
-    /// The ID of the scissoring rectangle this element belongs to.
-    ///
-    /// If this method is not used, then the current scissoring rectangle ID from the
-    /// window context will be used.
-    pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
-        self.scissor_rect_id = Some(scissor_rect_id);
-        self
-    }
 }
 
 /// A Paragraph element with an optional quad background.
@@ -389,10 +319,10 @@ impl ParagraphElement {
             z_index,
             rect,
             manually_hidden,
-            scissor_rect_id,
+            scissor_rect,
         } = builder;
 
-        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
+        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
 
         let style = cx.res.style_system.get(class);
 
@@ -415,7 +345,7 @@ impl ParagraphElement {
             z_index,
             rect,
             manually_hidden,
-            scissor_rect_id,
+            scissor_rect,
             class,
         };
 
@@ -468,14 +398,16 @@ struct SharedState {
 }
 
 /// A handle to a [`ParagraphElement`], a Paragraph with an optional quad background.
+#[element_handle]
+#[element_handle_class]
+#[element_handle_set_rect]
 pub struct Paragraph {
-    pub el: ElementHandle,
     shared_state: Rc<RefCell<SharedState>>,
 }
 
 impl Paragraph {
     pub fn builder() -> ParagraphBuilder {
-        ParagraphBuilder::new()
+        ParagraphBuilder::default()
     }
 
     /// Returns the size of the padded background rectangle if it were to
@@ -517,7 +449,7 @@ impl Paragraph {
             .set_text(text, &mut res.font_system);
 
         if changed {
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -544,7 +476,7 @@ impl Paragraph {
                 res.style_system.get(self.el.class()),
                 &mut res.font_system,
             );
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -553,24 +485,6 @@ impl Paragraph {
 
     pub fn bounds_width(&self) -> f32 {
         RefCell::borrow(&self.shared_state).inner.bounds_width()
-    }
-
-    /// Set the class of the element.
-    ///
-    /// Returns `true` if the class has changed.
-    ///
-    /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively cheap to call frequently. However, this method still
-    /// involves a string comparison so you may want to call this method
-    /// sparingly.
-    pub fn set_class(&mut self, class: ClassID, res: &mut ResourceCtx) {
-        if self.el.class() != class {
-            RefCell::borrow_mut(&self.shared_state)
-                .inner
-                .sync_new_style(res.style_system.get(class), &mut res.font_system);
-
-            self.el._notify_class_change(class);
-        }
     }
 
     /// An offset that can be used mainly to correct the position of icon glyphs.
@@ -585,7 +499,7 @@ impl Paragraph {
 
         if shared_state.inner.text_offset != offset {
             shared_state.inner.text_offset = offset;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false

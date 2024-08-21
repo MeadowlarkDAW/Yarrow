@@ -19,6 +19,30 @@ pub type IconID = u16;
 
 pub use style_system::{ClassID, StyleSystem, CLASS_DEFAULT, CLASS_MENU, CLASS_PANEL};
 
+/// The scale of an icon, used to make icons look more consistent.
+///
+/// Note this does not affect any layout, this is just a visual thing.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct IconScale(pub f32);
+
+impl Default for IconScale {
+    fn default() -> Self {
+        Self(1.0)
+    }
+}
+
+impl From<f32> for IconScale {
+    fn from(v: f32) -> Self {
+        Self(v)
+    }
+}
+
+impl Into<f32> for IconScale {
+    fn into(self) -> f32 {
+        self.0
+    }
+}
+
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BorderStyle {

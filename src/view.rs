@@ -31,6 +31,7 @@ use crate::clipboard::Clipboard;
 use crate::event::{CanvasEvent, ElementEvent, EventCaptureStatus, KeyboardEvent, PointerEvent};
 use crate::layout::Align2;
 use crate::math::{Point, PointI32, Rect, RectI32, ScaleFactor, Size, ZIndex};
+use crate::prelude::TooltipData;
 use crate::prelude::{ClassID, ResourceCtx};
 use crate::stmpsc_queue;
 use crate::CursorIcon;
@@ -296,13 +297,13 @@ impl<A: Clone + 'static> View<A> {
             z_index,
             rect,
             manually_hidden,
-            scissor_rect_id,
+            scissor_rect,
             class,
         } = element_builder;
 
         let flags = element.flags();
 
-        let scissor_rect_index = self.get_scissor_rect_index(scissor_rect_id);
+        let scissor_rect_index = self.get_scissor_rect_index(scissor_rect);
 
         let mut stack_data = EntryStackData {
             rect,
@@ -1152,17 +1153,8 @@ impl<A: Clone + 'static> View<A> {
                 ElementModificationType::StartScrollWheelTimeout => {
                     self.handle_element_start_scroll_wheel_timeout(modification.element_id);
                 }
-                ElementModificationType::ShowTooltip {
-                    message,
-                    align,
-                    auto_hide,
-                } => {
-                    self.handle_element_show_tooltip(
-                        modification.element_id,
-                        message,
-                        align,
-                        auto_hide,
-                    );
+                ElementModificationType::ShowTooltip { data, auto_hide } => {
+                    self.handle_element_show_tooltip(modification.element_id, data, auto_hide);
                 }
                 ElementModificationType::UpdateScissorRect(req) => {
                     self.update_scissor_rect(
@@ -1219,8 +1211,7 @@ impl<A: Clone + 'static> View<A> {
     fn handle_element_show_tooltip(
         &mut self,
         element_id: ElementID,
-        message: String,
-        align: Align2,
+        data: TooltipData,
         auto_hide: bool,
     ) {
         let Some(element_entry) = self.element_arena.get(element_id.0) else {
@@ -1235,9 +1226,9 @@ impl<A: Clone + 'static> View<A> {
 
         if let Some(action) = self.show_tooltip_action.as_mut() {
             let info = TooltipInfo {
-                message,
+                text: data.text,
+                align: data.align,
                 element_bounds: element_entry.stack_data.rect,
-                align,
                 window_id: self.context.window_id,
             };
 
@@ -2029,7 +2020,7 @@ impl EntryStackData {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TooltipInfo {
-    pub message: String,
+    pub text: String,
     pub element_bounds: Rect,
     pub align: Align2,
     pub window_id: WindowID,
@@ -2150,8 +2141,7 @@ fn send_event_to_element<A: Clone + 'static>(
         view_cx.mod_queue_sender.send_to_front(ElementModification {
             element_id,
             type_: ElementModificationType::ShowTooltip {
-                message: req.message,
-                align: req.align,
+                data: req.data,
                 auto_hide: req.auto_hide,
             },
         });

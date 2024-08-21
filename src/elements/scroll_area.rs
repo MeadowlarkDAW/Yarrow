@@ -1,20 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rootvg::color::{self, RGBA8};
-use rootvg::math::{Point, Rect, Size, Vector, ZIndex};
-use rootvg::quad::{QuadFlags, Radius};
-use rootvg::PrimitiveGroup;
-
-use crate::prelude::ElementStyle;
-use crate::style::{Background, BorderStyle, ClassID, QuadStyle};
-
-use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
-use crate::view::element::{
-    Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
-};
-use crate::view::ScissorRectID;
-use crate::window::WindowContext;
+use crate::prelude::*;
 
 /// The style of a scroll bar in a [`ScrollArea`] element.
 #[derive(Debug, Clone, PartialEq)]
@@ -98,10 +85,14 @@ impl ElementStyle for ScrollBarStyle {
     }
 }
 
+#[element_builder]
+#[element_builder_class]
+#[element_builder_rect]
+#[element_builder_hidden]
+#[element_builder_disabled]
 pub struct ScrollAreaBuilder<A: Clone + 'static> {
     pub scrolled_action: Option<Box<dyn FnMut(Vector) -> A>>,
     pub control_scissor_rect: Option<ScissorRectID>,
-    pub bounds: Rect,
     pub content_size: Size,
     pub scroll_offset: Vector,
     pub scroll_horizontally: bool,
@@ -110,19 +101,13 @@ pub struct ScrollAreaBuilder<A: Clone + 'static> {
     pub show_slider_when_content_fits: bool,
     pub capture_scroll_wheel: bool,
     pub points_per_line: f32,
-    pub class: Option<ClassID>,
-    pub z_index: Option<ZIndex>,
-    pub manually_hidden: bool,
-    pub disabled: bool,
-    pub scissor_rect_id: Option<ScissorRectID>,
 }
 
-impl<A: Clone + 'static> ScrollAreaBuilder<A> {
-    pub fn new() -> Self {
+impl<A: Clone + 'static> Default for ScrollAreaBuilder<A> {
+    fn default() -> Self {
         Self {
             scrolled_action: None,
             control_scissor_rect: None,
-            bounds: Rect::default(),
             content_size: Size::default(),
             scroll_offset: Vector::default(),
             scroll_horizontally: true,
@@ -133,12 +118,15 @@ impl<A: Clone + 'static> ScrollAreaBuilder<A> {
             points_per_line: 24.0,
             class: None,
             z_index: None,
+            rect: Rect::default(),
             manually_hidden: false,
             disabled: false,
-            scissor_rect_id: None,
+            scissor_rect: None,
         }
     }
+}
 
+impl<A: Clone + 'static> ScrollAreaBuilder<A> {
     pub fn build(self, cx: &mut WindowContext<'_, A>) -> ScrollArea {
         ScrollAreaElement::create(self, cx)
     }
@@ -154,11 +142,6 @@ impl<A: Clone + 'static> ScrollAreaBuilder<A> {
     /// be ignored.
     pub const fn control_scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
         self.control_scissor_rect = Some(scissor_rect_id);
-        self
-    }
-
-    pub const fn bounds(mut self, bounds: Rect) -> Self {
-        self.bounds = bounds;
         self
     }
 
@@ -201,49 +184,6 @@ impl<A: Clone + 'static> ScrollAreaBuilder<A> {
         self.points_per_line = points_per_line;
         self
     }
-
-    /// The style class ID
-    ///
-    /// If this method is not used, then the current class from the window context will
-    /// be used.
-    pub const fn class(mut self, class: ClassID) -> Self {
-        self.class = Some(class);
-        self
-    }
-
-    /// The z index of the element
-    ///
-    /// If this method is not used, then the current z index from the window context will
-    /// be used.
-    pub const fn z_index(mut self, z_index: ZIndex) -> Self {
-        self.z_index = Some(z_index);
-        self
-    }
-
-    /// Whether or not this element is manually hidden
-    ///
-    /// By default this is set to `false`.
-    pub const fn hidden(mut self, hidden: bool) -> Self {
-        self.manually_hidden = hidden;
-        self
-    }
-
-    /// Whether or not this element is in the disabled state
-    ///
-    /// By default this is set to `false`.
-    pub const fn disabled(mut self, disabled: bool) -> Self {
-        self.disabled = disabled;
-        self
-    }
-
-    /// The ID of the scissoring rectangle this element belongs to.
-    ///
-    /// If this method is not used, then the current scissoring rectangle ID from the
-    /// window context will be used.
-    pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
-        self.scissor_rect_id = Some(scissor_rect_id);
-        self
-    }
 }
 
 struct DragState {
@@ -279,7 +219,6 @@ impl<A: Clone + 'static> ScrollAreaElement<A> {
         let ScrollAreaBuilder {
             scrolled_action,
             control_scissor_rect,
-            bounds,
             content_size,
             scroll_offset,
 
@@ -292,12 +231,13 @@ impl<A: Clone + 'static> ScrollAreaElement<A> {
 
             class,
             z_index,
+            rect,
             manually_hidden,
-            scissor_rect_id,
+            scissor_rect,
             disabled,
         } = builder;
 
-        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
+        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
 
         let slider_width = cx
             .res
@@ -306,7 +246,7 @@ impl<A: Clone + 'static> ScrollAreaElement<A> {
             .slider_width;
 
         let res = update_sliders_state(
-            bounds.size,
+            rect.size,
             content_size,
             scroll_offset,
             slider_width,
@@ -349,9 +289,9 @@ impl<A: Clone + 'static> ScrollAreaElement<A> {
                 slider_width,
             }),
             z_index,
-            rect: bounds,
+            rect,
             manually_hidden,
-            scissor_rect_id,
+            scissor_rect,
             class,
         };
 
@@ -1014,30 +954,17 @@ struct SharedState {
     disabled: bool,
 }
 
+#[element_handle]
+#[element_handle_class]
+#[element_handle_set_rect]
+#[element_handle_layout_aligned]
 pub struct ScrollArea {
-    pub el: ElementHandle,
     shared_state: Rc<RefCell<SharedState>>,
 }
 
 impl ScrollArea {
     pub fn builder<A: Clone + 'static>() -> ScrollAreaBuilder<A> {
-        ScrollAreaBuilder::new()
-    }
-
-    /// Set the class of the element.
-    ///
-    /// Returns `true` if the class has changed.
-    ///
-    /// This will *NOT* trigger an element update unless the value has changed,
-    /// and the class ID is cached in the handle itself, so this is very
-    /// cheap to call frequently.
-    pub fn set_class(&mut self, class: ClassID) -> bool {
-        if self.el.class() != class {
-            self.el._notify_class_change(class);
-            true
-        } else {
-            false
-        }
+        ScrollAreaBuilder::default()
     }
 
     /// Set the scroll offset.
@@ -1051,7 +978,7 @@ impl ScrollArea {
 
         if shared_state.scroll_offset != scroll_offset {
             shared_state.scroll_offset = scroll_offset;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -1073,7 +1000,7 @@ impl ScrollArea {
 
         if shared_state.content_size != content_size {
             shared_state.content_size = content_size;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -1099,7 +1026,7 @@ impl ScrollArea {
 
         if shared_state.disabled != disabled {
             shared_state.disabled = disabled;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false

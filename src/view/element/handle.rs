@@ -15,9 +15,11 @@
 use super::ElementModificationType;
 use crate::layout::Align2;
 use crate::math::{Point, Rect, Size, Vector, ZIndex};
+use crate::prelude::TooltipData;
 use crate::stmpsc_queue;
 use crate::style::ClassID;
 use crate::view::{ElementID, ElementModification};
+use crate::WindowContext;
 
 pub struct ElementHandle {
     element_id: ElementID,
@@ -299,13 +301,20 @@ impl ElementHandle {
         }
     }
 
-    /// Show a tooltip on the element.
-    pub fn show_tooltip(&mut self, message: String, align: Align2, auto_hide: bool) {
+    /// Show a tooltip on the element
+    ///
+    /// * `text` - The tooltip text
+    /// * `align` - Where to align the tooltip relative to this element
+    /// * `auto_hide` - Whether or not the tooltip should automatically hide when
+    /// the mouse pointer is no longer over the element.
+    pub fn show_tooltip(&mut self, text: impl Into<String>, align: Align2, auto_hide: bool) {
         self.mod_queue_sender.send(ElementModification {
             element_id: self.element_id,
             type_: ElementModificationType::ShowTooltip {
-                message,
-                align,
+                data: TooltipData {
+                    text: text.into(),
+                    align,
+                },
                 auto_hide,
             },
         })
@@ -318,33 +327,43 @@ impl ElementHandle {
         self.class
     }
 
-    /// Notify the element that its custom state has changed.
-    ///
-    /// This is meant to be used by element implementations, not by the end-user.
+    /// Notify the system that this element's custom state has changed.
     ///
     /// Note, this will *always* cause an element update, so prefer to call this
     /// method sparingly.
-    pub fn _notify_custom_state_change(&mut self) {
+    pub fn notify_custom_state_change(&mut self) {
         self.mod_queue_sender.send(ElementModification {
             element_id: self.element_id,
             type_: ElementModificationType::CustomStateChanged,
         });
     }
 
-    /// Notify the element that its class ID has changed.
+    /// Set the class of this element instance.
     ///
-    /// This is meant to be used by element implementations, not by the end-user.
-    /// Using this method directly instead of the element's provided `set_class`
-    /// method may lead to de-synced state and unexpected results.
+    /// An update will only be sent to the view if the class has changed.
     ///
-    /// Note, this will *always* cause an element update, so prefer to call this
-    /// method sparingly.
-    pub fn _notify_class_change(&mut self, new_class: ClassID) {
-        self.class = new_class;
-        self.mod_queue_sender.send(ElementModification {
-            element_id: self.element_id,
-            type_: ElementModificationType::ClassChanged(new_class),
-        })
+    /// Returns `true` if the class has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call frequently (although a
+    /// string comparison is performed).
+    pub fn set_class(&mut self, new_class: ClassID) -> bool {
+        if self.class != new_class {
+            self.class = new_class;
+            self.mod_queue_sender.send(ElementModification {
+                element_id: self.element_id,
+                type_: ElementModificationType::ClassChanged(new_class),
+            });
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Get the actual bounding rectangle of this element, accounting for the offset
+    /// introduced by its assigned scissoring rectangle.
+    pub fn rect_in_window<A: Clone + 'static>(&self, cx: &WindowContext<'_, A>) -> Rect {
+        cx.view.element_rect(self).unwrap()
     }
 
     pub(crate) fn id(&self) -> ElementID {

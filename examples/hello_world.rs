@@ -60,7 +60,7 @@ impl MainWindowElements {
         let label_rect = centered_rect(window_rect.center(), label_size);
 
         // Element handles have a generic part with common methods.
-        self.hello_label.el.set_rect(label_rect);
+        self.hello_label.set_rect(label_rect);
     }
 }
 

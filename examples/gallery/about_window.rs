@@ -55,7 +55,7 @@ impl Elements {
             .rect(Rect::new(
                 Point::new(
                     style.content_padding,
-                    close_btn.el.rect().min_y() - style.element_padding,
+                    close_btn.min_y() - style.element_padding,
                 ),
                 Size::new(
                     window_size.width - style.content_padding - style.content_padding,
@@ -70,7 +70,7 @@ impl Elements {
                 Point::new(style.content_padding, style.content_padding),
                 Size::new(
                     window_size.width - style.content_padding - style.content_padding,
-                    separator.el.rect().min_y() - style.element_padding,
+                    separator.min_y() - style.element_padding,
                 ),
             ))
             .build(cx);

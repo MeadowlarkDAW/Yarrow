@@ -31,6 +31,7 @@ pub use application::{AppConfig, AppContext, Application};
 pub use cursor_icon::CursorIcon;
 pub use view::{ScissorRectID, TooltipInfo, View};
 pub use window::{WindowContext, WindowID, MAIN_WINDOW};
+pub use yarrow_derive as derive;
 
 pub use rootvg as vg;
 pub use rootvg::math;

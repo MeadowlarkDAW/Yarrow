@@ -1,35 +1,18 @@
-use std::{
-    cell::{Ref, RefCell},
-    ops::Range,
-    rc::Rc,
-};
-
-use keyboard_types::Modifiers;
-use rootvg::{
-    math::{Point, Rect, Size, ZIndex},
-    PrimitiveGroup,
-};
 use smallvec::SmallVec;
+use std::cell::{Ref, RefCell};
+use std::ops::Range;
+use std::rc::Rc;
 
-use crate::{
-    event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent},
-    layout::Align2,
-    style::ClassID,
-    view::element::{
-        Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, ElementRenderCache,
-        RenderContext,
-    },
-    CursorIcon, ScissorRectID, WindowContext,
-};
+use crate::prelude::*;
 
 mod inner;
 mod renderer;
 
-pub use inner::*;
-pub use renderer::*;
-
 pub mod knob;
 pub mod slider;
+
+pub use inner::*;
+pub use renderer::*;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ParamOpenTextEntryInfo {
@@ -247,12 +230,16 @@ pub struct ParamRightClickInfo {
     pub pointer_pos: Point,
 }
 
+#[element_builder]
+#[element_builder_class]
+#[element_builder_rect]
+#[element_builder_hidden]
+#[element_builder_disabled]
 pub struct VirtualSliderBuilder<A: Clone + 'static> {
     pub on_gesture: Option<Box<dyn FnMut(ParamUpdate) -> A>>,
     pub on_right_click: Option<Box<dyn FnMut(ParamRightClickInfo) -> A>>,
     pub on_open_text_entry: Option<Box<dyn FnMut(ParamOpenTextEntryInfo) -> A>>,
     pub on_tooltip_request: Option<Box<dyn FnMut(ParamElementTooltipInfo) -> A>>,
-    pub class: Option<ClassID>,
     pub tooltip_align: Align2,
     pub param_id: u32,
     pub normal_value: f64,
@@ -264,11 +251,6 @@ pub struct VirtualSliderBuilder<A: Clone + 'static> {
     pub drag_horizontally: bool,
     pub scroll_horizontally: bool,
     pub horizontal: bool,
-    pub z_index: Option<ZIndex>,
-    pub rect: Rect,
-    pub manually_hidden: bool,
-    pub disabled: bool,
-    pub scissor_rect_id: Option<ScissorRectID>,
 }
 
 impl<A: Clone + 'static> VirtualSliderBuilder<A> {
@@ -279,7 +261,7 @@ impl<A: Clone + 'static> VirtualSliderBuilder<A> {
             on_open_text_entry: None,
             on_tooltip_request: None,
             class: None,
-            tooltip_align: Align2::TOP_CENTER,
+            tooltip_align: Align2::default(),
             param_id,
             normal_value: 0.0,
             default_normal: 0.0,
@@ -294,7 +276,7 @@ impl<A: Clone + 'static> VirtualSliderBuilder<A> {
             rect: Rect::default(),
             manually_hidden: false,
             disabled: false,
-            scissor_rect_id: None,
+            scissor_rect: None,
         }
     }
 
@@ -329,6 +311,12 @@ impl<A: Clone + 'static> VirtualSliderBuilder<A> {
         align: Align2,
     ) -> Self {
         self.on_tooltip_request = Some(Box::new(f));
+        self.tooltip_align = align;
+        self
+    }
+
+    /// How to align the tooltip relative to this element
+    pub const fn tooltip_align(mut self, align: Align2) -> Self {
         self.tooltip_align = align;
         self
     }
@@ -377,58 +365,6 @@ impl<A: Clone + 'static> VirtualSliderBuilder<A> {
         self.horizontal = horizontal;
         self
     }
-
-    /// The style class ID
-    ///
-    /// If this method is not used, then the current class from the window context will
-    /// be used.
-    pub const fn class(mut self, class: ClassID) -> Self {
-        self.class = Some(class);
-        self
-    }
-
-    /// The z index of the element
-    ///
-    /// If this method is not used, then the current z index from the window context will
-    /// be used.
-    pub const fn z_index(mut self, z_index: ZIndex) -> Self {
-        self.z_index = Some(z_index);
-        self
-    }
-
-    /// The bounding rectangle of the element
-    ///
-    /// If this method is not used, then the element will have a size and position of
-    /// zero and will not be visible until its bounding rectangle is set.
-    pub const fn rect(mut self, rect: Rect) -> Self {
-        self.rect = rect;
-        self
-    }
-
-    /// Whether or not this element is manually hidden
-    ///
-    /// By default this is set to `false`.
-    pub const fn hidden(mut self, hidden: bool) -> Self {
-        self.manually_hidden = hidden;
-        self
-    }
-
-    /// Whether or not this element is in the disabled state
-    ///
-    /// By default this is set to `false`.
-    pub const fn disabled(mut self, disabled: bool) -> Self {
-        self.disabled = disabled;
-        self
-    }
-
-    /// The ID of the scissoring rectangle this element belongs to.
-    ///
-    /// If this method is not used, then the current scissoring rectangle ID from the
-    /// window context will be used.
-    pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
-        self.scissor_rect_id = Some(scissor_rect_id);
-        self
-    }
 }
 
 pub struct VirtualSliderElement<A: Clone + 'static, R: VirtualSliderRenderer + 'static> {
@@ -456,7 +392,6 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
             on_right_click,
             on_open_text_entry,
             on_tooltip_request,
-            class,
             tooltip_align,
             param_id,
             normal_value,
@@ -468,14 +403,15 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
             drag_horizontally,
             scroll_horizontally,
             horizontal,
+            class,
             z_index,
             rect,
             manually_hidden,
             disabled,
-            scissor_rect_id,
+            scissor_rect,
         } = builder;
 
-        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
+        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
         let style = cx.res.style_system.get_rc::<R::Style>(class);
 
         let renderer = R::new(style);
@@ -521,7 +457,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
             z_index,
             rect,
             manually_hidden,
-            scissor_rect_id,
+            scissor_rect,
             class,
         };
 
@@ -1103,8 +1039,11 @@ struct SharedState<R: VirtualSliderRenderer + 'static> {
 }
 
 /// A handle to a [`VirtualSliderElement`].
+#[element_handle]
+#[element_handle_class]
+#[element_handle_set_rect]
+#[element_handle_layout_aligned]
 pub struct VirtualSlider<R: VirtualSliderRenderer> {
-    pub el: ElementHandle,
     shared_state: Rc<RefCell<SharedState<R>>>,
 }
 
@@ -1131,7 +1070,7 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
 
         if shared_state.inner.normal_value() != new_normal {
             shared_state.queued_new_val = Some(ParamValue::Normal(new_normal));
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -1151,7 +1090,7 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
         if let Some(stepped_value) = shared_state.inner.stepped_value() {
             if stepped_value.value != new_val {
                 shared_state.queued_new_val = Some(ParamValue::Stepped(new_val));
-                self.el._notify_custom_state_change();
+                self.el.notify_custom_state_change();
                 return true;
             }
         }
@@ -1177,7 +1116,7 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
             }
 
             shared_state.queued_new_val = Some(new_val);
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -1196,7 +1135,7 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
         let state_changed = shared_state.inner.set_default_normal(new_normal);
         if state_changed {
             shared_state.needs_repaint = true;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -1216,7 +1155,7 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
         if shared_state.automation_info != info {
             shared_state.automation_info = info;
             shared_state.automation_info_changed = true;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -1235,7 +1174,7 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
         if shared_state.inner.normal_value() != shared_state.inner.default_normal() {
             shared_state.queued_new_val =
                 Some(ParamValue::Normal(shared_state.inner.default_normal()));
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -1277,7 +1216,7 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
         if shared_state.markers != markers {
             shared_state.markers = markers;
             shared_state.needs_repaint = true;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -1300,7 +1239,7 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
         if shared_state.bipolar != bipolar {
             shared_state.bipolar = bipolar;
             shared_state.needs_repaint = true;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -1311,16 +1250,33 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
         RefCell::borrow(&self.shared_state).bipolar
     }
 
-    /// Set the class of the element.
+    /// Show a tooltip on this element
     ///
-    /// Returns `true` if the class has changed.
+    /// * `text` - The tooltip text
+    /// * `align` - Where to align the tooltip relative to this element
+    /// * `auto_hide` - Whether or not the tooltip should automatically hide when
+    /// the mouse pointer is no longer over the element.
     ///
-    /// This will *NOT* trigger an element update unless the value has changed,
-    /// so this method is relatively inexpensive to call.
-    pub fn set_class(&mut self, class: ClassID) {
-        if self.el.class() != class {
-            self.el._notify_class_change(class);
+    /// If the element is not being gestured and it is not currently hovered, then
+    /// this will be ignored.
+    pub fn show_tooltip<A: Clone + 'static, F: FnOnce() -> String>(
+        &mut self,
+        get_text: F,
+        align: Align2,
+        cx: &WindowContext<'_, A>,
+    ) {
+        let shared_state = RefCell::borrow(&self.shared_state);
+
+        if !shared_state.inner.is_gesturing() {
+            if !cx.view.element_is_hovered(&self.el) {
+                return;
+            }
         }
+
+        let text = (get_text)();
+
+        self.el
+            .show_tooltip(text, align, !shared_state.inner.is_gesturing());
     }
 
     /// Set the disabled state of this element.
@@ -1335,7 +1291,7 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
         if shared_state.disabled != disabled {
             shared_state.disabled = disabled;
             shared_state.needs_repaint = true;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
         }
     }
 

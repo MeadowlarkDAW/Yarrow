@@ -1,25 +1,16 @@
-use std::time::{Duration, Instant};
-
-use keyboard_types::{Code, CompositionEvent, KeyState, Modifiers};
-use rootvg::quad::{QuadFlags, QuadPrimitive, Radius, SolidQuadBuilder, SolidQuadPrimitive};
-use rootvg::text::glyphon::cosmic_text::{Motion, Selection};
-use rootvg::text::glyphon::{Action, Affinity, Cursor, Edit};
-use rootvg::text::{
-    Attrs, EditorBorrowStatus, Family, FontSystem, RcTextBuffer, Shaping, TextPrimitive,
-    TextProperties, Wrap,
-};
 use smallvec::SmallVec;
+use std::time::{Duration, Instant};
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::clipboard::{Clipboard, ClipboardKind};
-use crate::event::{EventCaptureStatus, KeyboardEvent, PointerButton};
-use crate::layout::Padding;
-use crate::math::{Point, Rect, Size, Vector};
-use crate::prelude::ElementStyle;
-use crate::style::{Background, BorderStyle, DisabledBackground, DisabledColor, QuadStyle};
-
+use crate::prelude::*;
 use crate::theme::DEFAULT_ACCENT_COLOR;
-use crate::vg::color::{self, RGBA8};
+use crate::vg::quad::{QuadPrimitive, SolidQuadBuilder, SolidQuadPrimitive};
+use crate::vg::text::glyphon::{
+    cosmic_text::{Action, Affinity, Cursor, Motion, Selection},
+    Edit,
+};
+use crate::vg::text::{EditorBorrowStatus, RcTextBuffer, TextPrimitive};
 
 /// The style of a [`TextInput`] element
 #[derive(Debug, Clone, PartialEq)]
@@ -225,7 +216,6 @@ pub struct TextInputUpdateResult {
     pub set_focus: Option<bool>,
     pub capture_status: EventCaptureStatus,
     pub hovered: bool,
-    pub start_hover_timeout: bool,
     pub listen_to_pointer_clicked_off: bool,
     pub set_animating: Option<bool>,
     pub enter_key_pressed: bool,
@@ -235,7 +225,6 @@ pub struct TextInputUpdateResult {
 pub struct TextInputInner {
     pub show_password: bool,
     pub disabled: bool,
-    pub has_tooltip_message: bool,
 
     buffer: RcTextBuffer,
     placeholder_buffer: Option<RcTextBuffer>,
@@ -266,7 +255,6 @@ impl TextInputInner {
         max_characters: usize,
         bounds_size: Size,
         disabled: bool,
-        has_tooltip_message: bool,
         select_all_when_focused: bool,
         style: &TextInputStyle,
         font_system: &mut FontSystem,
@@ -354,7 +342,6 @@ impl TextInputInner {
             cursor_blink_last_toggle_instant: Instant::now(),
             cursor_blink_interval: style.cursor_blink_interval,
             pointer_hovered: false,
-            has_tooltip_message,
             select_all_when_focused,
         }
     }
@@ -368,6 +355,10 @@ impl TextInputInner {
         let mut result = TextInputUpdateResult::default();
 
         if self.text == text {
+            if select_all {
+                self.queue_action(TextInputAction::SelectAll);
+            }
+
             return result;
         }
 
@@ -387,6 +378,7 @@ impl TextInputInner {
                     affinity: Affinity::Before,
                 }));
                 editor.delete_selection();
+
                 editor.insert_string(text, None);
                 editor.shape_as_needed(font_system, true);
 
@@ -589,9 +581,6 @@ impl TextInputInner {
 
         let pointer_in_bounds = bounds.contains(position);
 
-        if pointer_in_bounds && !self.pointer_hovered && self.has_tooltip_message {
-            result.start_hover_timeout = true;
-        }
         if !self.pointer_hovered && pointer_in_bounds {
             result.needs_repaint = true;
         }

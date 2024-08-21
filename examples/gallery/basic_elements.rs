@@ -116,7 +116,7 @@ impl Elements {
 
                         MenuEntry::Option {
                             left_icon: Some(icon),
-                            icon_scale: 1.0,
+                            icon_scale: 1.0.into(),
                             left_text: format!("{s}"),
                             right_text: Some(s.right_text().into()),
                             unique_id: i,
@@ -186,7 +186,7 @@ impl Elements {
                 click_me_btn: Button::builder()
                     .text("Click Me!")
                     .on_select(Action::ClickMePressed.into())
-                    .tooltip_message("A cool button", Align2::TOP_CENTER)
+                    .tooltip("A cool button", Align2::TOP_CENTER)
                     .build(cx),
 
                 icon_btn: Button::builder()
@@ -227,7 +227,7 @@ impl Elements {
 
                 text_input: TextInput::builder()
                     .placeholder_text("write something...")
-                    .tooltip_message("A text input :)", Align2::TOP_LEFT)
+                    .tooltip("A text input :)", Align2::TOP_LEFT)
                     .on_changed(|text| Action::TextChanged(text).into())
                     .on_right_click(|pos| {
                         Action::OpenTextInputMenu {
@@ -297,7 +297,7 @@ impl Elements {
             Action::OpenDropDown => {
                 // Because the drop-down menu button may be offset by the scroll area,
                 // get the correct position via this method.
-                let rect = cx.view.element_rect(&self.drop_down_menu_btn.el).unwrap();
+                let rect = self.drop_down_menu_btn.rect_in_window(cx);
                 self.drop_down_menu
                     .open(Some(Point::new(rect.min_x(), rect.max_y())));
             }
@@ -335,9 +335,9 @@ impl Elements {
         style: &MyStyle,
         cx: &mut WindowContext<'_, MyAction>,
     ) {
-        self.right_click_area.el.set_rect(content_rect);
+        self.right_click_area.set_rect(content_rect);
 
-        self.scroll_area.el.set_rect(content_rect);
+        self.scroll_area.set_rect(content_rect);
 
         let start_pos = Point::new(style.content_padding, style.content_padding);
 
@@ -347,41 +347,29 @@ impl Elements {
 
         self.icon_btn.layout(
             Point::new(
-                self.click_me_btn.el.rect().max_x() + style.element_padding,
+                self.click_me_btn.max_x() + style.element_padding,
                 start_pos.y,
             ),
             cx.res,
         );
 
         self.label.layout(
-            Point::new(
-                self.icon_btn.el.rect().max_x() + style.element_padding,
-                start_pos.y,
-            ),
+            Point::new(self.icon_btn.max_x() + style.element_padding, start_pos.y),
             cx.res,
         );
 
         self.icon.layout(
-            Point::new(
-                self.label.el.rect().max_x() + style.element_padding,
-                start_pos.y,
-            ),
+            Point::new(self.label.max_x() + style.element_padding, start_pos.y),
             cx.res,
         );
 
         self.icon_label.layout(
-            Point::new(
-                self.icon.el.rect().max_x() + style.element_padding,
-                start_pos.y,
-            ),
+            Point::new(self.icon.max_x() + style.element_padding, start_pos.y),
             cx.res,
         );
 
         let mut toggle_btn_rect = Rect::new(
-            Point::new(
-                0.0,
-                self.click_me_btn.el.rect().max_y() + style.element_padding,
-            ),
+            Point::new(0.0, self.click_me_btn.max_y() + style.element_padding),
             self.toggle_btn.desired_size(cx.res),
         );
 
@@ -391,26 +379,26 @@ impl Elements {
             cx.res,
         );
 
-        toggle_btn_rect.origin.x = self.switch.el.rect().max_x() + style.element_padding;
-        self.toggle_btn.el.set_rect(toggle_btn_rect);
+        toggle_btn_rect.origin.x = self.switch.max_x() + style.element_padding;
+        self.toggle_btn.set_rect(toggle_btn_rect);
 
         self.icon_toggle_btn.layout(
             Point::new(
                 toggle_btn_rect.max_x() + style.element_padding,
-                self.toggle_btn.el.rect().min_y(),
+                self.toggle_btn.min_y(),
             ),
             cx.res,
         );
 
         self.icon_label_toggle_btn.layout(
             Point::new(
-                self.icon_toggle_btn.el.rect().max_x() + style.element_padding,
-                self.toggle_btn.el.rect().min_y(),
+                self.icon_toggle_btn.max_x() + style.element_padding,
+                self.toggle_btn.min_y(),
             ),
             cx.res,
         );
 
-        self.separator_1.el.set_rect(Rect::new(
+        self.separator_1.set_rect(Rect::new(
             Point::new(start_pos.x, toggle_btn_rect.max_y() + style.element_padding),
             Size::new(
                 content_rect.width() - style.content_padding - style.content_padding,
@@ -418,10 +406,10 @@ impl Elements {
             ),
         ));
 
-        self.drop_down_menu_btn.el.set_rect(Rect::new(
+        self.drop_down_menu_btn.set_rect(Rect::new(
             Point::new(
                 start_pos.x,
-                self.separator_1.el.rect().max_y() + style.element_padding,
+                self.separator_1.max_y() + style.element_padding,
             ),
             Size::new(
                 style.drop_down_btn_width,
@@ -432,7 +420,7 @@ impl Elements {
         self.radio_group.layout(
             Point::new(
                 start_pos.x,
-                self.drop_down_menu_btn.el.rect().max_y() + style.element_padding,
+                self.drop_down_menu_btn.max_y() + style.element_padding,
             ),
             style.radio_group_row_padding,
             style.radio_group_column_padding,
@@ -441,7 +429,7 @@ impl Elements {
             cx.res,
         );
 
-        self.separator_2.el.set_rect(Rect::new(
+        self.separator_2.set_rect(Rect::new(
             Point::new(
                 start_pos.x,
                 self.radio_group.bounds().max_y() + style.element_padding,
@@ -452,25 +440,22 @@ impl Elements {
             ),
         ));
 
-        self.text_input.el.set_rect(Rect::new(
+        self.text_input.set_rect(Rect::new(
             Point::new(
                 start_pos.x,
-                self.separator_2.el.rect().max_y() + style.element_padding,
+                self.separator_2.max_y() + style.element_padding,
             ),
             style.text_input_size,
         ));
 
-        self.search_text_input.el.set_rect(Rect::new(
-            Point::new(
-                start_pos.x,
-                self.text_input.el.rect().max_y() + style.element_padding,
-            ),
+        self.search_text_input.set_rect(Rect::new(
+            Point::new(start_pos.x, self.text_input.max_y() + style.element_padding),
             style.text_input_size,
         ));
 
         self.scroll_area.set_content_size(Size::new(
-            self.icon_label.el.rect().max_x() + style.content_padding,
-            self.search_text_input.el.rect().max_y() + style.content_padding,
+            self.icon_label.max_x() + style.content_padding,
+            self.search_text_input.max_y() + style.content_padding,
         ));
     }
 
@@ -500,25 +485,25 @@ impl Elements {
             active_text_input_menu: _,
         } = self;
 
-        label.el.set_hidden(hidden);
-        icon.el.set_hidden(hidden);
-        icon_label.el.set_hidden(hidden);
-        click_me_btn.el.set_hidden(hidden);
-        switch.el.set_hidden(hidden);
-        toggle_btn.el.set_hidden(hidden);
-        icon_toggle_btn.el.set_hidden(hidden);
-        icon_btn.el.set_hidden(hidden);
-        icon_label_toggle_btn.el.set_hidden(hidden);
+        label.set_hidden(hidden);
+        icon.set_hidden(hidden);
+        icon_label.set_hidden(hidden);
+        click_me_btn.set_hidden(hidden);
+        switch.set_hidden(hidden);
+        toggle_btn.set_hidden(hidden);
+        icon_toggle_btn.set_hidden(hidden);
+        icon_btn.set_hidden(hidden);
+        icon_label_toggle_btn.set_hidden(hidden);
         radio_group.set_hidden(hidden);
-        drop_down_menu_btn.el.set_hidden(hidden);
-        drop_down_menu.el.set_hidden(hidden);
-        text_input.el.set_hidden(hidden);
-        text_input_menu.el.set_hidden(hidden);
-        search_text_input.el.set_hidden(hidden);
-        right_click_area.el.set_hidden(hidden);
-        right_click_menu.el.set_hidden(hidden);
-        scroll_area.el.set_hidden(hidden);
-        separator_1.el.set_hidden(hidden);
-        separator_2.el.set_hidden(hidden);
+        drop_down_menu_btn.set_hidden(hidden);
+        drop_down_menu.set_hidden(hidden);
+        text_input.set_hidden(hidden);
+        text_input_menu.set_hidden(hidden);
+        search_text_input.set_hidden(hidden);
+        right_click_area.set_hidden(hidden);
+        right_click_menu.set_hidden(hidden);
+        scroll_area.set_hidden(hidden);
+        separator_1.set_hidden(hidden);
+        separator_2.set_hidden(hidden);
     }
 }

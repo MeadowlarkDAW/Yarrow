@@ -58,7 +58,7 @@ pub fn main() {
     yarrow::run_blocking(MyApp::new(), action_sender, action_receiver).unwrap();
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 enum MyAction {
     BasicElements(basic_elements::Action),
     KnobsAndSliders(knobs_and_sliders::Action),
@@ -71,6 +71,8 @@ enum MyAction {
     HideTooltip(WindowID),
     TabSelected(MyTab),
     OpenAboutWindow,
+    #[default]
+    None, // A quirk needed to get Yarrow's macros to work
 }
 
 impl From<basic_elements::Action> for MyAction {
@@ -172,7 +174,8 @@ impl MyApp {
         let tooltip = Tooltip::builder().z_index(OVERLAY_Z_INDEX).build(cx);
 
         let tab_group = TabGroup::new(
-            MyTab::ALL.map(|t| TabGroupOption::new(Some(format!("{t}")), None, format!("{t}"))),
+            MyTab::ALL
+                .map(|t| TabGroupOption::new(Some(format!("{t}")), None, Some(format!("{t}")))),
             self.current_tab as usize,
             |i| MyAction::TabSelected(MyTab::ALL[i]),
             None,
@@ -215,6 +218,7 @@ impl MyApp {
         let mut needs_layout = false;
 
         match action {
+            MyAction::None => {}
             MyAction::BasicElements(action) => {
                 let mut cx = cx.window_context(MAIN_WINDOW).unwrap();
                 needs_layout = elements.basic_elements.handle_action(action, &mut cx);
@@ -255,7 +259,7 @@ impl MyApp {
             MyAction::ShowTooltip((info, _window_id)) => {
                 elements
                     .tooltip
-                    .show(&info.message, info.element_bounds, info.align, &mut cx.res);
+                    .show(&info.text, info.align, info.element_bounds, &mut cx.res);
             }
             MyAction::HideTooltip(_window_id) => {
                 elements.tooltip.hide();
@@ -289,11 +293,11 @@ impl MyApp {
 
         let window_size = cx.logical_size();
 
-        elements.top_panel_bg.el.set_rect(Rect::new(
+        elements.top_panel_bg.set_rect(Rect::new(
             Point::zero(),
             Size::new(window_size.width, self.style.top_panel_height),
         ));
-        elements.top_panel_border.el.set_rect(Rect::new(
+        elements.top_panel_border.set_rect(Rect::new(
             Point::new(
                 0.0,
                 self.style.top_panel_height - self.style.panel_border_width,
@@ -302,14 +306,14 @@ impl MyApp {
         ));
 
         let left_panel_width = elements.left_panel_resize_handle.current_span();
-        elements.left_panel_bg.el.set_rect(Rect::new(
+        elements.left_panel_bg.set_rect(Rect::new(
             Point::new(0.0, self.style.top_panel_height),
             Size::new(
                 left_panel_width,
                 window_size.height - self.style.top_panel_height,
             ),
         ));
-        elements.left_panel_border.el.set_rect(Rect::new(
+        elements.left_panel_border.set_rect(Rect::new(
             Point::new(
                 left_panel_width - self.style.panel_border_width,
                 self.style.top_panel_height,
@@ -336,8 +340,8 @@ impl MyApp {
         );
 
         elements.menu.set_position(Point::new(
-            elements.menu_btn.el.rect().min_x(),
-            elements.menu_btn.el.rect().max_y(),
+            elements.menu_btn.min_x(),
+            elements.menu_btn.max_y(),
         ));
 
         elements.tab_group.layout(
