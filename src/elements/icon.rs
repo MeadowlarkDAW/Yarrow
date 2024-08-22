@@ -1,21 +1,12 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rootvg::quad::QuadPrimitive;
-use rootvg::text::{CustomGlyphDesc, TextPrimitive};
-use rootvg::PrimitiveGroup;
-
-use crate::event::{ElementEvent, EventCaptureStatus};
-use crate::layout::{Align2, Padding};
-use crate::math::{Point, Rect, Size, Vector, ZIndex};
-use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::{ClassID, IconID, QuadStyle};
-use crate::vg::color::{self, RGBA8};
-use crate::view::element::{
-    Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
+use crate::prelude::*;
+use crate::theme::DEFAULT_ICON_SIZE;
+use crate::vg::{
+    quad::QuadPrimitive,
+    text::{CustomGlyphDesc, TextPrimitive},
 };
-use crate::view::ScissorRectID;
-use crate::window::WindowContext;
 
 /// The style of an [`Icon`] element
 #[derive(Debug, Clone, PartialEq)]
@@ -55,7 +46,7 @@ impl IconStyle {
 impl Default for IconStyle {
     fn default() -> Self {
         Self {
-            size: 24.0,
+            size: DEFAULT_ICON_SIZE,
             color: color::WHITE,
             back_quad: QuadStyle::TRANSPARENT,
             padding: Padding::zero(),
@@ -99,13 +90,13 @@ pub struct IconInner {
     /// This does not effect the position of the background quad.
     pub offset: Vector,
     pub icon_id: IconID,
-    pub scale: f32,
+    pub scale: IconScale,
     desired_size: Size,
     size_needs_calculated: bool,
 }
 
 impl IconInner {
-    pub fn new(icon_id: IconID, scale: f32, offset: Vector) -> Self {
+    pub fn new(icon_id: IconID, scale: IconScale, offset: Vector) -> Self {
         Self {
             offset,
             icon_id,
@@ -145,10 +136,10 @@ impl IconInner {
     pub fn render_primitives(&mut self, bounds: Rect, style: &IconStyle) -> IconPrimitives {
         let icon_rect = self.icon_rect(style, bounds.size);
 
-        let (size, offset) = if self.scale != 1.0 {
+        let (size, offset) = if self.scale.0 != 1.0 {
             (
-                style.size * self.scale,
-                (style.size - (style.size * self.scale)) * 0.5,
+                style.size * self.scale.0,
+                (style.size - (style.size * self.scale.0)) * 0.5,
             )
         } else {
             (style.size, 0.0)
@@ -178,31 +169,18 @@ impl IconInner {
     }
 }
 
+#[element_builder]
+#[element_builder_class]
+#[element_builder_rect]
+#[element_builder_hidden]
+#[derive(Default)]
 pub struct IconBuilder {
     pub icon: IconID,
-    pub scale: f32,
+    pub scale: IconScale,
     pub offset: Vector,
-    pub class: Option<ClassID>,
-    pub z_index: Option<ZIndex>,
-    pub rect: Rect,
-    pub manually_hidden: bool,
-    pub scissor_rect_id: Option<ScissorRectID>,
 }
 
 impl IconBuilder {
-    pub fn new() -> Self {
-        Self {
-            icon: IconID::MAX,
-            scale: 1.0,
-            offset: Vector::default(),
-            class: None,
-            z_index: None,
-            rect: Rect::default(),
-            manually_hidden: false,
-            scissor_rect_id: None,
-        }
-    }
-
     pub fn build<A: Clone + 'static>(self, cx: &mut WindowContext<'_, A>) -> Icon {
         IconElement::create(self, cx)
     }
@@ -212,9 +190,11 @@ impl IconBuilder {
         self
     }
 
-    /// Scale the icon when rendering (used to help make icons look consistent).
-    pub const fn scale(mut self, scale: f32) -> Self {
-        self.scale = scale;
+    /// The scale of an icon, used to make icons look more consistent.
+    ///
+    /// Note this does not affect any layout, this is just a visual thing.
+    pub fn icon_scale(mut self, scale: impl Into<IconScale>) -> Self {
+        self.scale = scale.into();
         self
     }
 
@@ -222,50 +202,6 @@ impl IconBuilder {
     /// This does not effect the position of the background quad.
     pub const fn offset(mut self, offset: Vector) -> Self {
         self.offset = offset;
-        self
-    }
-
-    /// The style class ID
-    ///
-    /// If this method is not used, then the current class from the window context will
-    /// be used.
-    pub const fn class(mut self, class: ClassID) -> Self {
-        self.class = Some(class);
-        self
-    }
-
-    /// The z index of the element
-    ///
-    /// If this method is not used, then the current z index from the window context will
-    /// be used.
-    pub const fn z_index(mut self, z_index: ZIndex) -> Self {
-        self.z_index = Some(z_index);
-        self
-    }
-
-    /// The bounding rectangle of the element
-    ///
-    /// If this method is not used, then the element will have a size and position of
-    /// zero and will not be visible until its bounding rectangle is set.
-    pub const fn rect(mut self, rect: Rect) -> Self {
-        self.rect = rect;
-        self
-    }
-
-    /// Whether or not this element is manually hidden
-    ///
-    /// By default this is set to `false`.
-    pub const fn hidden(mut self, hidden: bool) -> Self {
-        self.manually_hidden = hidden;
-        self
-    }
-
-    /// The ID of the scissoring rectangle this element belongs to.
-    ///
-    /// If this method is not used, then the current scissoring rectangle ID from the
-    /// window context will be used.
-    pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
-        self.scissor_rect_id = Some(scissor_rect_id);
         self
     }
 }
@@ -285,10 +221,10 @@ impl IconElement {
             z_index,
             rect,
             manually_hidden,
-            scissor_rect_id,
+            scissor_rect,
         } = builder;
 
-        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
+        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
 
         let shared_state = Rc::new(RefCell::new(SharedState {
             inner: IconInner::new(icon, scale, offset),
@@ -301,7 +237,7 @@ impl IconElement {
             z_index,
             rect,
             manually_hidden,
-            scissor_rect_id,
+            scissor_rect,
             class,
         };
 
@@ -352,14 +288,16 @@ struct SharedState {
 }
 
 /// A handle to a [`IconElement`], an icon with an optional quad background.
+#[element_handle]
+#[element_handle_class]
+#[element_handle_set_rect]
 pub struct Icon {
-    pub el: ElementHandle,
     shared_state: Rc<RefCell<SharedState>>,
 }
 
 impl Icon {
     pub fn builder() -> IconBuilder {
-        IconBuilder::new()
+        IconBuilder::default()
     }
 
     /// Returns the size of the padded background rectangle if it were to
@@ -390,7 +328,7 @@ impl Icon {
 
         if shared_state.inner.icon_id != icon_id {
             shared_state.inner.icon_id = icon_id;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -399,25 +337,6 @@ impl Icon {
 
     pub fn icon_id(&self) -> IconID {
         RefCell::borrow(&self.shared_state).inner.icon_id
-    }
-
-    /// Set the class of the element.
-    ///
-    /// Returns `true` if the class has changed.
-    ///
-    /// This will *NOT* trigger an element update unless the value has changed,
-    /// and the class ID is cached in the handle itself, so this is very
-    /// cheap to call frequently.
-    pub fn set_class(&mut self, class: ClassID) -> bool {
-        if self.el.class() != class {
-            RefCell::borrow_mut(&self.shared_state)
-                .inner
-                .notify_style_change();
-            self.el._notify_class_change(class);
-            true
-        } else {
-            false
-        }
     }
 
     /// An offset that can be used mainly to correct the position of icon glyphs.
@@ -432,25 +351,29 @@ impl Icon {
 
         if shared_state.inner.offset != offset {
             shared_state.inner.offset = offset;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
         }
     }
 
-    /// Scale the icon when rendering (used to help make icons look consistent).
+    /// The scale of the icon, used to make icons look more consistent.
+    ///
+    /// Note this does not affect any layout, this is just a visual thing.
     ///
     /// Returns `true` if the scale has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
     /// so this method is relatively cheap to call frequently.
-    pub fn set_scale(&mut self, scale: f32) -> bool {
+    pub fn set_scale(&mut self, scale: impl Into<IconScale>) -> bool {
+        let scale: IconScale = scale.into();
+
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.scale != scale {
             shared_state.inner.scale = scale;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false

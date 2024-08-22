@@ -1,23 +1,13 @@
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
-use rootvg::math::Size;
-use rootvg::PrimitiveGroup;
+use crate::prelude::*;
 
-use crate::elements::text_input::TextInputUpdateResult;
-use crate::event::{ElementEvent, EventCaptureStatus, PointerEvent};
-use crate::layout::{Align2, Padding};
-use crate::math::{Point, Rect, Vector, ZIndex};
-use crate::prelude::{ClassID, ResourceCtx};
-use crate::view::element::{
-    Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
-};
-use crate::view::ScissorRectID;
-use crate::window::WindowContext;
-use crate::CursorIcon;
+use super::{TextInputAction, TextInputInner, TextInputStyle, TextInputUpdateResult};
 
-use super::{TextInputAction, TextInputInner, TextInputStyle};
-
+#[element_builder]
+#[element_builder_class]
+#[element_builder_rect]
 pub struct FloatingTextInputBuilder<A: Clone + 'static> {
     pub action: Option<Box<dyn FnMut(Option<String>) -> A>>,
     pub right_click_action: Option<Box<dyn FnMut(Point) -> A>>,
@@ -26,10 +16,6 @@ pub struct FloatingTextInputBuilder<A: Clone + 'static> {
     pub text_offset: Vector,
     pub select_all_when_focused: bool,
     pub max_characters: usize,
-    pub class: Option<ClassID>,
-    pub z_index: Option<ZIndex>,
-    pub rect: Rect,
-    pub scissor_rect_id: Option<ScissorRectID>,
 }
 
 impl<A: Clone + 'static> FloatingTextInputBuilder<A> {
@@ -42,10 +28,10 @@ impl<A: Clone + 'static> FloatingTextInputBuilder<A> {
             text_offset: Vector::default(),
             select_all_when_focused: true,
             max_characters: 256,
-            class: None,
-            z_index: None,
-            rect: Rect::default(),
-            scissor_rect_id: None,
+            z_index: Default::default(),
+            scissor_rect: Default::default(),
+            class: Default::default(),
+            rect: Default::default(),
         }
     }
 
@@ -94,42 +80,6 @@ impl<A: Clone + 'static> FloatingTextInputBuilder<A> {
         self.max_characters = max;
         self
     }
-
-    /// The style class ID
-    ///
-    /// If this method is not used, then the current class from the window context will
-    /// be used.
-    pub const fn class(mut self, class: ClassID) -> Self {
-        self.class = Some(class);
-        self
-    }
-
-    /// The z index of the element
-    ///
-    /// If this method is not used, then the current z index from the window context will
-    /// be used.
-    pub const fn z_index(mut self, z_index: ZIndex) -> Self {
-        self.z_index = Some(z_index);
-        self
-    }
-
-    /// The bounding rectangle of the element
-    ///
-    /// If this method is not used, then the element will have a size and position of
-    /// zero and will not be visible until its bounding rectangle is set.
-    pub const fn rect(mut self, rect: Rect) -> Self {
-        self.rect = rect;
-        self
-    }
-
-    /// The ID of the scissoring rectangle this element belongs to.
-    ///
-    /// If this method is not used, then the current scissoring rectangle ID from the
-    /// window context will be used.
-    pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
-        self.scissor_rect_id = Some(scissor_rect_id);
-        self
-    }
 }
 
 pub struct FloatingTextInputElement<A: Clone + 'static> {
@@ -158,10 +108,10 @@ impl<A: Clone + 'static> FloatingTextInputElement<A> {
             class,
             z_index,
             rect,
-            scissor_rect_id,
+            scissor_rect,
         } = builder;
 
-        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
+        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
         let style = cx.res.style_system.get(cx.class());
 
         let shared_state = Rc::new(RefCell::new(SharedState {
@@ -171,7 +121,6 @@ impl<A: Clone + 'static> FloatingTextInputElement<A> {
                 false,
                 max_characters,
                 rect.size,
-                false,
                 false,
                 select_all_when_focused,
                 &style,
@@ -194,7 +143,7 @@ impl<A: Clone + 'static> FloatingTextInputElement<A> {
             z_index,
             rect,
             manually_hidden: true,
-            scissor_rect_id,
+            scissor_rect,
             class,
         };
 
@@ -391,8 +340,9 @@ struct SharedState {
 }
 
 /// A handle to a [`FloatingTextInputElement`]
+#[element_handle]
+#[element_handle_class]
 pub struct FloatingTextInput {
-    pub el: ElementHandle,
     shared_state: Rc<RefCell<SharedState>>,
 }
 
@@ -412,14 +362,6 @@ impl FloatingTextInput {
     ) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
-        if let Some(text) = text {
-            shared_state
-                .inner
-                .set_text(text, &mut res.font_system, true);
-        } else {
-            shared_state.inner.queue_action(TextInputAction::SelectAll);
-        }
-
         if let Some(text) = placeholder_text {
             shared_state
                 .inner
@@ -430,9 +372,15 @@ impl FloatingTextInput {
                 });
         }
 
+        if let Some(text) = text {
+            shared_state
+                .inner
+                .set_text(text, &mut res.font_system, false);
+        }
+
         shared_state.show_with_info = Some((element_bounds, align, padding));
 
-        self.el._notify_custom_state_change();
+        self.el.notify_custom_state_change();
         self.el.set_hidden(false);
     }
 
@@ -457,7 +405,7 @@ impl FloatingTextInput {
             .inner
             .set_text(text, &mut res.font_system, select_all);
         if result.needs_repaint {
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -483,7 +431,7 @@ impl FloatingTextInput {
                     .clone()
             });
         if result.needs_repaint {
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
         }
     }
 
@@ -491,26 +439,6 @@ impl FloatingTextInput {
         Ref::map(RefCell::borrow(&self.shared_state), |s| {
             s.inner.placeholder_text()
         })
-    }
-
-    /// Set the class of the element.
-    ///
-    /// Returns `true` if the class has changed.
-    ///
-    /// This will *NOT* trigger an element update unless the value has changed,
-    /// and the class ID is cached in the handle itself, so this is very
-    /// cheap to call frequently.
-    pub fn set_class(&mut self, class: ClassID, res: &mut ResourceCtx) -> bool {
-        if self.el.class() != class {
-            RefCell::borrow_mut(&self.shared_state)
-                .inner
-                .sync_new_style(res.style_system.get(class), &mut res.font_system);
-
-            self.el._notify_class_change(class);
-            true
-        } else {
-            false
-        }
     }
 
     /// An offset that can be used mainly to correct the position of icon glyphs.
@@ -525,7 +453,7 @@ impl FloatingTextInput {
 
         if shared_state.text_offset != offset {
             shared_state.text_offset = offset;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -544,7 +472,7 @@ impl FloatingTextInput {
 
         if !shared_state.inner.disabled {
             shared_state.inner.queue_action(action);
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
         }
     }
 }

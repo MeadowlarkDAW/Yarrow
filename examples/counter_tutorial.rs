@@ -1,9 +1,11 @@
 use yarrow::prelude::*;
 
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub enum MyAction {
     OffsetCounterBy(i32),
     ResetCounter,
+    #[default]
+    None, // A quirk needed to get Yarrow's macros to work
 }
 
 #[derive(Default)]
@@ -48,6 +50,7 @@ impl Application for MyApp {
 
         while let Ok(action) = cx.action_receiver.try_recv() {
             match action {
+                MyAction::None => {}
                 MyAction::OffsetCounterBy(offset) => {
                     self.count += offset;
                     state_changed = true;
@@ -133,7 +136,7 @@ impl MainWindowElements {
         let window_rect = Rect::from_size(cx.logical_size());
         let label_rect = centered_rect(window_rect.center(), label_size);
 
-        self.hello_label.el.set_rect(label_rect);
+        self.hello_label.set_rect(label_rect);
 
         self.increment_btn.layout(
             point(style.window_padding.left, style.window_padding.top),
@@ -141,14 +144,14 @@ impl MainWindowElements {
         );
         self.decrement_btn.layout(
             point(
-                self.increment_btn.el.rect().max_x() + style.button_spacing,
+                self.increment_btn.max_x() + style.button_spacing,
                 style.window_padding.top,
             ),
             cx.res,
         );
         self.reset_btn.layout(
             point(
-                self.decrement_btn.el.rect().max_x() + style.button_spacing,
+                self.decrement_btn.max_x() + style.button_spacing,
                 style.window_padding.top,
             ),
             cx.res,

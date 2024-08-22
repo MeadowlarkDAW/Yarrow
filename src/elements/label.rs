@@ -1,25 +1,15 @@
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
-use rootvg::quad::QuadPrimitive;
-use rootvg::text::{FontSystem, RcTextBuffer, TextPrimitive, TextProperties};
-use rootvg::PrimitiveGroup;
+use crate::prelude::*;
+use crate::theme::DEFAULT_ICON_SIZE;
+use crate::vg::{
+    quad::QuadPrimitive,
+    text::{RcTextBuffer, TextPrimitive},
+};
 
 #[cfg(feature = "svg-icons")]
-use rootvg::text::CustomGlyphDesc;
-
-use crate::event::{ElementEvent, EventCaptureStatus};
-use crate::layout::{Align, Align2, Padding};
-use crate::math::{Point, Rect, Size, Vector, ZIndex};
-use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::{ClassID, IconID, QuadStyle};
-use crate::theme::DEFAULT_ICON_SIZE;
-use crate::vg::color::{self, RGBA8};
-use crate::view::element::{
-    Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
-};
-use crate::view::ScissorRectID;
-use crate::window::WindowContext;
+use crate::vg::text::CustomGlyphDesc;
 
 /// The style of a [`Label`] element
 #[derive(Debug, Clone, PartialEq)]
@@ -153,7 +143,7 @@ pub struct LabelInner {
     /// An offset that can be used mainly to correct the position of icons.
     /// This does not effect the position of the background quad.
     pub icon_offset: Vector,
-    pub icon_scale: f32,
+    pub icon_scale: IconScale,
     text_inner: Option<TextInner>,
     unclipped_text_size: Size,
     text_size_needs_calculated: bool,
@@ -172,7 +162,7 @@ impl LabelInner {
         icon: Option<IconID>,
         text_offset: Vector,
         icon_offset: Vector,
-        icon_scale: f32,
+        icon_scale: IconScale,
         text_icon_layout: TextIconLayout,
         style: &LabelStyle,
         font_system: &mut FontSystem,
@@ -431,10 +421,10 @@ impl LabelInner {
 
         #[cfg(feature = "svg-icons")]
         let icon = if let Some(icon) = self.icon {
-            let (size, offset) = if self.icon_scale != 1.0 {
+            let (size, offset) = if self.icon_scale.0 != 1.0 {
                 (
-                    style.icon_size * self.icon_scale,
-                    (style.icon_size - (style.icon_size * self.icon_scale)) * 0.5,
+                    style.icon_size * self.icon_scale.0,
+                    (style.icon_size - (style.icon_size * self.icon_scale.0)) * 0.5,
                 )
             } else {
                 (style.icon_size, 0.0)
@@ -478,37 +468,21 @@ impl LabelInner {
     }
 }
 
+#[element_builder]
+#[element_builder_class]
+#[element_builder_rect]
+#[element_builder_hidden]
+#[derive(Default)]
 pub struct LabelBuilder {
     pub text: Option<String>,
     pub icon: Option<IconID>,
-    pub icon_scale: f32,
+    pub icon_scale: IconScale,
     pub text_offset: Vector,
     pub icon_offset: Vector,
     pub text_icon_layout: TextIconLayout,
-    pub class: Option<ClassID>,
-    pub z_index: Option<ZIndex>,
-    pub rect: Rect,
-    pub manually_hidden: bool,
-    pub scissor_rect_id: Option<ScissorRectID>,
 }
 
 impl LabelBuilder {
-    pub fn new() -> Self {
-        Self {
-            text: None,
-            icon: None,
-            icon_scale: 1.0,
-            text_offset: Vector::default(),
-            icon_offset: Vector::default(),
-            text_icon_layout: TextIconLayout::default(),
-            class: None,
-            z_index: None,
-            rect: Rect::default(),
-            manually_hidden: false,
-            scissor_rect_id: None,
-        }
-    }
-
     /// Build the element
     pub fn build<A: Clone + 'static>(self, cx: &mut WindowContext<'_, A>) -> Label {
         LabelElement::create(self, cx)
@@ -548,11 +522,11 @@ impl LabelBuilder {
         self
     }
 
-    /// The scaling factor for the icon
+    /// The scale of an icon, used to make icons look more consistent.
     ///
-    /// By default this is set to `1.0`.
-    pub const fn icon_scale(mut self, scale: f32) -> Self {
-        self.icon_scale = scale;
+    /// Note this does not affect any layout, this is just a visual thing.
+    pub fn icon_scale(mut self, scale: impl Into<IconScale>) -> Self {
+        self.icon_scale = scale.into();
         self
     }
 
@@ -581,50 +555,6 @@ impl LabelBuilder {
         self.text_icon_layout = layout;
         self
     }
-
-    /// The style class ID
-    ///
-    /// If this method is not used, then the current class from the window context will
-    /// be used.
-    pub const fn class(mut self, class: ClassID) -> Self {
-        self.class = Some(class);
-        self
-    }
-
-    /// The z index of the element
-    ///
-    /// If this method is not used, then the current z index from the window context will
-    /// be used.
-    pub const fn z_index(mut self, z_index: ZIndex) -> Self {
-        self.z_index = Some(z_index);
-        self
-    }
-
-    /// The bounding rectangle of the element
-    ///
-    /// If this method is not used, then the element will have a size and position of
-    /// zero and will not be visible until its bounding rectangle is set.
-    pub const fn rect(mut self, rect: Rect) -> Self {
-        self.rect = rect;
-        self
-    }
-
-    /// Whether or not this element is manually hidden
-    ///
-    /// By default this is set to `false`.
-    pub const fn hidden(mut self, hidden: bool) -> Self {
-        self.manually_hidden = hidden;
-        self
-    }
-
-    /// The ID of the scissoring rectangle this element belongs to.
-    ///
-    /// If this method is not used, then the current scissoring rectangle ID from the
-    /// window context will be used.
-    pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
-        self.scissor_rect_id = Some(scissor_rect_id);
-        self
-    }
 }
 
 /// A label element with an optional quad background.
@@ -648,10 +578,10 @@ impl LabelElement {
             z_index,
             rect,
             manually_hidden,
-            scissor_rect_id,
+            scissor_rect,
         } = builder;
 
-        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
+        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
         let style = cx.res.style_system.get(class);
 
         let shared_state = Rc::new(RefCell::new(SharedState {
@@ -674,7 +604,7 @@ impl LabelElement {
             z_index,
             rect,
             manually_hidden,
-            scissor_rect_id,
+            scissor_rect,
             class,
         };
 
@@ -733,14 +663,16 @@ struct SharedState {
 }
 
 /// A handle to a [`LabelElement`], a label with an optional quad background.
+#[element_handle]
+#[element_handle_class]
+#[element_handle_set_rect]
 pub struct Label {
-    pub el: ElementHandle,
     shared_state: Rc<RefCell<SharedState>>,
 }
 
 impl Label {
     pub fn builder() -> LabelBuilder {
-        LabelBuilder::new()
+        LabelBuilder::default()
     }
 
     /// Returns the size of the padded background rectangle if it were to
@@ -774,7 +706,7 @@ impl Label {
                 .get::<LabelStyle>(self.el.class())
                 .text_properties
         }) {
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -793,7 +725,7 @@ impl Label {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.set_icon(icon) {
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -806,26 +738,6 @@ impl Label {
 
     pub fn icon(&self) -> Option<IconID> {
         RefCell::borrow(&self.shared_state).inner.icon
-    }
-
-    /// Set the class of the element.
-    ///
-    /// Returns `true` if the class has changed.
-    ///
-    /// This will *NOT* trigger an element update unless the value has changed,
-    /// and the class ID is cached in the handle itself, so this is very
-    /// cheap to call frequently.
-    pub fn set_class(&mut self, class: ClassID, res: &mut ResourceCtx) -> bool {
-        if self.el.class() != class {
-            RefCell::borrow_mut(&self.shared_state)
-                .inner
-                .sync_new_style(res.style_system.get(class), &mut res.font_system);
-
-            self.el._notify_class_change(class);
-            true
-        } else {
-            false
-        }
     }
 
     /// An offset that can be used mainly to correct the position of the text.
@@ -841,7 +753,7 @@ impl Label {
 
         if shared_state.inner.text_offset != offset {
             shared_state.inner.text_offset = offset;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -861,27 +773,29 @@ impl Label {
 
         if shared_state.inner.icon_offset != offset {
             shared_state.inner.icon_offset = offset;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
         }
     }
 
-    /// Scale the icon when rendering (used to help make icons look consistent).
+    /// The scale of the icon, used to make icons look more consistent.
     ///
-    /// This does no effect the padded size of the element.
+    /// Note this does not affect any layout, this is just a visual thing.
     ///
     /// Returns `true` if the scale has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
     /// so this method is relatively cheap to call frequently.
-    pub fn set_icon_scale(&mut self, scale: f32) -> bool {
+    pub fn set_icon_scale(&mut self, scale: impl Into<IconScale>) -> bool {
+        let scale: IconScale = scale.into();
+
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.icon_scale != scale {
             shared_state.inner.icon_scale = scale;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false

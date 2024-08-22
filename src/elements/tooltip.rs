@@ -1,23 +1,90 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rootvg::text::TextProperties;
-use rootvg::PrimitiveGroup;
+use crate::prelude::*;
 
-use crate::event::{ElementEvent, EventCaptureStatus};
-use crate::layout::{Align2, Padding};
-use crate::math::{Rect, Vector, ZIndex};
-use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::ClassID;
-use crate::vg::color::{self, RGBA8};
-use crate::view::element::{
-    Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
-};
-use crate::view::ScissorRectID;
-use crate::window::WindowContext;
+use super::label::LabelInner;
 
-use super::label::{LabelInner, LabelStyle};
-use super::quad::QuadStyle;
+/// Tooltip data assigned to an element
+#[derive(Default, Debug, Clone, PartialEq)]
+pub struct TooltipData {
+    /// The tooltip text
+    pub text: String,
+    /// Where to align the tooltip relative to this element
+    pub align: Align2,
+}
+
+impl TooltipData {
+    /// Construct tooltip data for an element
+    ///
+    /// * `text` - The tooltip text
+    /// * `align` - Where to align the tooltip relative to this element
+    pub fn new(text: impl Into<String>, align: Align2) -> Self {
+        Self {
+            text: text.into(),
+            align,
+        }
+    }
+}
+
+/// A struct that can be used by elements to simplify tooltip handling
+pub struct TooltipInner {
+    pub data: Option<TooltipData>,
+}
+
+impl TooltipInner {
+    pub fn new(data: Option<TooltipData>) -> Self {
+        Self { data }
+    }
+
+    pub fn set_data(&mut self, text: Option<&str>, align: Align2) -> bool {
+        let mut state_changed = false;
+
+        if let Some(old_data) = &mut self.data {
+            if let Some(text) = text {
+                if &old_data.text != text || old_data.align != align {
+                    old_data.text = String::from(text);
+                    old_data.align = align;
+                    state_changed = true;
+                }
+            } else {
+                self.data = None;
+                state_changed = true;
+            }
+        } else if let Some(text) = text {
+            self.data = Some(TooltipData {
+                text: String::from(text),
+                align,
+            });
+            state_changed = true;
+        }
+
+        state_changed
+    }
+
+    pub fn handle_event<A: Clone + 'static>(
+        &self,
+        event: &ElementEvent,
+        disabled: bool,
+        cx: &mut ElementContext<'_, A>,
+    ) {
+        if disabled || self.data.is_none() {
+            return;
+        }
+
+        match event {
+            ElementEvent::Pointer(PointerEvent::Moved { just_entered, .. }) => {
+                if *just_entered {
+                    cx.start_hover_timeout();
+                }
+            }
+            ElementEvent::Pointer(PointerEvent::HoverTimeout { .. }) => {
+                cx.show_tooltip(self.data.clone().unwrap(), true);
+            }
+            _ => {}
+        }
+    }
+}
 
 /// The style of a [`Tooltip`] element
 #[derive(Debug, Clone, PartialEq)]
@@ -165,7 +232,7 @@ impl TooltipElement {
             scissor_rect_id,
         } = builder;
 
-        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
+        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect_id, class);
 
         let style: &TooltipStyle = cx.res.style_system.get(class);
 
@@ -175,7 +242,7 @@ impl TooltipElement {
                 None,
                 text_offset,
                 Vector::default(),
-                1.0,
+                IconScale::default(),
                 Default::default(),
                 &style.label_style(),
                 &mut cx.res.font_system,
@@ -191,7 +258,7 @@ impl TooltipElement {
             z_index,
             rect: Rect::default(),
             manually_hidden: true,
-            scissor_rect_id,
+            scissor_rect,
             class,
         };
 
@@ -287,8 +354,9 @@ struct SharedState {
 }
 
 /// A handle to a [`TooltipElement`]
+#[element_handle]
+#[element_handle_class]
 pub struct Tooltip {
-    pub el: ElementHandle,
     shared_state: Rc<RefCell<SharedState>>,
 }
 
@@ -297,18 +365,12 @@ impl Tooltip {
         TooltipBuilder::new()
     }
 
-    pub fn show(
-        &mut self,
-        message: &str,
-        element_bounds: Rect,
-        align: Align2,
-        res: &mut ResourceCtx,
-    ) {
+    pub fn show(&mut self, text: &str, align: Align2, element_bounds: Rect, res: &mut ResourceCtx) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         shared_state
             .inner
-            .set_text(Some(message), &mut res.font_system, || {
+            .set_text(Some(text), &mut res.font_system, || {
                 res.style_system
                     .get::<TooltipStyle>(self.el.class())
                     .text_properties
@@ -316,7 +378,7 @@ impl Tooltip {
 
         shared_state.show_with_info = Some((element_bounds, align));
 
-        self.el._notify_custom_state_change();
+        self.el.notify_custom_state_change();
         self.el.set_hidden(false);
     }
 
@@ -324,29 +386,6 @@ impl Tooltip {
         RefCell::borrow_mut(&self.shared_state).show_with_info = None;
 
         self.el.set_hidden(true);
-    }
-
-    /// Set the class of the element.
-    ///
-    /// Returns `true` if the class has changed.
-    ///
-    /// This will *NOT* trigger an element update unless the value has changed,
-    /// and the class ID is cached in the handle itself, so this is very
-    /// cheap to call frequently.
-    pub fn set_class(&mut self, class: ClassID, res: &mut ResourceCtx) -> bool {
-        if self.el.class() != class {
-            RefCell::borrow_mut(&self.shared_state)
-                .inner
-                .sync_new_style(
-                    &res.style_system.get::<TooltipStyle>(class).label_style(),
-                    &mut res.font_system,
-                );
-
-            self.el._notify_class_change(class);
-            true
-        } else {
-            false
-        }
     }
 
     /// An offset that can be used mainly to correct the position of the text.
@@ -362,7 +401,7 @@ impl Tooltip {
 
         if shared_state.inner.text_offset != offset {
             shared_state.inner.text_offset = offset;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false

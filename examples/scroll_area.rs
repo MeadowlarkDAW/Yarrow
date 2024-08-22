@@ -72,7 +72,6 @@ impl MainWindowElements {
         // Assign the scroll area element to fill the area we want (in this case the
         // entire window).
         self.scroll_area
-            .el
             .set_rect(Rect::from_size(cx.logical_size()));
 
         // Layout the elements like normal.
@@ -81,13 +80,13 @@ impl MainWindowElements {
         // scissoring rectangle. So if the position of the rectangle of `self.scroll_area`
         // was `(50.0, 70.0)`, then the position of this element will be offset by that
         // amount.
-        self.long_boi.el.set_rect(rect(20.0, 20.0, 200.0, 1000.0));
+        self.long_boi.set_rect(rect(20.0, 20.0, 200.0, 1000.0));
 
         // Set the "content size" of the scroll area. In this case we want it to cover
         // the size of our elements with a bit of padding on the top and bottom.
-        self.scroll_area.set_content_size(Size::new(
-            self.long_boi.el.rect().max_x() + 20.0,
-            self.long_boi.el.rect().max_y() + 20.0,
+        self.scroll_area.set_content_size(size(
+            self.long_boi.max_x() + 20.0,
+            self.long_boi.max_y() + 20.0,
         ));
     }
 }
