@@ -35,5 +35,4 @@ pub use window::{WindowContext, WindowID, MAIN_WINDOW};
 pub use rootvg as vg;
 pub use rootvg::math;
 
-#[cfg(feature = "winit")]
 pub use window::run_blocking;

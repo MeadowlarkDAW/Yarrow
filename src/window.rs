@@ -4,7 +4,6 @@ use raw_window_handle_06::{
     AppKitDisplayHandle, AppKitWindowHandle, Win32WindowHandle, WindowsDisplayHandle,
     XcbDisplayHandle, XcbWindowHandle, XlibDisplayHandle, XlibWindowHandle,
 };
-use rootvg::math::{to_logical_size_i32, PhysicalPoint, Point, ZIndex};
 use rootvg::surface::{DefaultSurface, DefaultSurfaceConfig, NewSurfaceError};
 use std::num::{NonZeroIsize, NonZeroU32};
 use std::ptr::NonNull;
@@ -31,8 +30,12 @@ mod winit_backend;
 #[cfg(feature = "winit")]
 pub use winit_backend::{run_blocking, OpenWindowError};
 // TODO: baseview feature
+#[cfg(feature = "baseview")]
 mod baseview_backend;
+#[cfg(feature = "baseview")]
 use baseview::Window as BaseviewWindow;
+#[cfg(feature = "baseview")]
+pub use baseview_backend::{run_blocking, OpenWindowError};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 pub type WindowID = u32;
@@ -86,9 +89,9 @@ pub(crate) struct WindowState<A: Clone + 'static> {
     pub queued_pointer_position: Option<PhysicalPoint>,
     pub queued_pointer_delta: Option<(f64, f64)>,
     // TODO:
-    // #[cfg(feature = "winit")]
-    // pub winit_window: Arc<winit::window::Window>,
-    // pub baseview_window: &'window_state mut BaseviewWindow<'window_state>,
+    #[cfg(feature = "winit")]
+    pub winit_window: Arc<winit::window::Window>,
+    //pub baseview_window: &'window_state mut BaseviewWindow<'window_state>,
     clipboard: Clipboard,
     pub prev_pointer_pos: Option<Point>,
     pointer_btn_states: [PointerBtnState; 5],
@@ -101,8 +104,8 @@ pub(crate) struct WindowState<A: Clone + 'static> {
 impl<A: Clone + 'static> WindowState<A> {
     pub fn new<'new>(
         // TODO:
-        // #[cfg(feature = "winit")] winit_window: &Arc<winit::window::Window>,
-        baseview_window: &'new mut BaseviewWindow,
+        #[cfg(feature = "winit")] winit_window: &Arc<winit::window::Window>,
+        #[cfg(feature = "baseview")] baseview_window: &'new mut BaseviewWindow,
         logical_size: Size,
         physical_size: PhysicalSizeI32,
         system_scale_factor: ScaleFactor,
@@ -202,7 +205,8 @@ impl<A: Clone + 'static> WindowState<A> {
             queued_pointer_delta: None,
             // TODO:
             // baseview_window,
-            // winit_window: Arc::clone(winit_window),
+            #[cfg(feature = "winit")]
+            winit_window: Arc::clone(winit_window),
             prev_pointer_pos: None,
             pointer_btn_states: [PointerBtnState::default(); 5],
             modifiers: Modifiers::empty(),
