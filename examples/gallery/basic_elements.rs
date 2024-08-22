@@ -344,17 +344,16 @@ impl Elements {
         cx: &mut WindowContext<'_, MyAction>,
     ) {
         self.right_click_area.set_rect(content_rect);
-
         self.scroll_area.set_rect(content_rect);
 
-        let start_pos = Point::new(style.content_padding, style.content_padding);
+        let start_pos = point(style.content_padding, style.content_padding);
 
         // The position of an element is relative to the scissor rect it is
         // assigned to.
         self.click_me_btn.layout(start_pos, cx.res);
 
         self.icon_btn.layout(
-            Point::new(
+            point(
                 self.click_me_btn.max_x() + style.element_padding,
                 start_pos.y,
             ),
@@ -362,27 +361,27 @@ impl Elements {
         );
 
         self.label.layout(
-            Point::new(self.icon_btn.max_x() + style.element_padding, start_pos.y),
+            point(self.icon_btn.max_x() + style.element_padding, start_pos.y),
             cx.res,
         );
 
         self.icon.layout(
-            Point::new(self.label.max_x() + style.element_padding, start_pos.y),
+            point(self.label.max_x() + style.element_padding, start_pos.y),
             cx.res,
         );
 
         self.icon_label.layout(
-            Point::new(self.icon.max_x() + style.element_padding, start_pos.y),
+            point(self.icon.max_x() + style.element_padding, start_pos.y),
             cx.res,
         );
 
         let mut toggle_btn_rect = Rect::new(
-            Point::new(0.0, self.click_me_btn.max_y() + style.element_padding),
+            point(0.0, self.click_me_btn.max_y() + style.element_padding),
             self.toggle_btn.desired_size(cx.res),
         );
 
         self.switch.layout_aligned(
-            Point::new(start_pos.x, toggle_btn_rect.center().y),
+            point(start_pos.x, toggle_btn_rect.center().y),
             Align2::CENTER_LEFT,
             cx.res,
         );
@@ -391,7 +390,7 @@ impl Elements {
         self.toggle_btn.set_rect(toggle_btn_rect);
 
         self.icon_toggle_btn.layout(
-            Point::new(
+            point(
                 toggle_btn_rect.max_x() + style.element_padding,
                 self.toggle_btn.min_y(),
             ),
@@ -399,34 +398,29 @@ impl Elements {
         );
 
         self.icon_label_toggle_btn.layout(
-            Point::new(
+            point(
                 self.icon_toggle_btn.max_x() + style.element_padding,
                 self.toggle_btn.min_y(),
             ),
             cx.res,
         );
 
-        self.separator_1.set_rect(Rect::new(
-            Point::new(start_pos.x, toggle_btn_rect.max_y() + style.element_padding),
-            Size::new(
-                content_rect.width() - style.content_padding - style.content_padding,
-                style.separator_width,
-            ),
+        self.separator_1.set_rect(rect(
+            start_pos.x,
+            toggle_btn_rect.max_y() + style.element_padding,
+            content_rect.width() - style.content_padding - style.content_padding,
+            style.separator_width,
         ));
 
-        self.drop_down_menu_btn.set_rect(Rect::new(
-            Point::new(
-                start_pos.x,
-                self.separator_1.max_y() + style.element_padding,
-            ),
-            Size::new(
-                style.drop_down_btn_width,
-                self.drop_down_menu_btn.desired_size(cx.res).height,
-            ),
+        self.drop_down_menu_btn.set_rect(rect(
+            start_pos.x,
+            self.separator_1.max_y() + style.element_padding,
+            style.drop_down_btn_width,
+            self.drop_down_menu_btn.desired_size(cx.res).height,
         ));
 
         self.radio_group.layout(
-            Point::new(
+            point(
                 start_pos.x,
                 self.drop_down_menu_btn.max_y() + style.element_padding,
             ),
@@ -437,19 +431,15 @@ impl Elements {
             cx.res,
         );
 
-        self.separator_2.set_rect(Rect::new(
-            Point::new(
-                start_pos.x,
-                self.radio_group.bounds().max_y() + style.element_padding,
-            ),
-            Size::new(
-                content_rect.width() - style.content_padding - style.content_padding,
-                style.separator_width,
-            ),
+        self.separator_2.set_rect(rect(
+            start_pos.x,
+            self.radio_group.bounds().max_y() + style.element_padding,
+            content_rect.width() - style.content_padding - style.content_padding,
+            style.separator_width,
         ));
 
         self.text_input.set_rect(Rect::new(
-            Point::new(
+            point(
                 start_pos.x,
                 self.separator_2.max_y() + style.element_padding,
             ),
@@ -457,11 +447,11 @@ impl Elements {
         ));
 
         self.search_text_input.set_rect(Rect::new(
-            Point::new(start_pos.x, self.text_input.max_y() + style.element_padding),
+            point(start_pos.x, self.text_input.max_y() + style.element_padding),
             style.text_input_size,
         ));
 
-        self.scroll_area.set_content_size(Size::new(
+        self.scroll_area.set_content_size(size(
             self.icon_label.max_x() + style.content_padding,
             self.search_text_input.max_y() + style.content_padding,
         ));
