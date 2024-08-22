@@ -8,11 +8,12 @@ pub fn main() {
     let (action_sender, action_receiver) = yarrow::action_channel();
 
     yarrow::run_blocking(
-        MyApp {
-            main_window_elements: None,
-        },
+        WindowConfig::default(),
         action_sender,
         action_receiver,
+        || MyApp {
+            main_window_elements: None,
+        },
     )
     .unwrap();
 }

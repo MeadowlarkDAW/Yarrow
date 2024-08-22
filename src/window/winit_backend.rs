@@ -1,5 +1,6 @@
-use keyboard_types::{CompositionEvent, CompositionState};
+use keyboard_types::{CompositionEvent, CompositionState, Modifiers};
 use rootvg::math::{PhysicalPoint, Vector};
+use rootvg::surface::DefaultSurface;
 use rustc_hash::FxHashMap;
 use std::error::Error;
 use std::sync::Arc;
@@ -21,11 +22,13 @@ use crate::prelude::{ActionReceiver, ResourceCtx};
 use crate::window::{WindowID, MAIN_WINDOW};
 
 use super::{
-    LinuxBackendType, PointerLockState, ScaleFactorConfig, WindowCloseRequest, WindowConfig,
-    WindowState,
+    Clipboard, CursorIcon, LinuxBackendType, PointerBtnState, PointerLockState, ScaleFactorConfig,
+    View, WindowCloseRequest, WindowConfig, WindowState,
 };
 
 mod convert;
+
+pub(crate) type WindowHandle = Arc<winit::window::Window>;
 
 struct AppHandler<A: Application> {
     user_app: A,
@@ -38,10 +41,11 @@ struct AppHandler<A: Application> {
     requested_tick_resume: Instant,
     requested_cursor_debounce_resume: Option<Instant>,
 
-    winit_window_map: FxHashMap<WinitWindowId, (WindowID, Arc<WinitWindow>)>,
+    winit_id_to_window_id_map: FxHashMap<WinitWindowId, WindowID>,
 
     tick_wait_cancelled: bool,
     got_first_resumed_event: bool,
+    main_window_config: WindowConfig,
 }
 
 impl<A: Application> AppHandler<A> {
@@ -49,6 +53,7 @@ impl<A: Application> AppHandler<A> {
         mut user_app: A,
         action_sender: ActionSender<A::Action>,
         action_receiver: ActionReceiver<A::Action>,
+        main_window_config: WindowConfig,
     ) -> Result<Self, Box<dyn Error>> {
         let config = user_app.init()?;
 
@@ -63,9 +68,10 @@ impl<A: Application> AppHandler<A> {
             prev_cursor_debounce_instant: now,
             requested_tick_resume: now,
             requested_cursor_debounce_resume: None,
-            winit_window_map: FxHashMap::default(),
+            winit_id_to_window_id_map: FxHashMap::default(),
             tick_wait_cancelled: false,
             got_first_resumed_event: false,
+            main_window_config,
         })
     }
 
@@ -101,7 +107,7 @@ impl<A: Application> AppHandler<A> {
                 }
 
                 if window_state.view.view_needs_repaint() {
-                    window_state.winit_window.request_redraw();
+                    window_state.window_handle.request_redraw();
                 }
             }
 
@@ -141,13 +147,13 @@ impl<A: Application> AppHandler<A> {
                                 crate::math::to_physical_point(prev_pos, window_state.scale_factor);
 
                             if let Err(e) = window_state
-                                .winit_window
+                                .window_handle
                                 .set_cursor_position(PhysicalPosition::new(new_pos.x, new_pos.y))
                             {
                                 log::debug!("Could not set cursor position: {}", e);
 
                                 unlock_pointer(
-                                    &window_state.winit_window,
+                                    &window_state.window_handle,
                                     window_state.pointer_lock_state(),
                                 );
                                 window_state.set_pointer_locked(PointerLockState::NotLocked);
@@ -181,7 +187,7 @@ impl<A: Application> AppHandler<A> {
                 WindowRequest::Resize(new_size) => {
                     if let Some(window_state) = self.context.window_map.get_mut(&window_id) {
                         match window_state
-                            .winit_window
+                            .window_handle
                             .request_inner_size(LogicalSize::new(new_size.width, new_size.height))
                         {
                             Some(_) => {}
@@ -199,7 +205,7 @@ impl<A: Application> AppHandler<A> {
                 }
                 WindowRequest::Minimize(minimized) => {
                     if let Some(window_state) = self.context.window_map.get_mut(&window_id) {
-                        window_state.winit_window.set_minimized(minimized);
+                        window_state.window_handle.set_minimized(minimized);
                     } else {
                         log::warn!(
                             "Ignored request to minimize window {}, window does not exist",
@@ -209,7 +215,7 @@ impl<A: Application> AppHandler<A> {
                 }
                 WindowRequest::Maximize(maximized) => {
                     if let Some(window_state) = self.context.window_map.get_mut(&window_id) {
-                        window_state.winit_window.set_maximized(maximized);
+                        window_state.window_handle.set_maximized(maximized);
                     } else {
                         log::warn!(
                             "Ignored request to maximize window {}, window does not exist",
@@ -219,7 +225,7 @@ impl<A: Application> AppHandler<A> {
                 }
                 WindowRequest::Focus => {
                     if let Some(window_state) = self.context.window_map.get_mut(&window_id) {
-                        window_state.winit_window.focus_window();
+                        window_state.window_handle.focus_window();
                     } else {
                         log::warn!(
                             "Ignored request to focus window {}, window does not exist",
@@ -239,7 +245,7 @@ impl<A: Application> AppHandler<A> {
                 }
                 WindowRequest::SetTitle(title) => {
                     if let Some(window_state) = self.context.window_map.get_mut(&window_id) {
-                        window_state.winit_window.set_title(&title);
+                        window_state.window_handle.set_title(&title);
                     } else {
                         log::warn!(
                             "Ignored request to set title for window {}, window does not exist",
@@ -277,9 +283,9 @@ impl<A: Application> AppHandler<A> {
                         &self.context.action_sender,
                         &mut self.context.res,
                     ) {
-                        Ok((window, window_state)) => {
-                            self.winit_window_map
-                                .insert(window.id(), (window_id, window));
+                        Ok(window_state) => {
+                            self.winit_id_to_window_id_map
+                                .insert(window_state.window_handle.id(), window_id);
                             self.context.window_map.insert(window_id, window_state);
 
                             successful_open_requests.push(window_id);
@@ -301,10 +307,10 @@ impl<A: Application> AppHandler<A> {
                 .window_map
                 .get(&window_id)
                 .unwrap()
-                .winit_window
+                .window_handle
                 .id();
 
-            self.winit_window_map.remove(&winit_window_id);
+            self.winit_id_to_window_id_map.remove(&winit_window_id);
             self.context.window_map.remove(&window_id);
         }
 
@@ -334,10 +340,10 @@ impl<A: Application> AppHandler<A> {
                 if lock
                     && self.context.config.pointer_locking_enabled
                     && !window_state.pointer_lock_state().is_locked()
-                    && window_state.winit_window.has_focus()
+                    && window_state.window_handle.has_focus()
                 {
                     let new_state = try_lock_pointer(
-                        &window_state.winit_window,
+                        &window_state.window_handle,
                         #[cfg(any(
                             target_os = "linux",
                             target_os = "freebsd",
@@ -352,19 +358,19 @@ impl<A: Application> AppHandler<A> {
                     }
                 } else if (!lock && window_state.pointer_lock_state().is_locked())
                     || (window_state.pointer_lock_state().is_locked()
-                        && !window_state.winit_window.has_focus())
+                        && !window_state.window_handle.has_focus())
                 {
                     do_unlock_pointer = true;
                 }
             } else if window_state.pointer_lock_state().is_locked()
-                && !window_state.winit_window.has_focus()
+                && !window_state.window_handle.has_focus()
             {
                 do_unlock_pointer = true;
             }
 
             if do_unlock_pointer {
                 unlock_pointer(
-                    &window_state.winit_window,
+                    &window_state.window_handle,
                     window_state.pointer_lock_state(),
                 );
 
@@ -374,7 +380,7 @@ impl<A: Application> AppHandler<A> {
             if !window_state.pointer_lock_state.is_locked() {
                 if let Some(new_icon) = window_state.new_cursor_icon() {
                     let winit_icon = self::convert::convert_cursor_icon_to_winit(new_icon);
-                    window_state.winit_window.set_cursor(winit_icon);
+                    window_state.window_handle.set_cursor(winit_icon);
                 }
             }
         }
@@ -427,9 +433,11 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                 };
             }
 
-            let (main_window, main_window_state) = match create_window(
+            let main_window_config = self.main_window_config.clone();
+
+            let main_window_state = match create_window(
                 MAIN_WINDOW,
-                self.user_app.main_window_config(),
+                main_window_config,
                 event_loop,
                 &self.context.action_sender,
                 &mut self.context.res,
@@ -441,6 +449,8 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                     return;
                 }
             };
+
+            let winit_id = main_window_state.window_handle.id();
 
             let find_millihertz = if let TimerInterval::PercentageOfFrameRate(_) =
                 self.context.config.tick_timer_interval
@@ -457,11 +467,11 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                 // Attempt to get the refresh rate of the current monitor. If that's
                 // not possible, try other methods.
                 let mut millihertz = None;
-                if let Some(monitor) = main_window.current_monitor() {
+                if let Some(monitor) = main_window_state.window_handle.current_monitor() {
                     millihertz = monitor.refresh_rate_millihertz();
                 }
                 if millihertz.is_none() {
-                    if let Some(monitor) = main_window.primary_monitor() {
+                    if let Some(monitor) = main_window_state.window_handle.primary_monitor() {
                         millihertz = monitor.refresh_rate_millihertz();
                     }
                 }
@@ -499,8 +509,7 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
             self.context
                 .window_map
                 .insert(MAIN_WINDOW, main_window_state);
-            self.winit_window_map
-                .insert(main_window.id(), (MAIN_WINDOW, main_window));
+            self.winit_id_to_window_id_map.insert(winit_id, MAIN_WINDOW);
 
             self.user_app.on_window_event(
                 AppWindowEvent::WindowOpened,
@@ -518,10 +527,13 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
         winit_window_id: WinitWindowId,
         event: WinitWindowEvent,
     ) {
-        let Some((window_id, window)) = self.winit_window_map.get(&winit_window_id) else {
+        let Some(window_id) = self
+            .winit_id_to_window_id_map
+            .get(&winit_window_id)
+            .copied()
+        else {
             return;
         };
-        let window_id = *window_id;
 
         let mut process_updates = true;
 
@@ -543,7 +555,7 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                         &mut self.context,
                     ) {
                         WindowCloseRequest::CloseImmediately => {
-                            self.winit_window_map.remove(&winit_window_id);
+                            self.winit_id_to_window_id_map.remove(&winit_window_id);
                             self.context.window_map.remove(&window_id);
                         }
                         WindowCloseRequest::DoNotCloseYet => {}
@@ -554,15 +566,18 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                 process_updates = false;
 
                 let window_state = self.context.window_map.get_mut(&window_id).unwrap();
+                let window_handle = Arc::clone(&window_state.window_handle);
 
-                match window_state.render(|| window.pre_present_notify(), &mut self.context.res) {
+                match window_state
+                    .render(|| window_handle.pre_present_notify(), &mut self.context.res)
+                {
                     Ok(_) => {}
                     // Reconfigure the surface if lost
                     Err(wgpu::SurfaceError::Lost) => {
-                        let inner_size = window.inner_size();
+                        let inner_size = window_state.window_handle.inner_size();
                         let new_size =
                             PhysicalSizeI32::new(inner_size.width as i32, inner_size.height as i32);
-                        let new_scale_factor = window.scale_factor().into();
+                        let new_scale_factor = window_state.window_handle.scale_factor().into();
 
                         window_state.set_size(new_size, new_scale_factor);
                     }
@@ -580,9 +595,9 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
 
                 let window_state = self.context.window_map.get_mut(&window_id).unwrap();
 
-                let scale_factor = window.scale_factor().into();
+                let scale_factor = window_state.window_handle.scale_factor().into();
                 window_state.set_size(new_size, scale_factor);
-                window.request_redraw();
+                window_state.window_handle.request_redraw();
 
                 self.user_app.on_window_event(
                     AppWindowEvent::WindowResized,
@@ -609,7 +624,7 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                 }
 
                 window_state.set_size(new_size, scale_factor.into());
-                window.request_redraw();
+                window_state.window_handle.request_redraw();
 
                 self.user_app.on_window_event(
                     AppWindowEvent::WindowResized,
@@ -706,11 +721,13 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                 delta,
                 phase: _,
             } => {
+                let window_state = self.context.window_map.get(&window_id).unwrap();
+
                 let delta_type = match delta {
                     MouseScrollDelta::LineDelta(x, y) => WheelDeltaType::Lines(Vector::new(x, -y)),
                     MouseScrollDelta::PixelDelta(pos) => WheelDeltaType::Points(Vector::new(
-                        (pos.x / window.scale_factor()) as f32,
-                        (-pos.y / window.scale_factor()) as f32,
+                        (pos.x / window_state.window_handle.scale_factor()) as f32,
+                        (-pos.y / window_state.window_handle.scale_factor()) as f32,
                     )),
                 };
 
@@ -728,7 +745,7 @@ impl<A: Application> WinitApplicationHandler for AppHandler<A> {
                 );
 
                 self.context.window_map.remove(&window_id);
-                self.winit_window_map.remove(&winit_window_id);
+                self.winit_id_to_window_id_map.remove(&winit_window_id);
             }
             WinitWindowEvent::ModifiersChanged(winit_modifiers) => {
                 let modifiers = self::convert::convert_modifiers(winit_modifiers);
@@ -860,13 +877,21 @@ pub enum OpenWindowError {
     SurfaceError(#[from] rootvg::surface::NewSurfaceError),
 }
 
-pub fn run_blocking<A: Application>(
-    app: A,
+pub fn run_blocking<A: Application, B>(
+    main_window_config: WindowConfig,
     action_sender: ActionSender<A::Action>,
     action_receiver: ActionReceiver<A::Action>,
-) -> Result<(), Box<dyn Error>> {
+    mut build_app: B,
+) -> Result<(), Box<dyn Error>>
+where
+    A::Action: Send,
+    B: FnMut() -> A,
+    B: 'static + Send,
+{
+    let app = (build_app)();
+
     let event_loop = EventLoop::new()?;
-    let mut app_handler = AppHandler::new(app, action_sender, action_receiver)?;
+    let mut app_handler = AppHandler::new(app, action_sender, action_receiver, main_window_config)?;
 
     event_loop.run_app(&mut app_handler).map_err(Into::into)
 }
@@ -877,7 +902,7 @@ fn create_window<A: Clone + 'static>(
     event_loop: &ActiveEventLoop,
     action_sender: &ActionSender<A>,
     res: &mut ResourceCtx,
-) -> Result<(Arc<winit::window::Window>, WindowState<A>), OpenWindowError> {
+) -> Result<WindowState<A>, OpenWindowError> {
     #[allow(unused_mut)]
     let mut attributes = WinitWindow::default_attributes()
         .with_title(config.title.clone())
@@ -937,20 +962,52 @@ fn create_window<A: Clone + 'static>(
         PhysicalSizeI32::new(physical_size.width as i32, physical_size.height as i32);
     let system_scale_factor: ScaleFactor = window.scale_factor().into();
 
-    let window_state = WindowState::new(
-        &window,
-        config.size,
+    let scale_factor = config.scale_factor.scale_factor(system_scale_factor);
+
+    let surface = DefaultSurface::new(
         physical_size,
-        system_scale_factor,
-        config.scale_factor,
-        config.view_config,
+        scale_factor,
+        Arc::clone(&window),
         config.surface_config,
+    )?;
+    let renderer = rootvg::Canvas::new(
+        &surface.device,
+        &surface.queue,
+        surface.format(),
+        surface.canvas_config(),
+        &mut res.font_system,
+    );
+
+    let view = View::new(
+        physical_size,
+        scale_factor,
+        config.view_config,
         action_sender.clone(),
         id,
-        res,
-    )?;
+    );
 
-    Ok((window, window_state))
+    let clipboard = new_clipboard(Arc::clone(&window));
+
+    Ok(WindowState {
+        view,
+        renderer,
+        surface: Some(surface),
+        logical_size: config.size,
+        physical_size,
+        scale_factor,
+        scale_factor_recip: scale_factor.recip(),
+        system_scale_factor,
+        scale_factor_config: config.scale_factor,
+        queued_pointer_position: None,
+        queued_pointer_delta: None,
+        prev_pointer_pos: None,
+        pointer_btn_states: [PointerBtnState::default(); 5],
+        modifiers: Modifiers::empty(),
+        current_cursor_icon: CursorIcon::Default,
+        pointer_lock_state: PointerLockState::NotLocked,
+        clipboard,
+        window_handle: window,
+    })
 }
 
 fn try_lock_pointer(
@@ -1039,4 +1096,17 @@ fn unlock_pointer(window: &WinitWindow, prev_state: PointerLockState) {
         }
         _ => {}
     }
+}
+
+fn new_clipboard(window_handle: WindowHandle) -> Clipboard {
+    // SAFETY:
+    // A reference-counted handle to the window is stored in `WindowState`,
+    // ensuring that the window will not be dropped before the clipboard
+    // is dropped.
+    let state = unsafe { window_clipboard::Clipboard::connect(&window_handle) }
+        .ok()
+        .map(crate::clipboard::State::Connected)
+        .unwrap_or(crate::clipboard::State::Unavailable);
+
+    Clipboard { state }
 }

@@ -55,7 +55,27 @@ pub fn main() {
     // Actions are sent via a regular Rust mpsc queue.
     let (action_sender, action_receiver) = yarrow::action_channel();
 
-    yarrow::run_blocking(MyApp::new(), action_sender, action_receiver).unwrap();
+    yarrow::run_blocking(
+        WindowConfig {
+            title: String::from("Yarrow Gallery Demo"),
+            size: Size::new(700.0, 425.0),
+            //scale_factor: ScaleFactorConfig::Custom(1.0.into()),
+            /*
+            surface_config: rootvg::surface::DefaultSurfaceConfig {
+                instance_descriptor: wgpu::InstanceDescriptor {
+                    backends: wgpu::Backends::GL,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            */
+            ..Default::default()
+        },
+        action_sender,
+        action_receiver,
+        || MyApp::new(),
+    )
+    .unwrap();
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -378,24 +398,6 @@ impl MyApp {
 impl Application for MyApp {
     type Action = MyAction;
 
-    fn main_window_config(&self) -> WindowConfig {
-        WindowConfig {
-            title: String::from("Yarrow Gallery Demo"),
-            size: Size::new(700.0, 425.0),
-            //scale_factor: ScaleFactorConfig::Custom(1.0.into()),
-            /*
-            surface_config: rootvg::surface::DefaultSurfaceConfig {
-                instance_descriptor: wgpu::InstanceDescriptor {
-                    backends: wgpu::Backends::GL,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            */
-            ..Default::default()
-        }
-    }
-
     fn on_window_event(
         &mut self,
         event: AppWindowEvent,
@@ -462,7 +464,7 @@ impl Application for MyApp {
         if window_id == MAIN_WINDOW
             && event.state == KeyState::Down
             && event.code == Code::KeyA
-            && event.modifiers.ctrl()
+            && event.modifiers.contains(Modifiers::CONTROL)
             && !event.repeat
         {
             println!("program-wide keyboard shortcut activated: Ctrl+A");

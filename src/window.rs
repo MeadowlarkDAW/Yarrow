@@ -1,15 +1,6 @@
 use keyboard_types::{CompositionEvent, Modifiers};
-
-use raw_window_handle_06::{
-    AppKitDisplayHandle, AppKitWindowHandle, Win32WindowHandle, WindowsDisplayHandle,
-    XcbDisplayHandle, XcbWindowHandle, XlibDisplayHandle, XlibWindowHandle,
-};
-use rootvg::surface::{DefaultSurface, DefaultSurfaceConfig, NewSurfaceError};
-use std::num::{NonZeroIsize, NonZeroU32};
-use std::ptr::NonNull;
-use std::sync::Arc;
+use rootvg::surface::{DefaultSurface, DefaultSurfaceConfig};
 use std::time::{Duration, Instant};
-use wgpu::SurfaceTargetUnsafe;
 
 use crate::action_queue::ActionSender;
 use crate::clipboard::Clipboard;
@@ -28,15 +19,16 @@ use crate::{CursorIcon, ScissorRectID};
 #[cfg(feature = "winit")]
 mod winit_backend;
 #[cfg(feature = "winit")]
+use winit_backend::WindowHandle;
+#[cfg(feature = "winit")]
 pub use winit_backend::{run_blocking, OpenWindowError};
-// TODO: baseview feature
+
 #[cfg(feature = "baseview")]
 mod baseview_backend;
 #[cfg(feature = "baseview")]
-use baseview::Window as BaseviewWindow;
+use baseview_backend::WindowHandle;
 #[cfg(feature = "baseview")]
 pub use baseview_backend::{run_blocking, OpenWindowError};
-use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 pub type WindowID = u32;
 
@@ -75,8 +67,11 @@ impl PointerLockState {
     }
 }
 
-// TODO: check that lifetime is ok here
 pub(crate) struct WindowState<A: Clone + 'static> {
+    pub queued_pointer_position: Option<PhysicalPoint>,
+    pub queued_pointer_delta: Option<(f64, f64)>,
+    pub prev_pointer_pos: Option<Point>,
+
     view: View<A>,
     renderer: rootvg::Canvas,
     surface: Option<DefaultSurface<'static>>,
@@ -86,136 +81,19 @@ pub(crate) struct WindowState<A: Clone + 'static> {
     scale_factor_recip: f32,
     system_scale_factor: ScaleFactor,
     scale_factor_config: ScaleFactorConfig,
-    pub queued_pointer_position: Option<PhysicalPoint>,
-    pub queued_pointer_delta: Option<(f64, f64)>,
-    // TODO:
-    #[cfg(feature = "winit")]
-    pub winit_window: Arc<winit::window::Window>,
-    //pub baseview_window: &'window_state mut BaseviewWindow<'window_state>,
-    clipboard: Clipboard,
-    pub prev_pointer_pos: Option<Point>,
     pointer_btn_states: [PointerBtnState; 5],
     pointer_lock_state: PointerLockState,
+    clipboard: Clipboard,
 
     modifiers: Modifiers,
     current_cursor_icon: CursorIcon,
+
+    // Make sure that the window handle is the last field in
+    // this struct to ensure that it gets dropped last.
+    pub window_handle: WindowHandle,
 }
 
 impl<A: Clone + 'static> WindowState<A> {
-    pub fn new<'new>(
-        // TODO:
-        #[cfg(feature = "winit")] winit_window: &Arc<winit::window::Window>,
-        #[cfg(feature = "baseview")] baseview_window: &'new mut BaseviewWindow,
-        logical_size: Size,
-        physical_size: PhysicalSizeI32,
-        system_scale_factor: ScaleFactor,
-        scale_factor_config: ScaleFactorConfig,
-        view_config: ViewConfig,
-        surface_config: DefaultSurfaceConfig,
-        action_sender: ActionSender<A>,
-        id: WindowID,
-        res: &mut ResourceCtx,
-    ) -> Result<Self, NewSurfaceError> {
-        let scale_factor = scale_factor_config.scale_factor(system_scale_factor);
-
-        let raw_display_handle = baseview_window.raw_display_handle();
-        let raw_window_handle = baseview_window.raw_window_handle();
-
-        let target = SurfaceTargetUnsafe::RawHandle {
-            raw_display_handle: match raw_display_handle {
-                raw_window_handle::RawDisplayHandle::AppKit(_) => {
-                    raw_window_handle_06::RawDisplayHandle::AppKit(AppKitDisplayHandle::new())
-                }
-                raw_window_handle::RawDisplayHandle::Xlib(handle) => {
-                    raw_window_handle_06::RawDisplayHandle::Xlib(XlibDisplayHandle::new(
-                        NonNull::new(handle.display),
-                        handle.screen,
-                    ))
-                }
-                raw_window_handle::RawDisplayHandle::Xcb(handle) => {
-                    raw_window_handle_06::RawDisplayHandle::Xcb(XcbDisplayHandle::new(
-                        NonNull::new(handle.connection),
-                        handle.screen,
-                    ))
-                }
-                raw_window_handle::RawDisplayHandle::Windows(_) => {
-                    raw_window_handle_06::RawDisplayHandle::Windows(WindowsDisplayHandle::new())
-                }
-                _ => todo!(),
-            },
-            raw_window_handle: match raw_window_handle {
-                raw_window_handle::RawWindowHandle::AppKit(handle) => {
-                    raw_window_handle_06::RawWindowHandle::AppKit(AppKitWindowHandle::new(
-                        NonNull::new(handle.ns_view).unwrap(),
-                    ))
-                }
-                raw_window_handle::RawWindowHandle::Xlib(handle) => {
-                    raw_window_handle_06::RawWindowHandle::Xlib(XlibWindowHandle::new(
-                        handle.window,
-                    ))
-                }
-                raw_window_handle::RawWindowHandle::Xcb(handle) => {
-                    raw_window_handle_06::RawWindowHandle::Xcb(XcbWindowHandle::new(
-                        NonZeroU32::new(handle.window).unwrap(),
-                    ))
-                }
-                raw_window_handle::RawWindowHandle::Win32(handle) => {
-                    // will this work? i have no idea!
-                    let mut raw_handle =
-                        Win32WindowHandle::new(NonZeroIsize::new(handle.hwnd as isize).unwrap());
-
-                    raw_handle.hinstance = handle
-                        .hinstance
-                        .is_null()
-                        .then(|| NonZeroIsize::new(handle.hinstance as isize).unwrap());
-
-                    raw_window_handle_06::RawWindowHandle::Win32(raw_handle)
-                }
-                _ => todo!(),
-            },
-        };
-
-        let surface = unsafe {
-            DefaultSurface::new_unsafe(physical_size, scale_factor, target, surface_config)?
-        };
-        let renderer = rootvg::Canvas::new(
-            &surface.device,
-            &surface.queue,
-            surface.format(),
-            surface.canvas_config(),
-            &mut res.font_system,
-        );
-
-        let view = View::new(physical_size, scale_factor, view_config, action_sender, id);
-
-        // TODO:
-        let clipboard = Clipboard::new(baseview_window);
-
-        Ok(Self {
-            view,
-            renderer,
-            surface: Some(surface),
-            logical_size,
-            physical_size,
-            scale_factor,
-            scale_factor_recip: scale_factor.recip(),
-            system_scale_factor,
-            scale_factor_config,
-            queued_pointer_position: None,
-            queued_pointer_delta: None,
-            // TODO:
-            // baseview_window,
-            #[cfg(feature = "winit")]
-            winit_window: Arc::clone(winit_window),
-            prev_pointer_pos: None,
-            pointer_btn_states: [PointerBtnState::default(); 5],
-            modifiers: Modifiers::empty(),
-            current_cursor_icon: CursorIcon::Default,
-            pointer_lock_state: PointerLockState::NotLocked,
-            clipboard,
-        })
-    }
-
     pub fn set_size(&mut self, new_size: PhysicalSizeI32, new_system_scale_factor: ScaleFactor) {
         if self.physical_size == new_size && self.system_scale_factor == new_system_scale_factor {
             return;

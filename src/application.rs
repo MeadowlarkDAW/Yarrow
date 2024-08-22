@@ -19,10 +19,6 @@ pub trait Application {
         Ok(AppConfig::default())
     }
 
-    fn main_window_config(&self) -> WindowConfig {
-        WindowConfig::default()
-    }
-
     #[allow(unused)]
     fn on_window_event(
         &mut self,
