@@ -16,6 +16,7 @@ fn main() {
             main_window_elements: None,
         },
         action_sender,
+        action_receiver,
     )
     .unwrap();
 }
@@ -73,7 +74,7 @@ impl MyApp {
                 },
                 ..Default::default()
             },
-            padding: Padding::new(10.0, 10.0, 10.0, 10.0),
+            //padding: Padding::new(10.0, 10.0, 10.0, 10.0),
             ..Default::default()
         });
 
@@ -88,7 +89,7 @@ impl MyApp {
         // If no bounding rectangle is given, then by default the element has
         // a size of `0` meaning it is invisible. This allows us to layout out
         // the element later in a dedicated layout function.
-        let hello_label = Label::builder(&label_style)
+        let hello_label = Label::builder()
             .text("Hello World!")
             .build(&mut main_window_cx);
 
@@ -114,7 +115,7 @@ impl MyApp {
         //
         // This calculated size is automatically cached, so don't worry about
         // it being too expensive to use in an immediate-mode fasion.
-        let label_size = elements.hello_label.desired_padded_size();
+        let label_size = elements.hello_label.desired_size();
 
         // Center the label on the screen.
         let window_rect = Rect::from_size(window_size);
