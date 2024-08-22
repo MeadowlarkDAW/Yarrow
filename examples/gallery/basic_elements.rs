@@ -206,7 +206,7 @@ impl Elements {
 
                 icon_label_toggle_btn: ToggleButton::builder()
                     .icon(MyIcon::PowerOn)
-                    .text("on")
+                    .text("off")
                     .on_toggled(|toggled| Action::ToggleValue(toggled).into())
                     .build(cx),
 
@@ -286,6 +286,14 @@ impl Elements {
                 self.toggle_btn.set_toggled(toggled);
                 self.icon_toggle_btn.set_toggled(toggled);
                 self.icon_label_toggle_btn.set_toggled(toggled);
+
+                if toggled {
+                    self.toggle_btn.set_text(Some("on"), cx.res);
+                    self.icon_label_toggle_btn.set_text(Some("on"), cx.res);
+                } else {
+                    self.toggle_btn.set_text(Some("off"), cx.res);
+                    self.icon_label_toggle_btn.set_text(Some("off"), cx.res);
+                }
 
                 needs_layout = true;
             }
