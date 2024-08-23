@@ -850,7 +850,7 @@ impl TextInputInner {
 
                 result.needs_repaint = true;
             }
-            Code::Enter => {
+            Code::Enter | Code::NumpadEnter => {
                 result.capture_status = EventCaptureStatus::Captured;
 
                 result.enter_key_pressed = true;
