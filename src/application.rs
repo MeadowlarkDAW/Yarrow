@@ -1,14 +1,20 @@
-use rootvg::{math::Size, text::glyphon::FontSystem};
+use rootvg::{
+    math::{PhysicalPoint, Size},
+    text::glyphon::FontSystem,
+};
 use rustc_hash::FxHashMap;
-use std::{error::Error, time::Duration};
+use std::{
+    error::Error,
+    time::{Duration, Instant},
+};
 
 use crate::{
     event::{AppWindowEvent, KeyboardEvent},
     prelude::{ActionReceiver, ActionSender},
     style::StyleSystem,
     window::{
-        LinuxBackendType, ScaleFactorConfig, WindowCloseRequest, WindowConfig, WindowContext,
-        WindowID, WindowState,
+        LinuxBackendType, OpenWindowError, PointerLockState, ScaleFactorConfig, WindowBackend,
+        WindowCloseRequest, WindowConfig, WindowContext, WindowID, WindowState,
     },
 };
 
@@ -207,6 +213,265 @@ impl<A: Clone + 'static> AppContext<A> {
     }
 }
 
+pub(crate) struct AppHandler<A: Application> {
+    pub user_app: A,
+    pub context: AppContext<A::Action>,
+    pub prev_tick_instant: Instant,
+}
+
+impl<A: Application> AppHandler<A> {
+    pub fn new(
+        mut user_app: A,
+        action_sender: ActionSender<A::Action>,
+        action_receiver: ActionReceiver<A::Action>,
+    ) -> Result<Self, Box<dyn Error>> {
+        let config = user_app.init()?;
+
+        Ok(Self {
+            user_app,
+            context: AppContext::new(config, action_sender, action_receiver),
+            prev_tick_instant: Instant::now(),
+        })
+    }
+
+    pub fn on_tick(&mut self) {
+        let now = Instant::now();
+        let dt = (now - self.prev_tick_instant).as_secs_f64();
+        self.prev_tick_instant = now;
+
+        self.user_app.on_tick(dt, &mut self.context);
+
+        for window_state in self.context.window_map.values_mut() {
+            window_state.on_animation_tick(dt, &mut self.context.res);
+        }
+    }
+
+    pub fn process_updates<B: WindowBackend>(&mut self, backend: &mut B) {
+        self.drain_pointer_moved_events(backend);
+
+        loop {
+            let any_actions_processed = self.poll_actions();
+
+            self.drain_window_requests(backend);
+
+            let mut any_updates_processed = false;
+            for (window_id, window_state) in self.context.window_map.iter_mut() {
+                if window_state
+                    .view
+                    .process_updates(&mut self.context.res, &mut window_state.clipboard)
+                {
+                    any_updates_processed = true;
+                }
+
+                if window_state.view.view_needs_repaint() {
+                    backend.request_redraw(*window_id);
+                }
+            }
+
+            if !any_updates_processed && !any_actions_processed {
+                break;
+            }
+        }
+
+        self.update_pointer_lock_and_cursor(backend);
+    }
+
+    fn drain_pointer_moved_events<B: WindowBackend>(&mut self, backend: &mut B) {
+        for (window_id, window_state) in self.context.window_map.iter_mut() {
+            if let Some(delta) = window_state.queued_pointer_delta.take() {
+                if window_state.pointer_lock_state().is_locked() {
+                    let delta = crate::math::to_logical_point_from_recip(
+                        PhysicalPoint::new(delta.0 as f32, delta.1 as f32),
+                        window_state.scale_factor_recip,
+                    )
+                    .to_vector();
+
+                    window_state.handle_locked_pointer_delta(delta, &mut self.context.res);
+                }
+            }
+
+            if let Some(pos) = window_state.queued_pointer_position.take() {
+                match window_state.pointer_lock_state() {
+                    PointerLockState::NotLocked => {
+                        window_state.handle_pointer_moved(pos, &mut self.context.res);
+                    }
+                    PointerLockState::LockedUsingOS => {
+                        // Only send events from the raw device input when locked.
+                    }
+                    PointerLockState::ManualLock => {
+                        if let Some(prev_pos) = window_state.prev_pointer_pos {
+                            let new_pos =
+                                crate::math::to_physical_point(prev_pos, window_state.scale_factor);
+
+                            #[allow(unused)]
+                            if let Err(_) = backend.set_pointer_position(*window_id, new_pos) {
+                                backend
+                                    .unlock_pointer(*window_id, window_state.pointer_lock_state());
+                                window_state.set_pointer_locked(PointerLockState::NotLocked);
+
+                                window_state.handle_pointer_moved(pos, &mut self.context.res);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn drain_window_requests<B: WindowBackend>(&mut self, backend: &mut B) {
+        let mut windows_to_close: Vec<WindowID> = Vec::new();
+        let mut successful_open_requests: Vec<WindowID> = Vec::new();
+        let mut failed_open_requests: Vec<(WindowID, OpenWindowError)> = Vec::new();
+
+        for (window_id, request) in self.context.window_requests.drain(..) {
+            if let WindowRequest::Create(config) = &request {
+                match backend.create_window(
+                    window_id,
+                    config,
+                    &self.context.action_sender,
+                    &mut self.context.res,
+                ) {
+                    Ok(window_state) => {
+                        self.context.window_map.insert(window_id, window_state);
+                        successful_open_requests.push(window_id);
+                    }
+                    Err(e) => failed_open_requests.push((window_id, e)),
+                }
+
+                continue;
+            }
+
+            let Some(window_state) = self.context.window_map.get_mut(&window_id) else {
+                log::warn!(
+                    "Ignored request {:?} for window {}, window does not exist",
+                    request,
+                    window_id
+                );
+                continue;
+            };
+
+            match request {
+                WindowRequest::Resize(new_size) => {
+                    match backend.resize(window_id, new_size, window_state.scale_factor) {
+                        Ok(_) => {}
+                        Err(_) => {
+                            log::warn!(
+                                "Failed to set inner size {:?} for window {}",
+                                new_size,
+                                window_id
+                            );
+                        }
+                    }
+                }
+                WindowRequest::Minimize(minimized) => {
+                    backend.set_minimized(window_id, minimized);
+                }
+                WindowRequest::Maximize(maximized) => {
+                    backend.set_maximized(window_id, maximized);
+                }
+                WindowRequest::Focus => {
+                    backend.focus_window(window_id);
+                }
+                WindowRequest::Close => {
+                    windows_to_close.push(window_id);
+                }
+                WindowRequest::SetTitle(title) => {
+                    backend.set_window_title(window_id, title);
+                }
+                WindowRequest::SetScaleFactor(config) => {
+                    if let Some(new_size) = window_state.set_scale_factor_config(config) {
+                        match backend.resize(window_id, new_size, window_state.scale_factor) {
+                            Ok(_) => {}
+                            Err(_) => {
+                                log::warn!(
+                                    "Failed to set inner size {:?} for window {}",
+                                    new_size,
+                                    window_id
+                                );
+                            }
+                        }
+                    }
+                }
+                WindowRequest::NotifyThemeChange => {
+                    window_state.on_theme_changed(&mut self.context.res);
+                }
+                _ => {}
+            }
+        }
+
+        for window_id in windows_to_close {
+            self.context.window_map.remove(&window_id);
+
+            backend.close_window(window_id);
+        }
+
+        for window_id in successful_open_requests.drain(..) {
+            self.user_app.on_window_event(
+                AppWindowEvent::WindowOpened,
+                window_id,
+                &mut self.context,
+            );
+        }
+
+        for (window_id, error) in failed_open_requests.drain(..) {
+            log::error!("Failed to open window {}: {}", window_id, &error);
+            self.user_app.on_window_event(
+                AppWindowEvent::OpenWindowFailed(error),
+                window_id,
+                &mut self.context,
+            );
+        }
+    }
+
+    fn poll_actions(&mut self) -> bool {
+        let any_actions_processed = self.context.action_sender.any_action_sent();
+        if any_actions_processed {
+            self.user_app.on_action_emitted(&mut self.context);
+        }
+        return any_actions_processed;
+    }
+
+    fn update_pointer_lock_and_cursor<B: WindowBackend>(&mut self, backend: &mut B) {
+        for (window_id, window_state) in self.context.window_map.iter_mut() {
+            let mut do_unlock_pointer = false;
+
+            let has_focus = backend.has_focus(*window_id);
+
+            if let Some(lock) = window_state.new_pointer_lock_request() {
+                if lock
+                    && self.context.config.pointer_locking_enabled
+                    && !window_state.pointer_lock_state().is_locked()
+                    && has_focus
+                {
+                    let new_state = backend.try_lock_pointer(*window_id);
+                    if new_state.is_locked() {
+                        window_state.set_pointer_locked(new_state);
+                    }
+                } else if (!lock && window_state.pointer_lock_state().is_locked())
+                    || (window_state.pointer_lock_state().is_locked() && !has_focus)
+                {
+                    do_unlock_pointer = true;
+                }
+            } else if window_state.pointer_lock_state().is_locked() && !has_focus {
+                do_unlock_pointer = true;
+            }
+
+            if do_unlock_pointer {
+                backend.unlock_pointer(*window_id, window_state.pointer_lock_state());
+
+                window_state.set_pointer_locked(PointerLockState::NotLocked);
+            }
+
+            if !window_state.pointer_lock_state.is_locked() {
+                if let Some(new_icon) = window_state.new_cursor_icon() {
+                    backend.set_cursor_icon(*window_id, new_icon);
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
 pub(crate) enum WindowRequest {
     Resize(Size),
     Minimize(bool),

@@ -58,7 +58,6 @@ impl MainWindowElements {
 
         // Center the label on the screen.
         let window_rect = Rect::from_size(cx.logical_size());
-        println!("{window_rect:?}");
         let label_rect = centered_rect(window_rect.center(), label_size);
 
         // Element handles have a generic part with common methods.
