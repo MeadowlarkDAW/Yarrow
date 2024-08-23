@@ -18,6 +18,7 @@ mod handle;
 
 use std::any::Any;
 
+use context::UpdateScissorRectRequest;
 pub use context::{ElementContext, RenderContext};
 pub use flags::ElementFlags;
 pub use handle::ElementHandle;
@@ -27,8 +28,8 @@ use rootvg::PrimitiveGroup;
 use super::ScissorRectID;
 use crate::action_queue::ActionSender;
 use crate::event::{ElementEvent, EventCaptureStatus};
-use crate::layout::Align2;
 use crate::math::{Rect, Size, ZIndex};
+use crate::prelude::TooltipData;
 use crate::stmpsc_queue;
 use crate::style::ClassID;
 
@@ -83,7 +84,7 @@ pub struct ElementBuilder<A: Clone + 'static> {
     pub z_index: ZIndex,
     pub rect: Rect,
     pub manually_hidden: bool,
-    pub scissor_rect_id: ScissorRectID,
+    pub scissor_rect: ScissorRectID,
     pub class: ClassID,
 }
 
@@ -94,7 +95,7 @@ impl<A: Clone + 'static> ElementBuilder<A> {
             z_index: 0,
             rect: Rect::new(Point::new(0.0, 0.0), Size::new(0.0, 0.0)),
             manually_hidden: false,
-            scissor_rect_id: ScissorRectID::DEFAULT,
+            scissor_rect: ScissorRectID::DEFAULT,
             class: 0,
         }
     }
@@ -119,8 +120,8 @@ impl<A: Clone + 'static> ElementBuilder<A> {
         self
     }
 
-    pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
-        self.scissor_rect_id = scissor_rect_id;
+    pub const fn scissor_rect(mut self, scissor_rect: ScissorRectID) -> Self {
+        self.scissor_rect = scissor_rect;
         self
     }
 }
@@ -156,11 +157,8 @@ pub(super) enum ElementModificationType {
     ListenToClickOff,
     StartHoverTimeout,
     StartScrollWheelTimeout,
-    ShowTooltip {
-        message: String,
-        align: Align2,
-        auto_hide: bool,
-    },
+    ShowTooltip { data: TooltipData, auto_hide: bool },
+    UpdateScissorRect(UpdateScissorRectRequest),
 }
 
 // I get a warning about leaking `ElementID` if I make `ElementHandle::new()`

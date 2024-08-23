@@ -1,9 +1,7 @@
 use rootvg::{quad::QuadFlags, text::Metrics};
 
-use crate::{
-    prelude::*,
-    theme::{DEFAULT_ACCENT_COLOR, DEFAULT_ACCENT_HOVER_COLOR},
-};
+use crate::prelude::*;
+use crate::theme::{DEFAULT_ACCENT_COLOR, DEFAULT_ACCENT_HOVER_COLOR};
 
 pub const TEXT_PADDING: Padding = padding_vh(6.0, 7.0);
 pub const ICON_PADDING: Padding = padding_vh(4.0, 5.0);
@@ -54,6 +52,7 @@ pub fn button(config: &Config) -> ButtonStyle {
         },
         text_padding: TEXT_PADDING,
         icon_padding: ICON_PADDING,
+        icon_size: config.icon_size,
         text_icon_spacing: TEXT_ICON_SPACING,
         text_color: TEXT_COLOR,
         text_color_hover: Some(TEXT_COLOR_BRIGHT),
@@ -77,6 +76,7 @@ pub fn menu_button(config: &Config) -> ButtonStyle {
         },
         text_padding: TEXT_PADDING,
         icon_padding: ICON_PADDING,
+        icon_size: config.icon_size,
         text_icon_spacing: TEXT_ICON_SPACING,
         text_color: TEXT_COLOR,
         text_color_hover: Some(TEXT_COLOR_BRIGHT),
@@ -97,6 +97,7 @@ pub fn toggle_button(config: &Config) -> ToggleButtonStyle {
         text_padding: TEXT_PADDING,
         icon_padding: ICON_PADDING,
         text_icon_spacing: TEXT_ICON_SPACING,
+        icon_size: config.icon_size,
         text_color: TEXT_COLOR,
         text_color_on_hover: Some(TEXT_COLOR_BRIGHT),
         text_color_off_hover: Some(TEXT_COLOR_BRIGHT),
@@ -189,9 +190,11 @@ pub fn text_input(config: &Config) -> TextInputStyle {
     }
 }
 
+#[cfg(feature = "svg-icons")]
 pub fn icon_text_input(config: &Config) -> IconTextInputStyle {
     IconTextInputStyle {
         text_input: text_input(config),
+        icon_size: config.icon_size,
         icon_padding: padding(0.0, 0.0, 0.0, 5.0),
         ..Default::default()
     }
@@ -207,6 +210,7 @@ pub fn tab(config: &Config) -> TabStyle {
             },
             text_padding: TEXT_PADDING,
             icon_padding: ICON_PADDING,
+            icon_size: config.icon_size,
             text_icon_spacing: TEXT_ICON_SPACING,
             text_color: TEXT_COLOR,
             text_color_on_hover: Some(TEXT_COLOR_BRIGHT),
@@ -263,6 +267,7 @@ pub fn dropdown_menu(config: &Config) -> DropDownMenuStyle {
             attrs: config.text_attrs,
             ..Default::default()
         },
+        icon_size: config.icon_size,
         text_color: TEXT_COLOR,
         text_color_hover: Some(TEXT_COLOR_BRIGHT),
         back_quad: QuadStyle {
@@ -296,6 +301,7 @@ pub fn label(config: &Config) -> LabelStyle {
             ..Default::default()
         },
         text_color: TEXT_COLOR,
+        icon_size: config.icon_size,
         ..Default::default()
     }
 }
@@ -347,6 +353,7 @@ pub fn slider_style_modern(
     }
 }
 
+#[allow(unused)]
 pub fn knob_style(
     accent_color: RGBA8,
     accent_color_hover: RGBA8,
@@ -364,15 +371,26 @@ pub fn knob_style(
             ..Default::default()
         }),
         notch: if use_line_notch {
-            KnobNotchStyle::Line(KnobNotchStyleLine {
-                bg: KnobNotchStyleLineBg::Solid {
-                    idle: TEXT_COLOR,
-                    hovered: Some(TEXT_COLOR_BRIGHT),
-                    gesturing: None,
-                    disabled: Default::default(),
-                },
-                ..Default::default()
-            })
+            #[cfg(feature = "mesh")]
+            {
+                KnobNotchStyle::Line(KnobNotchStyleLine {
+                    bg: KnobNotchStyleLineBg::Solid {
+                        idle: TEXT_COLOR,
+                        hovered: Some(TEXT_COLOR_BRIGHT),
+                        gesturing: None,
+                        disabled: Default::default(),
+                    },
+                    ..Default::default()
+                })
+            }
+            #[cfg(not(feature = "mesh"))]
+            {
+                KnobNotchStyle::Quad(KnobNotchStyleQuad {
+                    bg: background(TEXT_COLOR),
+                    bg_hover: Some(background(TEXT_COLOR_BRIGHT)),
+                    ..Default::default()
+                })
+            }
         } else {
             KnobNotchStyle::Quad(KnobNotchStyleQuad {
                 bg: background(TEXT_COLOR),
@@ -390,12 +408,20 @@ pub fn knob_style(
                 ..Default::default()
             })
         } else {
-            KnobMarkersStyle::Arc(KnobMarkersArcStyle {
-                fill_bg: background(accent_color),
-                fill_bg_hover: Some(background(accent_color_hover)),
-                back_bg: background(KNOB_ARC_TRACK_COLOR),
-                ..Default::default()
-            })
+            #[cfg(feature = "tessellation")]
+            {
+                KnobMarkersStyle::Arc(KnobMarkersArcStyle {
+                    fill_bg: background(accent_color),
+                    fill_bg_hover: Some(background(accent_color_hover)),
+                    back_bg: background(KNOB_ARC_TRACK_COLOR),
+                    ..Default::default()
+                })
+            }
+
+            #[cfg(not(feature = "tessellation"))]
+            {
+                KnobMarkersStyle::None
+            }
         },
         ..Default::default()
     }
@@ -407,6 +433,7 @@ pub struct Config {
     pub radius: f32,
     pub text_metrics: Metrics,
     pub text_attrs: Attrs<'static>,
+    pub icon_size: f32,
 }
 
 impl Default for Config {
@@ -420,6 +447,7 @@ impl Default for Config {
                 line_height: 16.0,
             },
             text_attrs: Attrs::new(),
+            icon_size: crate::theme::DEFAULT_ICON_SIZE,
         }
     }
 }
@@ -438,8 +466,6 @@ pub fn load(config: Config, res: &mut ResourceCtx) {
     res.style_system.add(ClassID::default(), true, scroll_bar());
     res.style_system
         .add(ClassID::default(), true, text_input(&config));
-    res.style_system
-        .add(ClassID::default(), true, icon_text_input(&config));
     res.style_system.add(ClassID::default(), true, tab(&config));
     res.style_system
         .add(ClassID::default(), true, tooltip(&config));
@@ -466,4 +492,8 @@ pub fn load(config: Config, res: &mut ResourceCtx) {
         true,
         knob_style(config.accent_color, config.accent_color_hover, false, false),
     );
+
+    #[cfg(feature = "svg-icons")]
+    res.style_system
+        .add(ClassID::default(), true, icon_text_input(&config));
 }

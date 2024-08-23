@@ -1,7 +1,6 @@
 pub mod button;
 pub mod click_area;
 pub mod drop_down_menu;
-pub mod icon;
 pub mod label;
 pub mod paragraph;
 pub mod progress_bar;
@@ -16,3 +15,6 @@ pub mod text_input;
 pub mod toggle_button;
 pub mod tooltip;
 pub mod virtual_slider;
+
+#[cfg(feature = "svg-icons")]
+pub mod icon;

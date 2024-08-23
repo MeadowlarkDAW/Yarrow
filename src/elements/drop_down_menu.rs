@@ -1,24 +1,12 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rootvg::math::Point;
-use rootvg::quad::{SolidQuadBuilder, SolidQuadPrimitive};
-use rootvg::text::{CustomGlyphID, FontSystem, TextPrimitive, TextProperties};
-use rootvg::PrimitiveGroup;
-
-use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
-use crate::layout::Padding;
-use crate::math::{Rect, Size, Vector, ZIndex};
-use crate::prelude::ElementStyle;
-use crate::style::{ClassID, QuadStyle};
+use crate::prelude::*;
 use crate::theme::DEFAULT_ICON_SIZE;
-use crate::vg::color::{self, RGBA8};
-use crate::view::element::{
-    Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
+use crate::vg::{
+    quad::{SolidQuadBuilder, SolidQuadPrimitive},
+    text::TextPrimitive,
 };
-use crate::view::ScissorRectID;
-use crate::window::WindowContext;
-use crate::CursorIcon;
 
 use super::label::{LabelInner, LabelPaddingInfo, LabelStyle};
 
@@ -34,8 +22,8 @@ use super::label::{LabelInner, LabelPaddingInfo, LabelStyle};
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MenuEntry {
     Option {
-        left_icon: Option<CustomGlyphID>,
-        icon_scale: f32,
+        left_icon: Option<IconID>,
+        icon_scale: IconScale,
         left_text: String,
         right_text: Option<String>,
         unique_id: usize,
@@ -48,7 +36,7 @@ impl MenuEntry {
     pub fn option(text: impl Into<String>, unique_id: usize) -> Self {
         Self::Option {
             left_icon: None,
-            icon_scale: 1.0,
+            icon_scale: IconScale::default(),
             left_text: text.into(),
             right_text: None,
             unique_id,
@@ -62,7 +50,7 @@ impl MenuEntry {
     ) -> Self {
         Self::Option {
             left_icon: None,
-            icon_scale: 1.0,
+            icon_scale: IconScale::default(),
             left_text: left_text.into(),
             right_text: right_text.map(|t| t.into()),
             unique_id,
@@ -71,13 +59,13 @@ impl MenuEntry {
 
     pub fn option_with_icon(
         text: impl Into<String>,
-        icon_id: Option<impl Into<CustomGlyphID>>,
-        icon_scale: f32,
+        icon_id: Option<impl Into<IconID>>,
+        icon_scale: impl Into<IconScale>,
         unique_id: usize,
     ) -> Self {
         Self::Option {
             left_icon: icon_id.map(|i| i.into()),
-            icon_scale,
+            icon_scale: icon_scale.into(),
             left_text: text.into(),
             right_text: None,
             unique_id,
@@ -345,27 +333,16 @@ impl ElementStyle for DropDownMenuStyle {
     }
 }
 
+#[element_builder]
+#[element_builder_class]
+#[derive(Default)]
 pub struct DropDownMenuBuilder<A: Clone + 'static> {
     pub action: Option<Box<dyn FnMut(usize) -> A>>,
     pub entries: Vec<MenuEntry>,
-    pub class: Option<ClassID>,
-    pub z_index: Option<ZIndex>,
     pub position: Point,
-    pub scissor_rect_id: Option<ScissorRectID>,
 }
 
 impl<A: Clone + 'static> DropDownMenuBuilder<A> {
-    pub fn new() -> Self {
-        Self {
-            action: None,
-            entries: Vec::new(),
-            class: None,
-            z_index: None,
-            position: Point::default(),
-            scissor_rect_id: None,
-        }
-    }
-
     pub fn build(self, cx: &mut WindowContext<'_, A>) -> DropDownMenu {
         DropDownMenuElement::create(self, cx)
     }
@@ -377,33 +354,6 @@ impl<A: Clone + 'static> DropDownMenuBuilder<A> {
 
     pub fn entries(mut self, entries: Vec<MenuEntry>) -> Self {
         self.entries = entries.into();
-        self
-    }
-
-    /// The style class ID
-    ///
-    /// If this method is not used, then the current class from the window context will
-    /// be used.
-    pub const fn class(mut self, class: ClassID) -> Self {
-        self.class = Some(class);
-        self
-    }
-
-    /// The z index of the element
-    ///
-    /// If this method is not used, then the current z index from the window context will
-    /// be used.
-    pub const fn z_index(mut self, z_index: ZIndex) -> Self {
-        self.z_index = Some(z_index);
-        self
-    }
-
-    /// The ID of the scissoring rectangle this element belongs to.
-    ///
-    /// If this method is not used, then the current scissoring rectangle ID from the
-    /// window context will be used.
-    pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
-        self.scissor_rect_id = Some(scissor_rect_id);
         self
     }
 }
@@ -426,10 +376,10 @@ impl<A: Clone + 'static> DropDownMenuElement<A> {
             class,
             z_index,
             position,
-            scissor_rect_id,
+            scissor_rect,
         } = builder;
 
-        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
+        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
 
         let shared_state = Rc::new(RefCell::new(SharedState {
             new_entries: None,
@@ -456,7 +406,7 @@ impl<A: Clone + 'static> DropDownMenuElement<A> {
             z_index,
             rect: Rect::new(position, Size::zero()),
             manually_hidden: false,
-            scissor_rect_id,
+            scissor_rect,
             class,
         };
 
@@ -755,30 +705,15 @@ struct SharedState {
 }
 
 /// A handle to a [`DropDownMenuElement`].
+#[element_handle]
+#[element_handle_class]
 pub struct DropDownMenu {
-    pub el: ElementHandle,
     shared_state: Rc<RefCell<SharedState>>,
 }
 
 impl DropDownMenu {
-    pub fn builder<A: Clone + 'static>() -> DropDownMenuBuilder<A> {
-        DropDownMenuBuilder::new()
-    }
-
-    /// Set the class of the element.
-    ///
-    /// Returns `true` if the class has changed.
-    ///
-    /// This will *NOT* trigger an element update unless the value has changed,
-    /// and the class ID is cached in the handle itself, so this is very
-    /// cheap to call frequently.
-    pub fn set_class(&mut self, class: ClassID) -> bool {
-        if self.el.class() != class {
-            self.el._notify_class_change(class);
-            true
-        } else {
-            false
-        }
+    pub fn builder<A: Clone + 'static + Default>() -> DropDownMenuBuilder<A> {
+        DropDownMenuBuilder::default()
     }
 
     /// Set the position of the element.
@@ -797,7 +732,7 @@ impl DropDownMenu {
     /// this method sparingly.
     pub fn set_entries(&mut self, entries: Vec<MenuEntry>) {
         RefCell::borrow_mut(&self.shared_state).new_entries = Some(entries);
-        self.el._notify_custom_state_change();
+        self.el.notify_custom_state_change();
     }
 
     pub fn open(&mut self, position: Option<Point>) {
@@ -806,7 +741,7 @@ impl DropDownMenu {
         }
 
         RefCell::borrow_mut(&self.shared_state).open_requested = true;
-        self.el._notify_custom_state_change();
+        self.el.notify_custom_state_change();
     }
 }
 
@@ -843,7 +778,7 @@ fn build_entries(
                         None,
                         Vector::default(),
                         Vector::default(),
-                        1.0,
+                        IconScale::default(),
                         Default::default(),
                         &right_style,
                         font_system,

@@ -1,24 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rootvg::math::Point;
-use rootvg::quad::{QuadFlags, Radius};
-use rootvg::{color, PrimitiveGroup};
-
-use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
-use crate::layout::{self, Align2};
-use crate::math::{Rect, Size, Vector, ZIndex};
-use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::{
-    Background, BorderStyle, ClassID, DisabledBackground, DisabledColor, QuadStyle,
-};
-use crate::vg::color::RGBA8;
-use crate::view::element::{
-    Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
-};
-use crate::view::ScissorRectID;
-use crate::window::WindowContext;
-use crate::CursorIcon;
+use crate::prelude::*;
 
 use super::label::Label;
 
@@ -103,35 +86,19 @@ impl ElementStyle for RadioButtonStyle {
     }
 }
 
+#[element_builder]
+#[element_builder_class]
+#[element_builder_rect]
+#[element_builder_hidden]
+#[element_builder_disabled]
+#[element_builder_tooltip]
+#[derive(Default)]
 pub struct RadioButtonBuilder<A: Clone + 'static> {
     pub action: Option<A>,
-    pub tooltip_message: Option<String>,
-    pub tooltip_align: Align2,
     pub toggled: bool,
-    pub class: Option<ClassID>,
-    pub z_index: Option<ZIndex>,
-    pub rect: Rect,
-    pub manually_hidden: bool,
-    pub disabled: bool,
-    pub scissor_rect_id: Option<ScissorRectID>,
 }
 
 impl<A: Clone + 'static> RadioButtonBuilder<A> {
-    pub fn new() -> Self {
-        Self {
-            action: None,
-            tooltip_message: None,
-            tooltip_align: Align2::TOP_CENTER,
-            toggled: false,
-            class: None,
-            z_index: None,
-            rect: Rect::default(),
-            manually_hidden: false,
-            disabled: false,
-            scissor_rect_id: None,
-        }
-    }
-
     pub fn build(self, cx: &mut WindowContext<'_, A>) -> RadioButton {
         RadioButtonElement::create(self, cx)
     }
@@ -141,66 +108,8 @@ impl<A: Clone + 'static> RadioButtonBuilder<A> {
         self
     }
 
-    pub fn tooltip_message(mut self, message: impl Into<String>, align: Align2) -> Self {
-        self.tooltip_message = Some(message.into());
-        self.tooltip_align = align;
-        self
-    }
-
     pub const fn toggled(mut self, toggled: bool) -> Self {
         self.toggled = toggled;
-        self
-    }
-
-    /// The style class ID
-    ///
-    /// If this method is not used, then the current class from the window context will
-    /// be used.
-    pub const fn class(mut self, class: ClassID) -> Self {
-        self.class = Some(class);
-        self
-    }
-
-    /// The z index of the element
-    ///
-    /// If this method is not used, then the current z index from the window context will
-    /// be used.
-    pub const fn z_index(mut self, z_index: ZIndex) -> Self {
-        self.z_index = Some(z_index);
-        self
-    }
-
-    /// The bounding rectangle of the element
-    ///
-    /// If this method is not used, then the element will have a size and position of
-    /// zero and will not be visible until its bounding rectangle is set.
-    pub const fn rect(mut self, rect: Rect) -> Self {
-        self.rect = rect;
-        self
-    }
-
-    /// Whether or not this element is manually hidden
-    ///
-    /// By default this is set to `false`.
-    pub const fn hidden(mut self, hidden: bool) -> Self {
-        self.manually_hidden = hidden;
-        self
-    }
-
-    /// Whether or not this element is in the disabled state
-    ///
-    /// By default this is set to `false`.
-    pub const fn disabled(mut self, disabled: bool) -> Self {
-        self.disabled = disabled;
-        self
-    }
-
-    /// The ID of the scissoring rectangle this element belongs to.
-    ///
-    /// If this method is not used, then the current scissoring rectangle ID from the
-    /// window context will be used.
-    pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
-        self.scissor_rect_id = Some(scissor_rect_id);
         self
     }
 }
@@ -208,8 +117,6 @@ impl<A: Clone + 'static> RadioButtonBuilder<A> {
 pub struct RadioButtonElement<A: Clone + 'static> {
     shared_state: Rc<RefCell<SharedState>>,
     action: Option<A>,
-    tooltip_message: Option<String>,
-    tooltip_align: Align2,
     hovered: bool,
     cursor_icon: Option<CursorIcon>,
 }
@@ -218,36 +125,37 @@ impl<A: Clone + 'static> RadioButtonElement<A> {
     pub fn create(builder: RadioButtonBuilder<A>, cx: &mut WindowContext<'_, A>) -> RadioButton {
         let RadioButtonBuilder {
             action,
-            tooltip_message,
-            tooltip_align,
+            tooltip_data,
             toggled,
             class,
             z_index,
             rect,
             manually_hidden,
             disabled,
-            scissor_rect_id,
+            scissor_rect,
         } = builder;
 
-        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
+        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
         let style = cx.res.style_system.get::<RadioButtonStyle>(class);
         let cursor_icon = style.cursor_icon;
 
-        let shared_state = Rc::new(RefCell::new(SharedState { toggled, disabled }));
+        let shared_state = Rc::new(RefCell::new(SharedState {
+            toggled,
+            disabled,
+            tooltip_inner: TooltipInner::new(tooltip_data),
+        }));
 
         let element_builder = ElementBuilder {
             element: Box::new(Self {
                 shared_state: Rc::clone(&shared_state),
                 action,
-                tooltip_message,
-                tooltip_align,
                 hovered: false,
                 cursor_icon,
             }),
             z_index,
             rect,
             manually_hidden,
-            scissor_rect_id,
+            scissor_rect,
             class,
         };
 
@@ -269,6 +177,12 @@ impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
         event: ElementEvent,
         cx: &mut ElementContext<'_, A>,
     ) -> EventCaptureStatus {
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+
+        shared_state
+            .tooltip_inner
+            .handle_event(&event, shared_state.disabled, cx);
+
         match event {
             ElementEvent::CustomStateChanged => {
                 cx.request_repaint();
@@ -277,17 +191,13 @@ impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
                 let style = cx.res.style_system.get::<RadioButtonStyle>(cx.class());
                 self.cursor_icon = style.cursor_icon;
             }
-            ElementEvent::Pointer(PointerEvent::Moved { just_entered, .. }) => {
-                if RefCell::borrow(&self.shared_state).disabled {
+            ElementEvent::Pointer(PointerEvent::Moved { .. }) => {
+                if shared_state.disabled {
                     return EventCaptureStatus::NotCaptured;
                 }
 
                 if let Some(cursor_icon) = self.cursor_icon {
                     cx.cursor_icon = cursor_icon;
-                }
-
-                if just_entered && self.tooltip_message.is_some() {
-                    cx.start_hover_timeout();
                 }
 
                 if !self.hovered {
@@ -298,7 +208,7 @@ impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
                 return EventCaptureStatus::Captured;
             }
             ElementEvent::Pointer(PointerEvent::PointerLeft) => {
-                if RefCell::borrow(&self.shared_state).disabled {
+                if shared_state.disabled {
                     return EventCaptureStatus::NotCaptured;
                 }
 
@@ -310,13 +220,11 @@ impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
                 }
             }
             ElementEvent::Pointer(PointerEvent::ButtonJustPressed { button, .. }) => {
-                if RefCell::borrow(&self.shared_state).disabled {
+                if shared_state.disabled {
                     return EventCaptureStatus::NotCaptured;
                 }
 
                 if button == PointerButton::Primary {
-                    let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
                     if !shared_state.toggled {
                         shared_state.toggled = true;
 
@@ -328,11 +236,6 @@ impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
                     }
 
                     return EventCaptureStatus::Captured;
-                }
-            }
-            ElementEvent::Pointer(PointerEvent::HoverTimeout { .. }) => {
-                if let Some(message) = &self.tooltip_message {
-                    cx.show_tooltip(message.clone(), self.tooltip_align, true);
                 }
             }
             _ => {}
@@ -435,7 +338,7 @@ impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
         let bounds_rect = Rect::from_size(cx.bounds_size);
         let size = style.size;
 
-        let bg_bounds = layout::centered_rect(bounds_rect.center(), Size::new(size, size));
+        let bg_bounds = centered_rect(bounds_rect.center(), Size::new(size, size));
 
         primitives.add(bg_quad_style.create_primitive(bg_bounds));
 
@@ -474,19 +377,23 @@ impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
 }
 
 /// A handle to a [`RadioButtonElement`].
+#[element_handle]
+#[element_handle_class]
+#[element_handle_set_rect]
+#[element_handle_set_tooltip]
 pub struct RadioButton {
-    pub el: ElementHandle,
     shared_state: Rc<RefCell<SharedState>>,
 }
 
 struct SharedState {
     toggled: bool,
     disabled: bool,
+    tooltip_inner: TooltipInner,
 }
 
 impl RadioButton {
-    pub fn builder<A: Clone + 'static>() -> RadioButtonBuilder<A> {
-        RadioButtonBuilder::new()
+    pub fn builder<A: Clone + 'static + Default>() -> RadioButtonBuilder<A> {
+        RadioButtonBuilder::default()
     }
 
     pub fn desired_size(&self, res: &mut ResourceCtx) -> Size {
@@ -495,22 +402,6 @@ impl RadioButton {
             .get::<RadioButtonStyle>(self.el.class())
             .size;
         Size::new(size * 2.0, size)
-    }
-
-    /// Set the class of the element.
-    ///
-    /// Returns `true` if the class has changed.
-    ///
-    /// This will *NOT* trigger an element update unless the value has changed,
-    /// and the class ID is cached in the handle itself, so this is very
-    /// cheap to call frequently.
-    pub fn set_class(&mut self, class: ClassID) -> bool {
-        if self.el.class() != class {
-            self.el._notify_class_change(class);
-            true
-        } else {
-            false
-        }
     }
 
     /// Set the toggled state of this element.
@@ -524,7 +415,7 @@ impl RadioButton {
 
         if shared_state.toggled != toggled {
             shared_state.toggled = toggled;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -546,7 +437,7 @@ impl RadioButton {
 
         if shared_state.disabled != disabled {
             shared_state.disabled = disabled;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -585,21 +476,21 @@ pub struct RadioButtonGroup {
 }
 
 impl RadioButtonGroup {
-    pub fn new<A: Clone + 'static, F>(
+    pub fn new<A: Clone + 'static + Default, F>(
         options: impl IntoIterator<Item = impl Into<String>>,
         selected_index: usize,
         mut on_selected: F,
         label_class: Option<ClassID>,
         radio_btn_class: Option<ClassID>,
         z_index: Option<ZIndex>,
-        scissor_rect_id: Option<ScissorRectID>,
+        scissor_rect: Option<ScissorRectID>,
         cx: &mut WindowContext<A>,
     ) -> Self
     where
         F: FnMut(usize) -> A + 'static,
     {
         let z_index = z_index.unwrap_or_else(|| cx.z_index());
-        let scissor_rect_id = scissor_rect_id.unwrap_or_else(|| cx.scissor_rect_id());
+        let scissor_rect = scissor_rect.unwrap_or_else(|| cx.scissor_rect());
 
         let label_class = label_class.unwrap_or_else(|| cx.class());
         let radio_btn_class = radio_btn_class.unwrap_or_else(|| cx.class());
@@ -614,13 +505,13 @@ impl RadioButtonGroup {
                         .toggled(i == selected_index)
                         .class(radio_btn_class)
                         .z_index(z_index)
-                        .scissor_rect(scissor_rect_id)
+                        .scissor_rect(scissor_rect)
                         .build(cx),
                     Label::builder()
                         .text(option.into())
                         .class(label_class)
                         .z_index(z_index)
-                        .scissor_rect(scissor_rect_id)
+                        .scissor_rect(scissor_rect)
                         .build(cx),
                 )
             })
@@ -683,7 +574,7 @@ impl RadioButtonGroup {
             ));
 
             label.set_text_offset(text_offset);
-            label.el.set_rect(Rect::new(
+            label.set_rect(Rect::new(
                 Point::new(origin.x + btn_size.unwrap().width + column_padding, y),
                 Size::new(label_width, row_height),
             ));
@@ -724,7 +615,7 @@ impl RadioButtonGroup {
     pub fn set_hidden(&mut self, hidden: bool) {
         for (radio_btn, label) in self.rows.iter_mut() {
             radio_btn.el.set_hidden(hidden);
-            label.el.set_hidden(hidden);
+            label.set_hidden(hidden);
         }
     }
 }

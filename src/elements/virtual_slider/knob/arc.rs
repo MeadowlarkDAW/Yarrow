@@ -1,8 +1,7 @@
 use std::f32::consts::PI;
 
 use rootvg::{
-    gradient::PackedGradient,
-    math::{Angle, Point, Rect, Size},
+    math::{Angle, Point, Rect},
     mesh::MeshPrimitive,
     tessellation::{
         fill::FillStyle,
@@ -11,6 +10,9 @@ use rootvg::{
         Tessellator,
     },
 };
+
+#[cfg(feature = "gradient")]
+use rootvg::gradient::PackedGradient;
 
 use crate::{
     elements::virtual_slider::VirtualSliderState,
@@ -85,6 +87,7 @@ impl KnobMarkersArcStyle {
 
         let fill_style = match &back_bg {
             Background::Solid(c) => FillStyle::Solid((*c).into()),
+            #[cfg(feature = "gradient")]
             Background::Gradient(g) => {
                 let full_radius = radius + half_width;
 
@@ -92,7 +95,7 @@ impl KnobMarkersArcStyle {
                     g,
                     Rect::new(
                         Point::new(half_back_size - full_radius, half_back_size - full_radius),
-                        Size::new(full_radius * 2.0, full_radius * 2.0),
+                        crate::math::Size::new(full_radius * 2.0, full_radius * 2.0),
                     ),
                 ))
             }
@@ -173,6 +176,7 @@ impl KnobMarkersArcStyle {
 
         let fill_style = match &bg {
             Background::Solid(c) => FillStyle::Solid((*c).into()),
+            #[cfg(feature = "gradient")]
             Background::Gradient(g) => {
                 let full_radius = radius + half_width;
 
@@ -180,7 +184,7 @@ impl KnobMarkersArcStyle {
                     g,
                     Rect::new(
                         Point::new(half_back_size - full_radius, half_back_size - full_radius),
-                        Size::new(full_radius * 2.0, full_radius * 2.0),
+                        crate::math::Size::new(full_radius * 2.0, full_radius * 2.0),
                     ),
                 ))
             }

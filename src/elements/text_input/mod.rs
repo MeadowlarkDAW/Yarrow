@@ -1,9 +1,13 @@
 mod floating;
-mod icon;
 mod inner;
 mod standard;
 
+#[cfg(feature = "svg-icons")]
+mod icon;
+
 pub use floating::*;
-pub use icon::*;
 pub use inner::*;
 pub use standard::*;
+
+#[cfg(feature = "svg-icons")]
+pub use icon::*;

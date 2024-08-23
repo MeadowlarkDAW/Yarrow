@@ -1,16 +1,47 @@
 use rootvg::color;
 use rootvg::math::Rect;
-use rootvg::quad::{GradientQuad, QuadFlags, QuadPrimitive, SolidQuad};
+use rootvg::quad::{QuadFlags, QuadPrimitive, SolidQuad};
+
+#[cfg(feature = "gradient")]
+use rootvg::quad::GradientQuad;
 
 use crate::prelude::ElementStyle;
 use crate::theme::DEFAULT_DISABLED_ALPHA_MULTIPLIER;
 use crate::vg::color::RGBA8;
-use crate::vg::gradient::Gradient;
 use crate::vg::quad::{Border, Radius};
+
+#[cfg(feature = "gradient")]
+use crate::vg::gradient::Gradient;
 
 mod style_system;
 
+pub type IconID = u16;
+
 pub use style_system::{ClassID, StyleSystem, CLASS_DEFAULT, CLASS_MENU, CLASS_PANEL};
+
+/// The scale of an icon, used to make icons look more consistent.
+///
+/// Note this does not affect any layout, this is just a visual thing.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct IconScale(pub f32);
+
+impl Default for IconScale {
+    fn default() -> Self {
+        Self(1.0)
+    }
+}
+
+impl From<f32> for IconScale {
+    fn from(v: f32) -> Self {
+        Self(v)
+    }
+}
+
+impl Into<f32> for IconScale {
+    fn into(self) -> f32 {
+        self.0
+    }
+}
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -144,6 +175,7 @@ impl QuadStyle {
                 }
                 .into(),
             ),
+            #[cfg(feature = "gradient")]
             Background::Gradient(bg_gradient) => QuadPrimitive::Gradient(
                 GradientQuad {
                     bounds,
@@ -159,6 +191,7 @@ impl QuadStyle {
     pub fn multiply_alpha(&mut self, multiplier: f32) {
         match &mut self.bg {
             Background::Solid(c) => *c = color::multiply_alpha(*c, multiplier),
+            #[cfg(feature = "gradient")]
             Background::Gradient(g) => g.multiply_alpha(multiplier),
         }
 
@@ -189,10 +222,12 @@ impl Default for QuadStyleDisabled {
     }
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Background {
     Solid(RGBA8),
+    #[cfg(feature = "gradient")]
     Gradient(Gradient),
 }
 
@@ -200,6 +235,7 @@ impl Background {
     pub const TRANSPARENT: Self = Self::Solid(rootvg::color::TRANSPARENT);
 
     pub fn is_transparent(&self) -> bool {
+        #[allow(irrefutable_let_patterns)]
         if let Self::Solid(color) = self {
             *color == rootvg::color::TRANSPARENT
         } else {
@@ -210,6 +246,7 @@ impl Background {
     pub fn multiply_alpha(&mut self, multiplier: f32) {
         match self {
             Self::Solid(c) => *c = color::multiply_alpha(*c, multiplier),
+            #[cfg(feature = "gradient")]
             Self::Gradient(g) => g.multiply_alpha(multiplier),
         }
     }
@@ -292,6 +329,7 @@ impl Default for DisabledColor {
     }
 }
 
+#[cfg(feature = "gradient")]
 /// How to style a gradient property when an element is disabled.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DisabledGradient {
@@ -301,6 +339,7 @@ pub enum DisabledGradient {
     Custom(Gradient),
 }
 
+#[cfg(feature = "gradient")]
 impl DisabledGradient {
     pub fn get(&self, property_gradient: Gradient) -> Gradient {
         match self {
@@ -314,6 +353,7 @@ impl DisabledGradient {
     }
 }
 
+#[cfg(feature = "gradient")]
 impl Default for DisabledGradient {
     fn default() -> Self {
         Self::AlphaMultiplier(DEFAULT_DISABLED_ALPHA_MULTIPLIER)

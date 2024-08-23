@@ -1,81 +1,17 @@
 use rootvg::PrimitiveGroup;
 
-pub use crate::style::QuadStyle;
+use crate::prelude::*;
 
-use crate::event::{ElementEvent, EventCaptureStatus};
-use crate::math::{Rect, ZIndex};
-use crate::style::ClassID;
-use crate::view::element::{
-    Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
-};
-use crate::view::ScissorRectID;
-use crate::window::WindowContext;
-
-pub struct QuadElementBuilder {
-    pub class: Option<ClassID>,
-    pub z_index: Option<ZIndex>,
-    pub rect: Rect,
-    pub manually_hidden: bool,
-    pub scissor_rect_id: Option<ScissorRectID>,
-}
+#[element_builder]
+#[element_builder_class]
+#[element_builder_rect]
+#[element_builder_hidden]
+#[derive(Default)]
+pub struct QuadElementBuilder {}
 
 impl QuadElementBuilder {
-    pub fn new() -> Self {
-        Self {
-            class: None,
-            z_index: None,
-            rect: Rect::default(),
-            manually_hidden: false,
-            scissor_rect_id: None,
-        }
-    }
-
     pub fn build<A: Clone + 'static>(self, cx: &mut WindowContext<'_, A>) -> QuadElement {
         QuadElementInternal::create(self, cx)
-    }
-
-    /// The style class ID
-    ///
-    /// If this method is not used, then the current class from the window context will
-    /// be used.
-    pub const fn class(mut self, class: ClassID) -> Self {
-        self.class = Some(class);
-        self
-    }
-
-    /// The z index of the element
-    ///
-    /// If this method is not used, then the current z index from the window context will
-    /// be used.
-    pub const fn z_index(mut self, z_index: ZIndex) -> Self {
-        self.z_index = Some(z_index);
-        self
-    }
-
-    /// The bounding rectangle of the element
-    ///
-    /// If this method is not used, then the element will have a size and position of
-    /// zero and will not be visible until its bounding rectangle is set.
-    pub const fn rect(mut self, rect: Rect) -> Self {
-        self.rect = rect;
-        self
-    }
-
-    /// Whether or not this element is manually hidden
-    ///
-    /// By default this is set to `false`.
-    pub const fn hidden(mut self, hidden: bool) -> Self {
-        self.manually_hidden = hidden;
-        self
-    }
-
-    /// The ID of the scissoring rectangle this element belongs to.
-    ///
-    /// If this method is not used, then the current scissoring rectangle ID from the
-    /// window context will be used.
-    pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
-        self.scissor_rect_id = Some(scissor_rect_id);
-        self
     }
 }
 
@@ -92,17 +28,17 @@ impl QuadElementInternal {
             z_index,
             rect,
             manually_hidden,
-            scissor_rect_id,
+            scissor_rect,
         } = builder;
 
-        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
+        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
 
         let element_builder = ElementBuilder {
             element: Box::new(Self),
             z_index,
             rect,
             manually_hidden,
-            scissor_rect_id,
+            scissor_rect,
             class,
         };
 
@@ -142,28 +78,14 @@ impl<A: Clone + 'static> Element<A> for QuadElementInternal {
 }
 
 /// A simple element with a quad background.
-pub struct QuadElement {
-    pub el: ElementHandle,
-}
+#[element_handle]
+#[element_handle_class]
+#[element_handle_set_rect]
+#[element_handle_layout_aligned]
+pub struct QuadElement {}
 
 impl QuadElement {
     pub fn builder() -> QuadElementBuilder {
-        QuadElementBuilder::new()
-    }
-
-    /// Set the class of the element.
-    ///
-    /// Returns `true` if the class has changed.
-    ///
-    /// This will *NOT* trigger an element update unless the value has changed,
-    /// and the class ID is cached in the handle itself, so this is very
-    /// cheap to call frequently.
-    pub fn set_class(&mut self, class: ClassID) -> bool {
-        if self.el.class() != class {
-            self.el._notify_class_change(class);
-            true
-        } else {
-            false
-        }
+        QuadElementBuilder::default()
     }
 }

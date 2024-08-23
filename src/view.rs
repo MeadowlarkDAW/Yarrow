@@ -31,6 +31,7 @@ use crate::clipboard::Clipboard;
 use crate::event::{CanvasEvent, ElementEvent, EventCaptureStatus, KeyboardEvent, PointerEvent};
 use crate::layout::Align2;
 use crate::math::{Point, PointI32, Rect, RectI32, ScaleFactor, Size, ZIndex};
+use crate::prelude::TooltipData;
 use crate::prelude::{ClassID, ResourceCtx};
 use crate::stmpsc_queue;
 use crate::CursorIcon;
@@ -233,25 +234,45 @@ impl<A: Clone + 'static> View<A> {
         self.hide_tooltip_action = Some(Box::new(on_hide_tooltip));
     }
 
+    /// Get the current rectangle of the given scissoring rectangle.
+    ///
+    /// If a scissoring rectangle with the given ID does not exist, then
+    /// one will be created.
     pub fn scissor_rect(&mut self, scissor_rect_id: ScissorRectID) -> RectI32 {
         let i = self.get_scissor_rect_index(scissor_rect_id);
         self.scissor_rects[i].rect()
     }
 
+    /// Get the current scroll offset vector of the given scissoring rectangle.
+    ///
+    /// If a scissoring rectangle with the given ID does not exist, then
+    /// one will be created.
     pub fn scissor_rect_scroll_offset(&mut self, scissor_rect_id: ScissorRectID) -> Vector {
         let i = self.get_scissor_rect_index(scissor_rect_id);
         self.scissor_rects[i].scroll_offset()
     }
 
-    // TODO: Custom error type.
+    /// Update the given scissoring rectangle with the given values.
+    ///
+    /// If `new_rect` or `new_scroll_offset` is `None`, then the
+    /// current respecting value will not be changed.
+    ///
+    /// This will *NOT* trigger an update unless the value has changed,
+    /// so this method is relatively cheap to call frequently.
+    ///
+    /// If a scissoring rectangle with the given ID does not exist, then
+    /// one will be created.
+    ///
+    /// If `scissor_rect_id == ScissorRectID::DEFAULT`, then this
+    /// will do nothing.
     pub fn update_scissor_rect(
         &mut self,
         scissor_rect_id: ScissorRectID,
         new_rect: Option<Rect>,
         new_scroll_offset: Option<Vector>,
-    ) -> Result<(), ()> {
+    ) {
         if scissor_rect_id == ScissorRectID::DEFAULT {
-            return Err(());
+            return;
         }
 
         let new_rect: Option<RectI32> = new_rect.map(|r| r.round().cast());
@@ -263,8 +284,6 @@ impl<A: Clone + 'static> View<A> {
             new_scroll_offset,
             &mut self.context.mod_queue_sender,
         );
-
-        Ok(())
     }
 
     pub fn add_element(
@@ -278,13 +297,13 @@ impl<A: Clone + 'static> View<A> {
             z_index,
             rect,
             manually_hidden,
-            scissor_rect_id,
+            scissor_rect,
             class,
         } = element_builder;
 
         let flags = element.flags();
 
-        let scissor_rect_index = self.get_scissor_rect_index(scissor_rect_id);
+        let scissor_rect_index = self.get_scissor_rect_index(scissor_rect);
 
         let mut stack_data = EntryStackData {
             rect,
@@ -1134,16 +1153,14 @@ impl<A: Clone + 'static> View<A> {
                 ElementModificationType::StartScrollWheelTimeout => {
                     self.handle_element_start_scroll_wheel_timeout(modification.element_id);
                 }
-                ElementModificationType::ShowTooltip {
-                    message,
-                    align,
-                    auto_hide,
-                } => {
-                    self.handle_element_show_tooltip(
-                        modification.element_id,
-                        message,
-                        align,
-                        auto_hide,
+                ElementModificationType::ShowTooltip { data, auto_hide } => {
+                    self.handle_element_show_tooltip(modification.element_id, data, auto_hide);
+                }
+                ElementModificationType::UpdateScissorRect(req) => {
+                    self.update_scissor_rect(
+                        req.scissor_rect_id,
+                        req.new_rect,
+                        req.new_scroll_offset,
                     );
                 }
             }
@@ -1194,8 +1211,7 @@ impl<A: Clone + 'static> View<A> {
     fn handle_element_show_tooltip(
         &mut self,
         element_id: ElementID,
-        message: String,
-        align: Align2,
+        data: TooltipData,
         auto_hide: bool,
     ) {
         let Some(element_entry) = self.element_arena.get(element_id.0) else {
@@ -1210,9 +1226,9 @@ impl<A: Clone + 'static> View<A> {
 
         if let Some(action) = self.show_tooltip_action.as_mut() {
             let info = TooltipInfo {
-                message,
+                text: data.text,
+                align: data.align,
                 element_bounds: element_entry.stack_data.rect,
-                align,
                 window_id: self.context.window_id,
             };
 
@@ -1912,6 +1928,7 @@ impl<A: Clone + 'static> View<A> {
             &view,
             self.physical_size,
             &mut res.font_system,
+            #[cfg(feature = "svg-icons")]
             &mut res.svg_icon_system,
         )
         .unwrap(); // TODO: handle this error properly.
@@ -2003,7 +2020,7 @@ impl EntryStackData {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TooltipInfo {
-    pub message: String,
+    pub text: String,
     pub element_bounds: Rect,
     pub align: Align2,
     pub window_id: WindowID,
@@ -2124,10 +2141,16 @@ fn send_event_to_element<A: Clone + 'static>(
         view_cx.mod_queue_sender.send_to_front(ElementModification {
             element_id,
             type_: ElementModificationType::ShowTooltip {
-                message: req.message,
-                align: req.align,
+                data: req.data,
                 auto_hide: req.auto_hide,
             },
+        });
+    }
+
+    if let Some(req) = el_cx.update_scissor_rect_req {
+        view_cx.mod_queue_sender.send_to_front(ElementModification {
+            element_id,
+            type_: ElementModificationType::UpdateScissorRect(req),
         });
     }
 

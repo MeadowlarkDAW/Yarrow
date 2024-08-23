@@ -14,21 +14,29 @@ use super::{
     UpdateResult, VirtualSlider, VirtualSliderRenderInfo, VirtualSliderRenderer, VirtualSliderState,
 };
 
-use self::arc::CachedKnobMarkerArcFrontMesh;
-use self::cache::{KnobRenderCache, KnobRenderCacheInner};
-
 mod angle_range;
-mod arc;
-mod cache;
 mod markers_dot;
-mod notch_line;
 mod quad;
 
-pub use angle_range::KnobAngleRange;
-pub use arc::KnobMarkersArcStyle;
-pub use markers_dot::KnobMarkersDotStyle;
+#[cfg(feature = "tessellation")]
+mod arc;
+
+#[cfg(feature = "mesh")]
+mod cache;
+#[cfg(feature = "mesh")]
+mod notch_line;
+
+#[cfg(feature = "mesh")]
+use self::cache::{KnobRenderCache, KnobRenderCacheInner};
+#[cfg(feature = "mesh")]
 pub use notch_line::{KnobNotchLinePrimitives, KnobNotchStyleLine, KnobNotchStyleLineBg};
+
+pub use angle_range::KnobAngleRange;
+pub use markers_dot::KnobMarkersDotStyle;
 pub use quad::{KnobBackStyleQuad, KnobNotchStyleQuad};
+
+#[cfg(feature = "tessellation")]
+pub use arc::KnobMarkersArcStyle;
 
 #[derive(Default, Debug, Clone)]
 pub struct KnobStyle {
@@ -87,6 +95,7 @@ impl Default for KnobBackStyle {
 #[derive(Debug, Clone, PartialEq)]
 pub enum KnobNotchStyle {
     Quad(KnobNotchStyleQuad),
+    #[cfg(feature = "mesh")]
     Line(KnobNotchStyleLine),
     None,
 }
@@ -100,18 +109,24 @@ impl Default for KnobNotchStyle {
 #[derive(Debug, Clone)]
 pub enum KnobMarkersStyle {
     Dots(KnobMarkersDotStyle),
+    #[cfg(feature = "tessellation")]
     Arc(KnobMarkersArcStyle),
     None,
 }
 
 impl Default for KnobMarkersStyle {
     fn default() -> Self {
-        Self::Arc(KnobMarkersArcStyle::default())
+        #[cfg(feature = "tessellation")]
+        return Self::Arc(KnobMarkersArcStyle::default());
+
+        #[cfg(not(feature = "tessellation"))]
+        return Self::Dots(KnobMarkersDotStyle::default());
     }
 }
 
 pub struct KnobRenderer {
-    cached_arc_marker_front_mesh: CachedKnobMarkerArcFrontMesh,
+    #[cfg(feature = "tessellation")]
+    cached_arc_marker_front_mesh: arc::CachedKnobMarkerArcFrontMesh,
     style: Rc<dyn Any>,
 }
 
@@ -120,6 +135,7 @@ impl VirtualSliderRenderer for KnobRenderer {
 
     fn new(style: Rc<dyn Any>) -> Self {
         Self {
+            #[cfg(feature = "tessellation")]
             cached_arc_marker_front_mesh: Default::default(),
             style,
         }
@@ -150,6 +166,7 @@ impl VirtualSliderRenderer for KnobRenderer {
         }
     }
 
+    #[allow(unused_mut)]
     fn render_primitives(
         &mut self,
         info: VirtualSliderRenderInfo<'_>,
@@ -178,6 +195,7 @@ impl VirtualSliderRenderer for KnobRenderer {
                     primitives,
                 );
             }
+            #[cfg(feature = "tessellation")]
             KnobMarkersStyle::Arc(_) => {
                 let render_cache = cx
                     .render_cache
@@ -233,6 +251,7 @@ impl VirtualSliderRenderer for KnobRenderer {
                     back_bounds,
                 ));
             }
+            #[cfg(feature = "mesh")]
             KnobNotchStyle::Line(_) => {
                 let normal_val = info
                     .automation_info
@@ -267,7 +286,11 @@ impl VirtualSliderRenderer for KnobRenderer {
     ///
     /// All instances of this element type must return the same value.
     fn global_render_cache_id(&self) -> Option<u32> {
-        Some(KnobRenderCache::ID)
+        #[cfg(feature = "mesh")]
+        return Some(KnobRenderCache::ID);
+
+        #[cfg(not(feature = "mesh"))]
+        return None;
     }
 
     /// An optional struct that is shared across all instances of this element type
@@ -276,7 +299,11 @@ impl VirtualSliderRenderer for KnobRenderer {
     /// This will only be called once at the creation of the first instance of this
     /// element type.
     fn global_render_cache(&self) -> Option<Box<dyn ElementRenderCache>> {
-        Some(Box::new(KnobRenderCache::new()))
+        #[cfg(feature = "mesh")]
+        return Some(Box::new(KnobRenderCache::new()));
+
+        #[cfg(not(feature = "mesh"))]
+        return None;
     }
 }
 

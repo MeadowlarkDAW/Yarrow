@@ -4,13 +4,15 @@
 
 use std::{any::Any, hash::Hash};
 
-use rootvg::{math::Rect, mesh::MeshPrimitive};
 use rustc_hash::FxHashMap;
+
+#[cfg(feature = "tessellation")]
+use rootvg::mesh::MeshPrimitive;
 
 use crate::style::ClassID;
 use crate::view::element::ElementRenderCache;
 
-use super::{KnobMarkersStyle, KnobNotchLinePrimitives, KnobNotchStyle, KnobStyle};
+use super::{KnobNotchLinePrimitives, KnobNotchStyle, KnobStyle};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct KnobNotchLineCacheKey {
@@ -18,6 +20,7 @@ struct KnobNotchLineCacheKey {
     back_size: i32,
 }
 
+#[cfg(feature = "tessellation")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct KnobMarkersArcCacheKey {
     class: ClassID,
@@ -28,6 +31,7 @@ struct KnobMarkersArcCacheKey {
 #[derive(Default)]
 pub struct KnobRenderCacheInner {
     notch_line_meshes: FxHashMap<KnobNotchLineCacheKey, (KnobNotchLinePrimitives, bool)>,
+    #[cfg(feature = "tessellation")]
     marker_arc_meshes: FxHashMap<KnobMarkersArcCacheKey, (MeshPrimitive, bool)>,
 }
 
@@ -36,6 +40,7 @@ impl KnobRenderCacheInner {
         for entry in self.notch_line_meshes.values_mut() {
             entry.1 = false;
         }
+        #[cfg(feature = "tessellation")]
         for entry in self.marker_arc_meshes.values_mut() {
             entry.1 = false;
         }
@@ -43,6 +48,7 @@ impl KnobRenderCacheInner {
 
     pub fn post_render(&mut self) {
         self.notch_line_meshes.retain(|_, (_, active)| *active);
+        #[cfg(feature = "tessellation")]
         self.marker_arc_meshes.retain(|_, (_, active)| *active);
     }
 
@@ -72,13 +78,16 @@ impl KnobRenderCacheInner {
         Some(&entry.0)
     }
 
+    #[cfg(feature = "tessellation")]
     pub fn marker_arc_back_mesh(
         &mut self,
         class: ClassID,
         style: &KnobStyle,
-        back_bounds: Rect,
+        back_bounds: crate::math::Rect,
         disabled: bool,
     ) -> Option<MeshPrimitive> {
+        use super::KnobMarkersStyle;
+
         let KnobMarkersStyle::Arc(arc_style) = &style.markers else {
             return None;
         };

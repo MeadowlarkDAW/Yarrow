@@ -144,7 +144,7 @@ impl MyStyle {
             true,
             LabelStyle {
                 back_quad: quad_style(background(LABEL_BG_COLOR), border_radius_only(radius(30.0))),
-                text_color: gray_a(255, 200),
+                text_color: gray_a(255, 240),
                 icon_color: Some(yarrow::theme::DEFAULT_ACCENT_COLOR),
                 text_padding: padding_vh(6.0, 12.0),
                 icon_padding: padding_vh(4.0, 8.0),

@@ -1,27 +1,11 @@
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
-use rootvg::color::{self, RGBA8};
-use rootvg::math::Size;
-use rootvg::text::CustomGlyphID;
-use rootvg::PrimitiveGroup;
-
-use crate::elements::icon::{IconInner, IconStyle};
-use crate::elements::text_input::TextInputUpdateResult;
-use crate::event::{ElementEvent, EventCaptureStatus, PointerEvent};
-use crate::layout::{Align2, Padding, StartEndAlign};
-use crate::math::{Point, Rect, Vector, ZIndex};
-use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::{ClassID, DisabledColor, QuadStyle};
+use crate::prelude::*;
 use crate::theme::DEFAULT_ICON_SIZE;
-use crate::view::element::{
-    Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
-};
-use crate::view::ScissorRectID;
-use crate::window::WindowContext;
-use crate::CursorIcon;
 
-use super::{TextInputAction, TextInputInner, TextInputStyle};
+use super::super::icon::IconInner;
+use super::{TextInputAction, TextInputInner, TextInputStyle, TextInputUpdateResult};
 
 /// The style of an [`IconTextInput`] element
 #[derive(Debug, Clone, PartialEq)]
@@ -115,26 +99,24 @@ impl ElementStyle for IconTextInputStyle {
     }
 }
 
+#[element_builder]
+#[element_builder_class]
+#[element_builder_rect]
+#[element_builder_hidden]
+#[element_builder_disabled]
+#[element_builder_tooltip]
 pub struct IconTextInputBuilder<A: Clone + 'static> {
     pub action: Option<Box<dyn FnMut(String) -> A>>,
     pub right_click_action: Option<Box<dyn FnMut(Point) -> A>>,
-    pub tooltip_message: Option<String>,
-    pub tooltip_align: Align2,
     pub placeholder_text: String,
     pub text: String,
     pub text_offset: Vector,
-    pub icon: CustomGlyphID,
-    pub icon_scale: f32,
+    pub icon: IconID,
+    pub icon_scale: IconScale,
     pub icon_offset: Vector,
     pub select_all_when_focused: bool,
     pub password_mode: bool,
     pub max_characters: usize,
-    pub disabled: bool,
-    pub class: Option<ClassID>,
-    pub z_index: Option<ZIndex>,
-    pub rect: Rect,
-    pub manually_hidden: bool,
-    pub scissor_rect_id: Option<ScissorRectID>,
 }
 
 impl<A: Clone + 'static> IconTextInputBuilder<A> {
@@ -142,23 +124,22 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
         Self {
             action: None,
             right_click_action: None,
-            tooltip_message: None,
-            tooltip_align: Align2::TOP_CENTER,
             placeholder_text: String::new(),
             text: String::new(),
             text_offset: Vector::default(),
-            icon: CustomGlyphID::MAX,
-            icon_scale: 1.0,
-            icon_offset: Vector::default(),
+            icon: Default::default(),
+            icon_scale: Default::default(),
+            icon_offset: Default::default(),
             select_all_when_focused: false,
             password_mode: false,
             max_characters: 256,
-            disabled: false,
-            class: None,
-            z_index: None,
-            rect: Rect::default(),
-            manually_hidden: false,
-            scissor_rect_id: None,
+            z_index: Default::default(),
+            scissor_rect: Default::default(),
+            class: Default::default(),
+            rect: Default::default(),
+            manually_hidden: Default::default(),
+            disabled: Default::default(),
+            tooltip_data: Default::default(),
         }
     }
 
@@ -173,12 +154,6 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
 
     pub fn on_right_click<F: FnMut(Point) -> A + 'static>(mut self, f: F) -> Self {
         self.right_click_action = Some(Box::new(f));
-        self
-    }
-
-    pub fn tooltip_message(mut self, message: impl Into<String>, align: Align2) -> Self {
-        self.tooltip_message = Some(message.into());
-        self.tooltip_align = align;
         self
     }
 
@@ -199,14 +174,16 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
         self
     }
 
-    pub fn icon(mut self, id: impl Into<CustomGlyphID>) -> Self {
+    pub fn icon(mut self, id: impl Into<IconID>) -> Self {
         self.icon = id.into();
         self
     }
 
-    /// Scale the icon when rendering (used to help make icons look consistent).
-    pub const fn icon_scale(mut self, scale: f32) -> Self {
-        self.icon_scale = scale;
+    /// The scale of an icon, used to make icons look more consistent.
+    ///
+    /// Note this does not affect any layout, this is just a visual thing.
+    pub fn icon_scale(mut self, scale: impl Into<IconScale>) -> Self {
+        self.icon_scale = scale.into();
         self
     }
 
@@ -237,66 +214,12 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
         self.max_characters = max;
         self
     }
-
-    /// The style class ID
-    ///
-    /// If this method is not used, then the current class from the window context will
-    /// be used.
-    pub const fn class(mut self, class: ClassID) -> Self {
-        self.class = Some(class);
-        self
-    }
-
-    /// The z index of the element
-    ///
-    /// If this method is not used, then the current z index from the window context will
-    /// be used.
-    pub const fn z_index(mut self, z_index: ZIndex) -> Self {
-        self.z_index = Some(z_index);
-        self
-    }
-
-    /// The bounding rectangle of the element
-    ///
-    /// If this method is not used, then the element will have a size and position of
-    /// zero and will not be visible until its bounding rectangle is set.
-    pub const fn rect(mut self, rect: Rect) -> Self {
-        self.rect = rect;
-        self
-    }
-
-    /// Whether or not this element is manually hidden
-    ///
-    /// By default this is set to `false`.
-    pub const fn hidden(mut self, hidden: bool) -> Self {
-        self.manually_hidden = hidden;
-        self
-    }
-
-    /// Whether or not this element is in the disabled state
-    ///
-    /// By default this is set to `false`.
-    pub const fn disabled(mut self, disabled: bool) -> Self {
-        self.disabled = disabled;
-        self
-    }
-
-    /// The ID of the scissoring rectangle this element belongs to.
-    ///
-    /// If this method is not used, then the current scissoring rectangle ID from the
-    /// window context will be used.
-    pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
-        self.scissor_rect_id = Some(scissor_rect_id);
-        self
-    }
 }
 
 pub struct IconTextInputElement<A: Clone + 'static> {
     shared_state: Rc<RefCell<SharedState>>,
     action: Option<Box<dyn FnMut(String) -> A>>,
     right_click_action: Option<Box<dyn FnMut(Point) -> A>>,
-    tooltip_message: Option<String>,
-    tooltip_align: Align2,
     icon: IconInner,
     icon_rect: Rect,
     text_input_style: TextInputStyle,
@@ -311,8 +234,7 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
         let IconTextInputBuilder {
             action,
             right_click_action,
-            tooltip_message,
-            tooltip_align,
+            tooltip_data,
             placeholder_text,
             text,
             text_offset,
@@ -327,10 +249,10 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
             z_index,
             rect,
             manually_hidden,
-            scissor_rect_id,
+            scissor_rect,
         } = builder;
 
-        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
+        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
         let style = cx.res.style_system.get::<IconTextInputStyle>(cx.class());
 
         let icon = IconInner::new(icon, icon_scale, icon_offset);
@@ -345,19 +267,17 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
                 max_characters,
                 rect.size,
                 disabled,
-                tooltip_message.is_some(),
                 select_all_when_focused,
                 &layout_res.text_input_style,
                 &mut cx.res.font_system,
             ),
             text_offset,
+            tooltip_inner: TooltipInner::new(tooltip_data),
         }));
 
         let element_builder = ElementBuilder {
             element: Box::new(Self {
                 shared_state: Rc::clone(&shared_state),
-                tooltip_message,
-                tooltip_align,
                 action,
                 right_click_action,
                 icon,
@@ -368,7 +288,7 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
             z_index,
             rect,
             manually_hidden,
-            scissor_rect_id,
+            scissor_rect,
             class,
         };
 
@@ -397,6 +317,10 @@ impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
         cx: &mut ElementContext<'_, A>,
     ) -> EventCaptureStatus {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+
+        shared_state
+            .tooltip_inner
+            .handle_event(&event, shared_state.inner.disabled(), cx);
 
         let res = match event {
             ElementEvent::Animation { .. } => shared_state.inner.on_animation(),
@@ -457,13 +381,6 @@ impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
                 &mut cx.res.font_system,
             ),
             ElementEvent::ClickedOff => shared_state.inner.on_clicked_off(),
-            ElementEvent::Pointer(PointerEvent::HoverTimeout { .. }) => {
-                if let Some(message) = &self.tooltip_message {
-                    cx.show_tooltip(message.clone(), self.tooltip_align, true);
-                }
-
-                TextInputUpdateResult::default()
-            }
             _ => TextInputUpdateResult::default(),
         };
 
@@ -493,9 +410,6 @@ impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
             cx.cursor_icon = CursorIcon::Text;
         } else {
             self.hovered = false;
-        }
-        if res.start_hover_timeout {
-            cx.start_hover_timeout();
         }
         if res.listen_to_pointer_clicked_off {
             cx.listen_to_pointer_clicked_off();
@@ -549,11 +463,15 @@ impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
 struct SharedState {
     inner: TextInputInner,
     text_offset: Vector,
+    tooltip_inner: TooltipInner,
 }
 
 /// A handle to a [`IconTextInputElement`]
+#[element_handle]
+#[element_handle_class]
+#[element_handle_set_rect]
+#[element_handle_set_tooltip]
 pub struct IconTextInput {
-    pub el: ElementHandle,
     shared_state: Rc<RefCell<SharedState>>,
 }
 
@@ -577,7 +495,7 @@ impl IconTextInput {
             .inner
             .set_text(text, &mut res.font_system, select_all);
         if result.needs_repaint {
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -604,7 +522,7 @@ impl IconTextInput {
                     .clone()
             });
         if result.needs_repaint {
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
         }
     }
 
@@ -612,22 +530,6 @@ impl IconTextInput {
         Ref::map(RefCell::borrow(&self.shared_state), |s| {
             s.inner.placeholder_text()
         })
-    }
-
-    /// Set the class of the element.
-    ///
-    /// Returns `true` if the class has changed.
-    ///
-    /// This will *NOT* trigger an element update unless the value has changed,
-    /// and the class ID is cached in the handle itself, so this is very
-    /// cheap to call frequently.
-    pub fn set_class(&mut self, class: ClassID) -> bool {
-        if self.el.class() != class {
-            self.el._notify_class_change(class);
-            true
-        } else {
-            false
-        }
     }
 
     /// Set the disabled state of this element.
@@ -641,7 +543,7 @@ impl IconTextInput {
 
         if shared_state.inner.disabled != disabled {
             shared_state.inner.disabled = true;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -660,7 +562,7 @@ impl IconTextInput {
 
         if shared_state.text_offset != offset {
             shared_state.text_offset = offset;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -679,7 +581,7 @@ impl IconTextInput {
 
         if !shared_state.inner.disabled {
             shared_state.inner.queue_action(action);
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
         }
     }
 
@@ -695,7 +597,7 @@ impl IconTextInput {
 
         if shared_state.inner.show_password != show {
             shared_state.inner.show_password = show;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false

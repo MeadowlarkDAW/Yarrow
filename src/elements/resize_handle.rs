@@ -1,22 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rootvg::color::{self, RGBA8};
-use rootvg::math::Point;
-use rootvg::quad::{QuadFlags, SolidQuadBuilder};
-use rootvg::PrimitiveGroup;
-
-use crate::prelude::ElementStyle;
-
-use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
-use crate::math::{Rect, Size, ZIndex};
-use crate::style::ClassID;
-use crate::view::element::{
-    Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
-};
-use crate::view::ScissorRectID;
-use crate::window::WindowContext;
-use crate::CursorIcon;
+use crate::prelude::*;
+use crate::vg::quad::SolidQuadBuilder;
 
 // TODO: Make this configurable?
 const DRAG_HANDLE_WIDTH: f32 = 5.0;
@@ -102,6 +88,10 @@ impl ResizeHandleLayout {
     }
 }
 
+#[element_builder]
+#[element_builder_class]
+#[element_builder_hidden]
+#[element_builder_disabled]
 pub struct ResizeHandleBuilder<A: Clone + 'static> {
     pub resized_action: Option<Box<dyn FnMut(f32) -> A>>,
     pub resize_finished_action: Option<Box<dyn FnMut(f32) -> A>>,
@@ -111,15 +101,10 @@ pub struct ResizeHandleBuilder<A: Clone + 'static> {
     pub default_span: f32,
     pub current_span: f32,
     pub layout: Option<ResizeHandleLayout>,
-    pub class: Option<ClassID>,
-    pub z_index: Option<ZIndex>,
-    pub manually_hidden: bool,
-    pub scissor_rect_id: Option<ScissorRectID>,
-    pub disabled: bool,
 }
 
-impl<A: Clone + 'static> ResizeHandleBuilder<A> {
-    pub fn new() -> Self {
+impl<A: Clone + 'static> Default for ResizeHandleBuilder<A> {
+    fn default() -> Self {
         Self {
             resized_action: None,
             resize_finished_action: None,
@@ -128,15 +113,17 @@ impl<A: Clone + 'static> ResizeHandleBuilder<A> {
             max_span: 500.0,
             default_span: 200.0,
             current_span: 200.0,
+            layout: None,
             class: None,
             z_index: None,
-            layout: None,
             manually_hidden: false,
-            scissor_rect_id: None,
+            scissor_rect: None,
             disabled: false,
         }
     }
+}
 
+impl<A: Clone + 'static> ResizeHandleBuilder<A> {
     pub fn build(self, cx: &mut WindowContext<'_, A>) -> ResizeHandle {
         ResizeHandleElement::create(self, cx)
     }
@@ -180,49 +167,6 @@ impl<A: Clone + 'static> ResizeHandleBuilder<A> {
         self.layout = Some(layout);
         self
     }
-
-    /// The style class ID
-    ///
-    /// If this method is not used, then the current class from the window context will
-    /// be used.
-    pub const fn class(mut self, class: ClassID) -> Self {
-        self.class = Some(class);
-        self
-    }
-
-    /// The z index of the element
-    ///
-    /// If this method is not used, then the current z index from the window context will
-    /// be used.
-    pub const fn z_index(mut self, z_index: ZIndex) -> Self {
-        self.z_index = Some(z_index);
-        self
-    }
-
-    /// Whether or not this element is manually hidden
-    ///
-    /// By default this is set to `false`.
-    pub const fn hidden(mut self, hidden: bool) -> Self {
-        self.manually_hidden = hidden;
-        self
-    }
-
-    /// Whether or not this element is in the disabled state
-    ///
-    /// By default this is set to `false`.
-    pub const fn disabled(mut self, disabled: bool) -> Self {
-        self.disabled = disabled;
-        self
-    }
-
-    /// The ID of the scissoring rectangle this element belongs to.
-    ///
-    /// If this method is not used, then the current scissoring rectangle ID from the
-    /// window context will be used.
-    pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
-        self.scissor_rect_id = Some(scissor_rect_id);
-        self
-    }
 }
 
 struct DragState {
@@ -260,11 +204,11 @@ impl<A: Clone + 'static> ResizeHandleElement<A> {
             class,
             z_index,
             manually_hidden,
-            scissor_rect_id,
+            scissor_rect,
             disabled,
         } = builder;
 
-        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
+        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
 
         let max_span = if max_span < min_span {
             min_span
@@ -301,7 +245,7 @@ impl<A: Clone + 'static> ResizeHandleElement<A> {
             z_index,
             rect,
             manually_hidden,
-            scissor_rect_id,
+            scissor_rect,
             class,
         };
 
@@ -551,8 +495,9 @@ impl<A: Clone + 'static> Element<A> for ResizeHandleElement<A> {
 }
 
 /// A simple element with a quad background.
+#[element_handle]
+#[element_handle_class]
 pub struct ResizeHandle {
-    pub el: ElementHandle,
     shared_state: Rc<RefCell<SharedState>>,
     // Keep a copy here so the pointer doesn't need to be dereferenced when
     // diffing.
@@ -563,24 +508,8 @@ pub struct ResizeHandle {
 }
 
 impl ResizeHandle {
-    pub fn builder<A: Clone + 'static>() -> ResizeHandleBuilder<A> {
-        ResizeHandleBuilder::new()
-    }
-
-    /// Set the class of the element.
-    ///
-    /// Returns `true` if the class has changed.
-    ///
-    /// This will *NOT* trigger an element update unless the value has changed,
-    /// and the class ID is cached in the handle itself, so this is very
-    /// cheap to call frequently.
-    pub fn set_class(&mut self, class: ClassID) -> bool {
-        if self.el.class() != class {
-            self.el._notify_class_change(class);
-            true
-        } else {
-            false
-        }
+    pub fn builder<A: Clone + 'static + Default>() -> ResizeHandleBuilder<A> {
+        ResizeHandleBuilder::default()
     }
 
     /// Set the layout.
@@ -595,7 +524,7 @@ impl ResizeHandle {
 
             RefCell::borrow_mut(&self.shared_state).layout = layout;
 
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -619,7 +548,7 @@ impl ResizeHandle {
         if shared_state.current_span != span {
             shared_state.current_span = span;
             shared_state.resized_by_handle = true;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -657,7 +586,7 @@ impl ResizeHandle {
 
         if shared_state.disabled != disabled {
             shared_state.disabled = disabled;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false

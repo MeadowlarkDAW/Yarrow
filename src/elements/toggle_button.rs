@@ -1,29 +1,11 @@
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
-use rootvg::math::Point;
-use rootvg::quad::{QuadFlags, Radius};
-use rootvg::text::{CustomGlyphID, FontSystem, TextProperties};
-use rootvg::PrimitiveGroup;
-
-use crate::event::{ElementEvent, EventCaptureStatus, PointerButton, PointerEvent};
-use crate::layout::{Align, Align2, Padding};
-use crate::math::{Rect, Size, Vector, ZIndex};
-use crate::prelude::{ElementStyle, ResourceCtx};
-use crate::style::{
-    Background, BorderStyle, ClassID, DisabledBackground, DisabledColor, QuadStyle,
-};
+use crate::prelude::*;
 use crate::theme::DEFAULT_ICON_SIZE;
-use crate::vg::color::{self, RGBA8};
-use crate::view::element::{
-    Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, RenderContext,
-};
-use crate::view::ScissorRectID;
-use crate::window::WindowContext;
-use crate::CursorIcon;
 
 use super::button::ButtonState;
-use super::label::{LabelInner, LabelPaddingInfo, LabelPrimitives, LabelStyle, TextIconLayout};
+use super::label::{LabelInner, LabelPaddingInfo, LabelPrimitives};
 
 /// The style of a [`ToggleButton`] element
 #[derive(Debug, Clone, PartialEq)]
@@ -526,10 +508,10 @@ pub struct ToggleButtonInner {
 impl ToggleButtonInner {
     pub fn new(
         text: Option<impl Into<String>>,
-        icon_id: Option<CustomGlyphID>,
+        icon_id: Option<IconID>,
         text_offset: Vector,
         icon_offset: Vector,
-        icon_scale: f32,
+        icon_scale: IconScale,
         toggled: bool,
         disabled: bool,
         text_icon_layout: TextIconLayout,
@@ -598,11 +580,11 @@ impl ToggleButtonInner {
         self.label_inner.text()
     }
 
-    pub fn set_icon(&mut self, icon: Option<CustomGlyphID>) -> bool {
+    pub fn set_icon(&mut self, icon: Option<IconID>) -> bool {
         self.label_inner.set_icon(icon)
     }
 
-    pub fn icon(&self) -> Option<CustomGlyphID> {
+    pub fn icon(&self) -> Option<IconID> {
         self.label_inner.icon()
     }
 
@@ -654,7 +636,7 @@ impl ToggleButtonInner {
     }
 
     /// Returns `true` if the icon scale has changed.
-    pub fn set_icon_scale(&mut self, scale: f32) -> bool {
+    pub fn set_icon_scale(&mut self, scale: IconScale) -> bool {
         if self.label_inner.icon_scale != scale {
             self.label_inner.icon_scale = scale;
             true
@@ -663,64 +645,40 @@ impl ToggleButtonInner {
         }
     }
 
-    pub fn icon_scale(&self) -> f32 {
+    pub fn icon_scale(&self) -> IconScale {
         self.label_inner.icon_scale
+    }
+
+    pub fn disabled(&self) -> bool {
+        self.state == ButtonState::Disabled
     }
 }
 
+#[element_builder]
+#[element_builder_class]
+#[element_builder_rect]
+#[element_builder_hidden]
+#[element_builder_disabled]
+#[element_builder_tooltip]
+#[derive(Default)]
 pub struct ToggleButtonBuilder<A: Clone + 'static> {
     pub action: Option<Box<dyn FnMut(bool) -> A>>,
-    pub tooltip_message: Option<String>,
-    pub tooltip_align: Align2,
     pub toggled: bool,
     pub text: Option<String>,
-    pub icon: Option<CustomGlyphID>,
-    pub icon_scale: f32,
+    pub icon: Option<IconID>,
+    pub icon_scale: IconScale,
     pub text_offset: Vector,
     pub icon_offset: Vector,
     pub text_icon_layout: TextIconLayout,
-    pub class: Option<ClassID>,
-    pub z_index: Option<ZIndex>,
-    pub rect: Rect,
-    pub manually_hidden: bool,
-    pub disabled: bool,
-    pub scissor_rect_id: Option<ScissorRectID>,
 }
 
 impl<A: Clone + 'static> ToggleButtonBuilder<A> {
-    pub fn new() -> Self {
-        Self {
-            action: None,
-            tooltip_message: None,
-            tooltip_align: Align2::TOP_CENTER,
-            toggled: false,
-            text: None,
-            icon: None,
-            icon_scale: 1.0,
-            text_offset: Vector::default(),
-            icon_offset: Vector::default(),
-            text_icon_layout: TextIconLayout::default(),
-            class: None,
-            z_index: None,
-            rect: Rect::default(),
-            manually_hidden: false,
-            disabled: false,
-            scissor_rect_id: None,
-        }
-    }
-
     pub fn build(self, cx: &mut WindowContext<'_, A>) -> ToggleButton {
         ToggleButtonElement::create(self, cx)
     }
 
     pub fn on_toggled<F: FnMut(bool) -> A + 'static>(mut self, f: F) -> Self {
         self.action = Some(Box::new(f));
-        self
-    }
-
-    pub fn tooltip_message(mut self, message: impl Into<String>, align: Align2) -> Self {
-        self.tooltip_message = Some(message.into());
-        self.tooltip_align = align;
         self
     }
 
@@ -742,7 +700,7 @@ impl<A: Clone + 'static> ToggleButtonBuilder<A> {
     ///
     /// If this method isn't used, then the label will have no icon (unless
     /// [`LabelBulder::icon_optional`] is used).
-    pub fn icon(mut self, icon: impl Into<CustomGlyphID>) -> Self {
+    pub fn icon(mut self, icon: impl Into<IconID>) -> Self {
         self.icon = Some(icon.into());
         self
     }
@@ -758,16 +716,16 @@ impl<A: Clone + 'static> ToggleButtonBuilder<A> {
     /// The optional icon of the label
     ///
     /// If this is set to `None`, then the label will have no icon.
-    pub fn icon_optional(mut self, icon: Option<impl Into<CustomGlyphID>>) -> Self {
+    pub fn icon_optional(mut self, icon: Option<impl Into<IconID>>) -> Self {
         self.icon = icon.map(|i| i.into());
         self
     }
 
-    /// The scaling factor for the icon
+    /// The scale of an icon, used to make icons look more consistent.
     ///
-    /// By default this is set to `1.0`.
-    pub const fn icon_scale(mut self, scale: f32) -> Self {
-        self.icon_scale = scale;
+    /// Note this does not affect any layout, this is just a visual thing.
+    pub fn icon_scale(mut self, scale: impl Into<IconScale>) -> Self {
+        self.icon_scale = scale.into();
         self
     }
 
@@ -796,66 +754,12 @@ impl<A: Clone + 'static> ToggleButtonBuilder<A> {
         self.text_icon_layout = layout;
         self
     }
-
-    /// The style class ID
-    ///
-    /// If this method is not used, then the current class from the window context will
-    /// be used.
-    pub const fn class(mut self, class: ClassID) -> Self {
-        self.class = Some(class);
-        self
-    }
-
-    /// The z index of the element
-    ///
-    /// If this method is not used, then the current z index from the window context will
-    /// be used.
-    pub const fn z_index(mut self, z_index: ZIndex) -> Self {
-        self.z_index = Some(z_index);
-        self
-    }
-
-    /// The bounding rectangle of the element
-    ///
-    /// If this method is not used, then the element will have a size and position of
-    /// zero and will not be visible until its bounding rectangle is set.
-    pub const fn rect(mut self, rect: Rect) -> Self {
-        self.rect = rect;
-        self
-    }
-
-    /// Whether or not this element is manually hidden
-    ///
-    /// By default this is set to `false`.
-    pub const fn hidden(mut self, hidden: bool) -> Self {
-        self.manually_hidden = hidden;
-        self
-    }
-
-    /// Whether or not this element is in the disabled state
-    ///
-    /// By default this is set to `false`.
-    pub const fn disabled(mut self, disabled: bool) -> Self {
-        self.disabled = disabled;
-        self
-    }
-
-    /// The ID of the scissoring rectangle this element belongs to.
-    ///
-    /// If this method is not used, then the current scissoring rectangle ID from the
-    /// window context will be used.
-    pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
-        self.scissor_rect_id = Some(scissor_rect_id);
-        self
-    }
 }
 
 /// A button element with a label.
 pub struct ToggleButtonElement<A: Clone + 'static> {
     shared_state: Rc<RefCell<SharedState>>,
     action: Option<Box<dyn FnMut(bool) -> A>>,
-    tooltip_message: Option<String>,
-    tooltip_align: Align2,
     cursor_icon: Option<CursorIcon>,
 }
 
@@ -863,8 +767,7 @@ impl<A: Clone + 'static> ToggleButtonElement<A> {
     pub fn create(builder: ToggleButtonBuilder<A>, cx: &mut WindowContext<'_, A>) -> ToggleButton {
         let ToggleButtonBuilder {
             action,
-            tooltip_message,
-            tooltip_align,
+            tooltip_data,
             toggled,
             text,
             icon,
@@ -877,10 +780,10 @@ impl<A: Clone + 'static> ToggleButtonElement<A> {
             rect,
             manually_hidden,
             disabled,
-            scissor_rect_id,
+            scissor_rect,
         } = builder;
 
-        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
+        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
         let style = cx.res.style_system.get::<ToggleButtonStyle>(class);
         let cursor_icon = style.cursor_icon;
 
@@ -897,20 +800,19 @@ impl<A: Clone + 'static> ToggleButtonElement<A> {
                 &style,
                 &mut cx.res.font_system,
             ),
+            tooltip_inner: TooltipInner::new(tooltip_data),
         }));
 
         let element_builder = ElementBuilder {
             element: Box::new(Self {
                 shared_state: Rc::clone(&shared_state),
                 action,
-                tooltip_message,
-                tooltip_align,
                 cursor_icon,
             }),
             z_index,
             rect,
             manually_hidden,
-            scissor_rect_id,
+            scissor_rect,
             class,
         };
 
@@ -932,6 +834,12 @@ impl<A: Clone + 'static> Element<A> for ToggleButtonElement<A> {
         event: ElementEvent,
         cx: &mut ElementContext<'_, A>,
     ) -> EventCaptureStatus {
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+
+        shared_state
+            .tooltip_inner
+            .handle_event(&event, shared_state.inner.disabled(), cx);
+
         match event {
             ElementEvent::CustomStateChanged => {
                 cx.request_repaint();
@@ -940,19 +848,13 @@ impl<A: Clone + 'static> Element<A> for ToggleButtonElement<A> {
                 let style = cx.res.style_system.get::<ToggleButtonStyle>(cx.class());
                 self.cursor_icon = style.cursor_icon;
             }
-            ElementEvent::Pointer(PointerEvent::Moved { just_entered, .. }) => {
-                let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
+            ElementEvent::Pointer(PointerEvent::Moved { .. }) => {
                 if shared_state.inner.state == ButtonState::Disabled {
                     return EventCaptureStatus::NotCaptured;
                 }
 
                 if let Some(cursor_icon) = self.cursor_icon {
                     cx.cursor_icon = cursor_icon;
-                }
-
-                if just_entered && self.tooltip_message.is_some() {
-                    cx.start_hover_timeout();
                 }
 
                 if shared_state.inner.state == ButtonState::Idle {
@@ -966,8 +868,6 @@ impl<A: Clone + 'static> Element<A> for ToggleButtonElement<A> {
                 return EventCaptureStatus::Captured;
             }
             ElementEvent::Pointer(PointerEvent::PointerLeft) => {
-                let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
                 if shared_state.inner.state == ButtonState::Hovered
                     || shared_state.inner.state == ButtonState::Down
                 {
@@ -981,8 +881,6 @@ impl<A: Clone + 'static> Element<A> for ToggleButtonElement<A> {
                 }
             }
             ElementEvent::Pointer(PointerEvent::ButtonJustPressed { button, .. }) => {
-                let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
                 if button == PointerButton::Primary
                     && (shared_state.inner.state == ButtonState::Idle
                         || shared_state.inner.state == ButtonState::Hovered)
@@ -1003,8 +901,6 @@ impl<A: Clone + 'static> Element<A> for ToggleButtonElement<A> {
             ElementEvent::Pointer(PointerEvent::ButtonJustReleased {
                 position, button, ..
             }) => {
-                let mut shared_state = RefCell::borrow_mut(&self.shared_state);
-
                 if button == PointerButton::Primary
                     && (shared_state.inner.state == ButtonState::Down
                         || shared_state.inner.state == ButtonState::Hovered)
@@ -1022,11 +918,6 @@ impl<A: Clone + 'static> Element<A> for ToggleButtonElement<A> {
                     }
 
                     return EventCaptureStatus::Captured;
-                }
-            }
-            ElementEvent::Pointer(PointerEvent::HoverTimeout { .. }) => {
-                if let Some(message) = &self.tooltip_message {
-                    cx.show_tooltip(message.clone(), self.tooltip_align, true);
                 }
             }
             _ => {}
@@ -1061,18 +952,22 @@ impl<A: Clone + 'static> Element<A> for ToggleButtonElement<A> {
 }
 
 /// A handle to a [`ToggleButtonElement`], a button with a label.
+#[element_handle]
+#[element_handle_class]
+#[element_handle_set_rect]
+#[element_handle_set_tooltip]
 pub struct ToggleButton {
-    pub el: ElementHandle,
     shared_state: Rc<RefCell<SharedState>>,
 }
 
 struct SharedState {
     inner: ToggleButtonInner,
+    tooltip_inner: TooltipInner,
 }
 
 impl ToggleButton {
-    pub fn builder<A: Clone + 'static>() -> ToggleButtonBuilder<A> {
-        ToggleButtonBuilder::new()
+    pub fn builder<A: Clone + 'static + Default>() -> ToggleButtonBuilder<A> {
+        ToggleButtonBuilder::default()
     }
 
     /// Set the toggled state of this element.
@@ -1086,7 +981,7 @@ impl ToggleButton {
 
         if shared_state.inner.toggled != toggled {
             shared_state.inner.toggled = toggled;
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -1128,7 +1023,7 @@ impl ToggleButton {
                 .get::<ToggleButtonStyle>(self.el.class())
                 .text_properties
         }) {
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -1141,13 +1036,13 @@ impl ToggleButton {
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
     /// so this method is relatively cheap to call frequently.
-    pub fn set_icon(&mut self, icon: Option<impl Into<CustomGlyphID>>) -> bool {
-        let icon: Option<CustomGlyphID> = icon.map(|i| i.into());
+    pub fn set_icon(&mut self, icon: Option<impl Into<IconID>>) -> bool {
+        let icon: Option<IconID> = icon.map(|i| i.into());
 
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.set_icon(icon) {
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -1158,28 +1053,8 @@ impl ToggleButton {
         Ref::filter_map(RefCell::borrow(&self.shared_state), |s| s.inner.text()).ok()
     }
 
-    pub fn icon(&self) -> Option<CustomGlyphID> {
+    pub fn icon(&self) -> Option<IconID> {
         RefCell::borrow(&self.shared_state).inner.icon()
-    }
-
-    /// Set the class of the element.
-    ///
-    /// Returns `true` if the class has changed.
-    ///
-    /// This will *NOT* trigger an element update unless the value has changed,
-    /// and the class ID is cached in the handle itself, so this is very
-    /// cheap to call frequently.
-    pub fn set_class(&mut self, class: ClassID, res: &mut ResourceCtx) -> bool {
-        if self.el.class() != class {
-            RefCell::borrow_mut(&self.shared_state)
-                .inner
-                .sync_new_style(res.style_system.get(class), &mut res.font_system);
-
-            self.el._notify_class_change(class);
-            true
-        } else {
-            false
-        }
     }
 
     /// An offset that can be used mainly to correct the position of the text.
@@ -1194,7 +1069,7 @@ impl ToggleButton {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.set_text_offset(offset) {
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -1213,26 +1088,26 @@ impl ToggleButton {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.set_icon_offset(offset) {
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
         }
     }
 
-    /// Scale the icon when rendering (used to help make icons look consistent).
+    /// The scale of the icon, used to make icons look more consistent.
     ///
-    /// This does no effect the padded size of the element.
+    /// Note this does not affect any layout, this is just a visual thing.
     ///
     /// Returns `true` if the scale has changed.
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
     /// so this method is relatively cheap to call frequently.
-    pub fn set_icon_scale(&mut self, scale: f32) -> bool {
+    pub fn set_icon_scale(&mut self, scale: impl Into<IconScale>) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
-        if shared_state.inner.set_icon_scale(scale) {
-            self.el._notify_custom_state_change();
+        if shared_state.inner.set_icon_scale(scale.into()) {
+            self.el.notify_custom_state_change();
             true
         } else {
             false
@@ -1250,11 +1125,11 @@ impl ToggleButton {
 
         if disabled && shared_state.inner.state != ButtonState::Disabled {
             shared_state.inner.set_state(ButtonState::Disabled);
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else if !disabled && shared_state.inner.state == ButtonState::Disabled {
             shared_state.inner.set_state(ButtonState::Idle);
-            self.el._notify_custom_state_change();
+            self.el.notify_custom_state_change();
             true
         } else {
             false
