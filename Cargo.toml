@@ -62,9 +62,7 @@ all-features = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace]
-members = [
-    "yarrow_derive",
-]
+members = ["yarrow_derive"]
 
 [dependencies]
 yarrow_derive = { path = "yarrow_derive" }
