@@ -2,20 +2,22 @@ use std::{cell::RefCell, rc::Rc};
 
 use rootvg::{
     color::Rgba,
-    math::{Rect, ZIndex},
+    math::{Point, Rect, Size, Vector, ZIndex},
     quad::Radius,
     Primitive,
+};
+use yarrow_derive::{
+    element_builder, element_builder_class, element_builder_disabled, element_builder_hidden,
+    element_builder_rect, element_handle, element_handle_class, element_handle_set_rect,
 };
 
 use crate::{
     event::{ElementEvent, EventCaptureStatus},
     prelude::{ElementHandle, ElementStyle},
-    style::{Background, BorderStyle, ClassID},
+    style::{Background, BorderStyle, ClassID, QuadStyle},
     view::element::{Element, ElementBuilder, ElementFlags},
     ScissorRectID, WindowContext,
 };
-
-use super::quad::QuadStyle;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProgressBarStyle {
@@ -50,77 +52,22 @@ impl ElementStyle for ProgressBarStyle {
     }
 }
 
+#[element_builder]
+#[element_builder_class]
+#[element_builder_rect]
+#[element_builder_hidden]
+#[derive(Default)]
 pub struct ProgressBarBuilder {
     pub percentage: f32,
-    pub class: Option<ClassID>,
-    pub z_index: Option<ZIndex>,
-    pub rect: Rect,
-    pub manually_hidden: bool,
-    pub scissor_rect_id: Option<ScissorRectID>,
 }
 
 impl ProgressBarBuilder {
-    pub fn new() -> Self {
-        Self {
-            percentage: 0.0,
-            class: None,
-            z_index: None,
-            rect: Rect::default(),
-            manually_hidden: false,
-            scissor_rect_id: None,
-        }
-    }
-
     pub fn build<A: Clone + 'static>(self, cx: &mut WindowContext<'_, A>) -> ProgressBar {
         ProgressBarElement::create(self, cx)
     }
 
     pub const fn percentage(mut self, percentage: f32) -> Self {
         self.percentage = percentage;
-        self
-    }
-
-    /// The style class ID
-    ///
-    /// If this method is not used, then the current class from the window context will
-    /// be used.
-    pub const fn class(mut self, class: ClassID) -> Self {
-        self.class = Some(class);
-        self
-    }
-
-    /// The z index of the element
-    ///
-    /// If this method is not used, then the current z index from the window context will
-    /// be used.
-    pub const fn z_index(mut self, z_index: ZIndex) -> Self {
-        self.z_index = Some(z_index);
-        self
-    }
-
-    /// The bounding rectangle of the element
-    ///
-    /// If this method is not used, then the element will have a size and position of
-    /// zero and will not be visible until its bounding rectangle is set.
-    pub const fn rect(mut self, rect: Rect) -> Self {
-        self.rect = rect;
-        self
-    }
-
-    /// Whether or not this element is manually hidden
-    ///
-    /// By default this is set to `false`.
-    pub const fn hidden(mut self, hidden: bool) -> Self {
-        self.manually_hidden = hidden;
-        self
-    }
-
-    /// The ID of the scissoring rectangle this element belongs to.
-    ///
-    /// If this method is not used, then the current scissoring rectangle ID from the
-    /// window context will be used.
-    pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
-        self.scissor_rect_id = Some(scissor_rect_id);
         self
     }
 }
@@ -180,9 +127,9 @@ impl ProgressBarElement {
             z_index,
             rect,
             manually_hidden,
-            scissor_rect_id,
+            scissor_rect,
         } = builder;
-        let (z_index, scissor_rect_id, class) = cx.builder_values(z_index, scissor_rect_id, class);
+        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
 
         let shared_state = Rc::new(RefCell::new(SharedState { percentage }));
 
@@ -193,7 +140,7 @@ impl ProgressBarElement {
             z_index,
             rect,
             manually_hidden,
-            scissor_rect_id,
+            scissor_rect,
             class,
         };
 
@@ -203,8 +150,10 @@ impl ProgressBarElement {
     }
 }
 
+#[element_handle]
+#[element_handle_class]
+#[element_handle_set_rect]
 pub struct ProgressBar {
-    pub el: ElementHandle,
     shared_state: Rc<RefCell<SharedState>>,
 }
 
@@ -214,12 +163,12 @@ struct SharedState {
 
 impl ProgressBar {
     pub fn builder() -> ProgressBarBuilder {
-        ProgressBarBuilder::new()
+        ProgressBarBuilder::default()
     }
 
     pub fn set_percent(&mut self, percent: f32) {
         let mut shared_state = self.shared_state.borrow_mut();
         shared_state.percentage = percent;
-        self.el._notify_custom_state_change();
+        self.el.notify_custom_state_change();
     }
 }

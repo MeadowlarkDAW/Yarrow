@@ -341,18 +341,17 @@ impl Elements {
             22.0,
         ));
 
-<<<<<<< HEAD
-        self.progress_bar.el.set_rect(Rect::new(
+        self.progress_bar.set_rect(Rect::new(
             Point::new(
                 start_pos.x,
-                self.slider_4.el.rect().max_y() + style.element_padding,
+                self.slider_4.rect().max_y() + style.element_padding,
             ),
             Size::new(200.0, 22.0),
         ));
 
         self.scroll_area.set_content_size(Size::new(
-            self.slider_6.el.rect().max_x() + style.content_padding,
-            self.progress_bar.el.rect().max_y() + style.content_padding,
+            self.slider_6.rect().max_x() + style.content_padding,
+            self.progress_bar.rect().max_y() + style.content_padding,
         ));
     }
 
@@ -376,19 +375,19 @@ impl Elements {
             text_input_param_id: _,
         } = self;
 
-        knob_0.el.set_hidden(hidden);
-        knob_0_label.el.set_hidden(hidden);
-        knob_1.el.set_hidden(hidden);
-        knob_1_label.el.set_hidden(hidden);
-        knob_2.el.set_hidden(hidden);
-        knob_2_label.el.set_hidden(hidden);
-        slider_3.el.set_hidden(hidden);
-        slider_4.el.set_hidden(hidden);
-        slider_5.el.set_hidden(hidden);
-        slider_6.el.set_hidden(hidden);
-        scroll_area.el.set_hidden(hidden);
-        separator.el.set_hidden(hidden);
-        progress_bar.el.set_hidden(hidden);
+        knob_0.set_hidden(hidden);
+        knob_0_label.set_hidden(hidden);
+        knob_1.set_hidden(hidden);
+        knob_1_label.set_hidden(hidden);
+        knob_2.set_hidden(hidden);
+        knob_2_label.set_hidden(hidden);
+        slider_3.set_hidden(hidden);
+        slider_4.set_hidden(hidden);
+        slider_5.set_hidden(hidden);
+        slider_6.set_hidden(hidden);
+        scroll_area.set_hidden(hidden);
+        separator.set_hidden(hidden);
+        progress_bar.set_hidden(hidden);
         floating_text_input.hide();
     }
 }
