@@ -1,13 +1,14 @@
 use baseview::{
-    Window as BaseviewWindow, WindowHandler as BaseviewWindowHandler, WindowOpenOptions,
-    WindowScalePolicy,
+    MouseCursor, Window as BaseviewWindow, WindowHandler as BaseviewWindowHandler,
+    WindowOpenOptions, WindowScalePolicy,
 };
-use keyboard_types::Modifiers;
+use keyboard_types::{CompositionEvent, KeyState, Modifiers};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use raw_window_handle_06::{
     AppKitDisplayHandle, AppKitWindowHandle, Win32WindowHandle, WindowsDisplayHandle,
     XcbDisplayHandle, XcbWindowHandle, XlibDisplayHandle, XlibWindowHandle,
 };
+use rootvg::math::Vector;
 use rootvg::surface::{DefaultSurface, NewSurfaceError};
 use std::error::Error;
 use std::num::{NonZeroIsize, NonZeroU32};
@@ -19,7 +20,7 @@ use super::{ScaleFactorConfig, WindowBackend, WindowConfig, WindowID, WindowStat
 use crate::action_queue::ActionSender;
 use crate::application::Application;
 use crate::clipboard::Clipboard;
-use crate::event::{EventCaptureStatus, PointerButton};
+use crate::event::{EventCaptureStatus, PointerButton, WheelDeltaType};
 use crate::math::{PhysicalPoint, PhysicalSizeI32, ScaleFactor, Size};
 use crate::prelude::{ActionReceiver, AppHandler, ResourceCtx};
 use crate::window::{PointerBtnState, PointerLockState};
@@ -63,7 +64,44 @@ impl<'a, 'b> WindowBackend for BaseviewWindowBackend<'a, 'b> {
     }
 
     fn set_cursor_icon(&mut self, window_id: WindowID, icon: CursorIcon) {
-        // TODO
+        if window_id == MAIN_WINDOW {
+            self.main_window.set_mouse_cursor(match icon {
+                CursorIcon::Default => MouseCursor::Default,
+                CursorIcon::ContextMenu => todo!("ContextMenu"),
+                CursorIcon::Help => MouseCursor::Help,
+                CursorIcon::Pointer => MouseCursor::Hand,
+                CursorIcon::Progress => todo!("Progress"),
+                CursorIcon::Wait => todo!("Wait"),
+                CursorIcon::Cell => todo!("Cell"),
+                CursorIcon::Crosshair => MouseCursor::Crosshair,
+                CursorIcon::Text => MouseCursor::Text,
+                CursorIcon::VerticalText => todo!("VerticalText"),
+                CursorIcon::Alias => MouseCursor::Alias,
+                CursorIcon::Copy => MouseCursor::Copy,
+                CursorIcon::Move => MouseCursor::Move,
+                CursorIcon::NoDrop => todo!("NoDrop"),
+                CursorIcon::NotAllowed => MouseCursor::NotAllowed,
+                CursorIcon::Grab => MouseCursor::Hand,
+                CursorIcon::Grabbing => MouseCursor::HandGrabbing,
+                CursorIcon::EResize => MouseCursor::EResize,
+                CursorIcon::NResize => MouseCursor::NResize,
+                CursorIcon::NeResize => MouseCursor::NeResize,
+                CursorIcon::NwResize => MouseCursor::NwResize,
+                CursorIcon::SResize => MouseCursor::SResize,
+                CursorIcon::SeResize => MouseCursor::SeResize,
+                CursorIcon::SwResize => MouseCursor::SwResize,
+                CursorIcon::WResize => MouseCursor::WResize,
+                CursorIcon::EwResize => MouseCursor::EwResize,
+                CursorIcon::NsResize => MouseCursor::NsResize,
+                CursorIcon::NeswResize => MouseCursor::NeswResize,
+                CursorIcon::NwseResize => MouseCursor::NwseResize,
+                CursorIcon::ColResize => MouseCursor::ColResize,
+                CursorIcon::RowResize => MouseCursor::RowResize,
+                CursorIcon::AllScroll => MouseCursor::AllScroll,
+                CursorIcon::ZoomIn => MouseCursor::ZoomIn,
+                CursorIcon::ZoomOut => MouseCursor::ZoomOut,
+            })
+        }
     }
 
     fn resize(
@@ -181,8 +219,6 @@ impl<A: Application> BaseviewWindowHandler for BaseviewAppHandler<A> {
         window: &mut BaseviewWindow,
         event: baseview::Event,
     ) -> baseview::EventStatus {
-        println!("{event:?}");
-
         let mut process_updates = true;
 
         // TODO:
@@ -192,6 +228,13 @@ impl<A: Application> BaseviewWindowHandler for BaseviewAppHandler<A> {
                     position,
                     modifiers,
                 } => {
+                    self.app_handler
+                        .context
+                        .window_map
+                        .get_mut(&MAIN_WINDOW)
+                        .unwrap()
+                        .set_modifiers(modifiers);
+
                     let pos = PhysicalPoint::new(position.x as f32, position.y as f32);
 
                     self.app_handler
@@ -205,6 +248,13 @@ impl<A: Application> BaseviewWindowHandler for BaseviewAppHandler<A> {
                     process_updates = false;
                 }
                 baseview::MouseEvent::ButtonPressed { button, modifiers } => {
+                    self.app_handler
+                        .context
+                        .window_map
+                        .get_mut(&MAIN_WINDOW)
+                        .unwrap()
+                        .set_modifiers(modifiers);
+
                     let button = match button {
                         baseview::MouseButton::Left => PointerButton::Primary,
                         baseview::MouseButton::Middle => PointerButton::Auxiliary,
@@ -222,6 +272,13 @@ impl<A: Application> BaseviewWindowHandler for BaseviewAppHandler<A> {
                         .handle_mouse_button(button, true, &mut self.app_handler.context.res);
                 }
                 baseview::MouseEvent::ButtonReleased { button, modifiers } => {
+                    self.app_handler
+                        .context
+                        .window_map
+                        .get_mut(&MAIN_WINDOW)
+                        .unwrap()
+                        .set_modifiers(modifiers);
+
                     let button = match button {
                         baseview::MouseButton::Left => PointerButton::Primary,
                         baseview::MouseButton::Middle => PointerButton::Auxiliary,
@@ -238,9 +295,38 @@ impl<A: Application> BaseviewWindowHandler for BaseviewAppHandler<A> {
                         .unwrap()
                         .handle_mouse_button(button, false, &mut self.app_handler.context.res);
                 }
-                baseview::MouseEvent::WheelScrolled { delta, modifiers } => (),
+                baseview::MouseEvent::WheelScrolled { delta, modifiers } => {
+                    let window_state = self
+                        .app_handler
+                        .context
+                        .window_map
+                        .get_mut(&MAIN_WINDOW)
+                        .unwrap();
+
+                    window_state.set_modifiers(modifiers);
+
+                    let delta_type = match delta {
+                        baseview::ScrollDelta::Lines { x, y } => {
+                            WheelDeltaType::Lines(Vector::new(x, -y))
+                        }
+                        baseview::ScrollDelta::Pixels { x, y } => {
+                            WheelDeltaType::Points(Vector::new(
+                                x * window_state.scale_factor_recip,
+                                -y * window_state.scale_factor_recip,
+                            ))
+                        }
+                    };
+
+                    window_state.handle_mouse_wheel(delta_type, &mut self.app_handler.context.res)
+                }
                 baseview::MouseEvent::CursorEntered => (),
-                baseview::MouseEvent::CursorLeft => (),
+                baseview::MouseEvent::CursorLeft => self
+                    .app_handler
+                    .context
+                    .window_map
+                    .get_mut(&MAIN_WINDOW)
+                    .unwrap()
+                    .handle_pointer_left(&mut self.app_handler.context.res),
                 baseview::MouseEvent::DragEntered {
                     position,
                     modifiers,
@@ -272,9 +358,28 @@ impl<A: Application> BaseviewWindowHandler for BaseviewAppHandler<A> {
                     .handle_keyboard_event(key_event.clone(), &mut self.app_handler.context.res)
                     == EventCaptureStatus::Captured;
 
-                if !captured {
-                    // TODO: composition?
+                if !captured && keyboard_event.state == KeyState::Down {
+                    if let Some(text) =
+                        self::convert::key_to_composition(keyboard_event.key, keyboard_event.code)
+                    {
+                        captured |= window_state.handle_text_composition_event(
+                            CompositionEvent {
+                                state: keyboard_types::CompositionState::Start,
+                                data: String::new(),
+                            },
+                            &mut self.app_handler.context.res,
+                        ) == EventCaptureStatus::Captured;
+                        captured |= window_state.handle_text_composition_event(
+                            CompositionEvent {
+                                state: keyboard_types::CompositionState::End,
+                                data: text,
+                            },
+                            &mut self.app_handler.context.res,
+                        ) == EventCaptureStatus::Captured
+                    }
+                }
 
+                if !captured {
                     self.app_handler.user_app.on_keyboard_event(
                         key_event,
                         MAIN_WINDOW,
@@ -317,9 +422,43 @@ impl<A: Application> BaseviewWindowHandler for BaseviewAppHandler<A> {
                         );
                     }
                 }
-                baseview::WindowEvent::Focused => (),
-                baseview::WindowEvent::Unfocused => (),
-                baseview::WindowEvent::WillClose => (),
+                baseview::WindowEvent::Focused => {
+                    let window_state = self
+                        .app_handler
+                        .context
+                        .window_map
+                        .get_mut(&MAIN_WINDOW)
+                        .unwrap();
+
+                    window_state.handle_window_focused(&mut self.app_handler.context.res);
+                    self.app_handler.user_app.on_window_event(
+                        crate::event::AppWindowEvent::WindowFocused,
+                        MAIN_WINDOW,
+                        &mut self.app_handler.context,
+                    );
+                }
+                baseview::WindowEvent::Unfocused => {
+                    let window_state = self
+                        .app_handler
+                        .context
+                        .window_map
+                        .get_mut(&MAIN_WINDOW)
+                        .unwrap();
+
+                    window_state.handle_window_unfocused(&mut self.app_handler.context.res);
+                    self.app_handler.user_app.on_window_event(
+                        crate::event::AppWindowEvent::WindowUnfocused,
+                        MAIN_WINDOW,
+                        &mut self.app_handler.context,
+                    );
+                }
+                baseview::WindowEvent::WillClose => {
+                    self.app_handler.user_app.on_request_to_close_window(
+                        MAIN_WINDOW,
+                        true,
+                        &mut self.app_handler.context,
+                    );
+                }
             },
         }
 
