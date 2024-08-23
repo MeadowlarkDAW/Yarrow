@@ -23,7 +23,7 @@ default = [
     "msaa",
     "svg-icons",
     "web-colors",
-    "baseview",
+    "winit",
     "x11",
     "wayland",
     "winit-wayland-csd-adwaita",
