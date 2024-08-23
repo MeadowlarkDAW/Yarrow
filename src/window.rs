@@ -219,6 +219,8 @@ impl<A: Clone + 'static> WindowState<A> {
         event: KeyboardEvent,
         res: &mut ResourceCtx,
     ) -> EventCaptureStatus {
+        self.modifiers = event.modifiers;
+
         self.view
             .handle_event(&CanvasEvent::Keyboard(event), res, &mut self.clipboard)
     }
