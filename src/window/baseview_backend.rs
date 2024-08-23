@@ -13,6 +13,7 @@ use rootvg::surface::{DefaultSurface, NewSurfaceError};
 use std::error::Error;
 use std::num::{NonZeroIsize, NonZeroU32};
 use std::ptr::NonNull;
+use std::time::Instant;
 
 mod convert;
 
@@ -29,6 +30,8 @@ pub(crate) type WindowHandle = ();
 
 struct AppHandler<A: Application> {
     user_app: A,
+    prev_tick_instant: Instant,
+    first_resize: bool,
     context: AppContext<A::Action>,
 }
 
@@ -42,6 +45,8 @@ impl<A: Application> AppHandler<A> {
 
         Ok(Self {
             user_app,
+            first_resize: true,
+            prev_tick_instant: Instant::now(),
             context: AppContext::new(config, action_sender.clone(), action_reciever),
         })
     }
@@ -50,6 +55,16 @@ impl<A: Application> AppHandler<A> {
 impl<A: Application> BaseviewWindowHandler for AppHandler<A> {
     fn on_frame(&mut self, window: &mut BaseviewWindow) {
         // TODO: unwrap
+        let now = Instant::now();
+        let dt = (now - self.prev_tick_instant).as_secs_f64();
+        self.prev_tick_instant = now;
+
+        self.user_app.on_tick(dt, &mut self.context);
+
+        for window_state in self.context.window_map.values_mut() {
+            window_state.on_animation_tick(dt, &mut self.context.res);
+        }
+
         let window_state = self.context.window_map.get_mut(&MAIN_WINDOW).unwrap();
         window_state.render(|| {}, &mut self.context.res).unwrap();
     }
@@ -58,6 +73,8 @@ impl<A: Application> BaseviewWindowHandler for AppHandler<A> {
         window: &mut BaseviewWindow,
         event: baseview::Event,
     ) -> baseview::EventStatus {
+        println!("{event:?}");
+
         // TODO:
         match event {
             baseview::Event::Mouse(mouse_event) => match mouse_event {
@@ -142,7 +159,38 @@ impl<A: Application> BaseviewWindowHandler for AppHandler<A> {
                 }
             }
             baseview::Event::Window(window_event) => match window_event {
-                baseview::WindowEvent::Resized(_) => (),
+                baseview::WindowEvent::Resized(info) => {
+                    let physical_size = info.physical_size();
+                    let new_size = PhysicalSizeI32::new(
+                        physical_size.width as i32,
+                        physical_size.height as i32,
+                    );
+
+                    let window_state = self.context.window_map.get_mut(&MAIN_WINDOW).unwrap();
+
+                    let scale_factor = info.scale();
+
+                    window_state.set_size(new_size, scale_factor.into());
+
+                    println!("hello?");
+                    println!("{}", self.first_resize);
+
+                    if self.first_resize {
+                        self.first_resize = false;
+                        println!("sending event");
+                        self.user_app.on_window_event(
+                            crate::event::AppWindowEvent::WindowOpened,
+                            MAIN_WINDOW,
+                            &mut self.context,
+                        );
+                    } else {
+                        self.user_app.on_window_event(
+                            crate::event::AppWindowEvent::WindowResized,
+                            MAIN_WINDOW,
+                            &mut self.context,
+                        );
+                    }
+                }
                 baseview::WindowEvent::Focused => (),
                 baseview::WindowEvent::Unfocused => (),
                 baseview::WindowEvent::WillClose => (),
