@@ -1,6 +1,18 @@
 use proc_macro::TokenStream;
+use proc_macro2::Span;
+use proc_macro_crate::crate_name;
 use quote::quote;
-use syn::{parse::Parser, parse_macro_input, spanned::Spanned, DeriveInput};
+use syn::{parse::Parser, parse_macro_input, spanned::Spanned, DeriveInput, Ident};
+
+fn root() -> proc_macro2::TokenStream {
+    match crate_name("yarrow").expect("yarrow not found in Cargo.toml") {
+        proc_macro_crate::FoundCrate::Itself => quote! { crate },
+        proc_macro_crate::FoundCrate::Name(name) => {
+            let ident = Ident::new(&name, Span::call_site());
+            quote! { ::#ident }
+        }
+    }
+}
 
 #[proc_macro_attribute]
 pub fn element_builder(_args: TokenStream, input: TokenStream) -> TokenStream {
@@ -8,6 +20,8 @@ pub fn element_builder(_args: TokenStream, input: TokenStream) -> TokenStream {
     let name = ast.ident.clone();
     let generics = ast.generics.clone();
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    let crate_name = root();
 
     match &mut ast.data {
         syn::Data::Struct(ref mut struct_data) => {
@@ -19,7 +33,7 @@ pub fn element_builder(_args: TokenStream, input: TokenStream) -> TokenStream {
                             ///
                             /// If this method is not used, then the current z index from the window context will
                             /// be used.
-                            pub z_index: Option<ZIndex>
+                            pub z_index: Option<#crate_name::math::ZIndex>
                         })
                         .unwrap(),
                 );
@@ -31,7 +45,7 @@ pub fn element_builder(_args: TokenStream, input: TokenStream) -> TokenStream {
                             ///
                             /// If this method is not used, then the current scissoring rectangle ID from the
                             /// window context will be used.
-                            pub scissor_rect: Option<ScissorRectID>
+                            pub scissor_rect: Option<#crate_name::ScissorRectID>
                         })
                         .unwrap(),
                 );
@@ -45,7 +59,7 @@ pub fn element_builder(_args: TokenStream, input: TokenStream) -> TokenStream {
                     ///
                     /// If this method is not used, then the current z index from the window context will
                     /// be used.
-                    pub const fn z_index(mut self, z_index: ZIndex) -> Self {
+                    pub const fn z_index(mut self, z_index: #crate_name::math::ZIndex) -> Self {
                         self.z_index = Some(z_index);
                         self
                     }
@@ -54,7 +68,7 @@ pub fn element_builder(_args: TokenStream, input: TokenStream) -> TokenStream {
                     ///
                     /// If this method is not used, then the current scissoring rectangle ID from the
                     /// window context will be used.
-                    pub const fn scissor_rect(mut self, scissor_rect: ScissorRectID) -> Self {
+                    pub const fn scissor_rect(mut self, scissor_rect: #crate_name::ScissorRectID) -> Self {
                         self.scissor_rect = Some(scissor_rect);
                         self
                     }
@@ -75,6 +89,8 @@ pub fn element_builder_class(_args: TokenStream, input: TokenStream) -> TokenStr
     let generics = ast.generics.clone();
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
+    let crate_name = root();
+
     match &mut ast.data {
         syn::Data::Struct(ref mut struct_data) => {
             if let syn::Fields::Named(ref mut fields) = struct_data.fields {
@@ -85,7 +101,7 @@ pub fn element_builder_class(_args: TokenStream, input: TokenStream) -> TokenStr
                             ///
                             /// If this method is not used, then the current class from the window context will
                             /// be used.
-                            pub class: Option<ClassID>
+                            pub class: Option<#crate_name::style::ClassID>
                         })
                         .unwrap(),
                 );
@@ -99,7 +115,7 @@ pub fn element_builder_class(_args: TokenStream, input: TokenStream) -> TokenStr
                     ///
                     /// If this method is not used, then the current class from the window context will
                     /// be used.
-                    pub const fn class(mut self, class: ClassID) -> Self {
+                    pub const fn class(mut self, class: #crate_name::style::ClassID) -> Self {
                         self.class = Some(class);
                         self
                     }
@@ -123,6 +139,8 @@ pub fn element_builder_rect(_args: TokenStream, input: TokenStream) -> TokenStre
     let generics = ast.generics.clone();
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
+    let crate_name = root();
+
     match &mut ast.data {
         syn::Data::Struct(ref mut struct_data) => {
             if let syn::Fields::Named(ref mut fields) = struct_data.fields {
@@ -133,7 +151,7 @@ pub fn element_builder_rect(_args: TokenStream, input: TokenStream) -> TokenStre
                             ///
                             /// If this method is not used, then the element will have a size and position of
                             /// zero and will not be visible until its bounding rectangle is set.
-                            pub rect: ::rootvg::math::Rect
+                            pub rect: #crate_name::math::Rect
                         })
                         .unwrap(),
                 );
@@ -147,7 +165,7 @@ pub fn element_builder_rect(_args: TokenStream, input: TokenStream) -> TokenStre
                     ///
                     /// If this method is not used, then the element will have a size and position of
                     /// zero and will not be visible until its bounding rectangle is set.
-                    pub const fn rect(mut self, rect: ::rootvg::math::Rect) -> Self {
+                    pub const fn rect(mut self, rect: #crate_name::math::Rect) -> Self {
                         self.rect = rect;
                         self
                     }
@@ -263,6 +281,8 @@ pub fn element_builder_tooltip(_args: TokenStream, input: TokenStream) -> TokenS
     let generics = ast.generics.clone();
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
+    let crate_name = root();
+
     match &mut ast.data {
         syn::Data::Struct(ref mut struct_data) => {
             if let syn::Fields::Named(ref mut fields) = struct_data.fields {
@@ -274,7 +294,7 @@ pub fn element_builder_tooltip(_args: TokenStream, input: TokenStream) -> TokenS
                             /// If this is `None` then this element will not have a tooltip.
                             ///
                             /// By default this is set to `None`.
-                            pub tooltip_data: Option<TooltipData>
+                            pub tooltip_data: Option<#crate_name::elements::tooltip::TooltipData>
                         })
                         .unwrap(),
                 );
@@ -288,8 +308,8 @@ pub fn element_builder_tooltip(_args: TokenStream, input: TokenStream) -> TokenS
                     ///
                     /// * `text` - The tooltip text
                     /// * `align` - Where to align the tooltip relative to this element
-                    pub fn tooltip(mut self, text: impl Into<String>, align: Align2) -> Self {
-                        self.tooltip_data = Some(TooltipData::new(text, align));
+                    pub fn tooltip(mut self, text: impl Into<String>, align: #crate_name::layout::Align2) -> Self {
+                        self.tooltip_data = Some(#crate_name::elements::tooltip::TooltipData::new(text, align));
                         self
                     }
                 }
@@ -312,13 +332,15 @@ pub fn element_handle(_args: TokenStream, input: TokenStream) -> TokenStream {
     let generics = ast.generics.clone();
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
+    let crate_name = root();
+
     match &mut ast.data {
         syn::Data::Struct(ref mut struct_data) => {
             if let syn::Fields::Named(ref mut fields) = struct_data.fields {
                 fields.named.push(
                     syn::Field::parse_named
                         .parse2(quote! {
-                            el: ElementHandle
+                            el: #crate_name::prelude::ElementHandle
                         })
                         .unwrap(),
                 );
@@ -331,28 +353,28 @@ pub fn element_handle(_args: TokenStream, input: TokenStream) -> TokenStream {
                     /// Get the bounding rectangle of this element instance.
                     ///
                     /// This is cached directly in the handle so this is very cheap to call frequently.
-                    pub fn rect(&self) -> Rect {
+                    pub fn rect(&self) -> #crate_name::math::Rect {
                         self.el.rect()
                     }
 
                     /// Get the top-left position of the bounding rectangle of this element instance.
                     ///
                     /// This is cached directly in the handle so this is very cheap to call frequently.
-                    pub fn origin(&self) -> Point {
+                    pub fn origin(&self) -> #crate_name::math::Point {
                         self.el.rect().origin
                     }
 
                     /// Get the bottom-right position of the bounding rectangle of this element instance.
                     ///
                     /// This is cached directly in the handle so this is very cheap to call frequently.
-                    pub fn max(&self) -> Point {
+                    pub fn max(&self) -> #crate_name::math::Point {
                         self.el.rect().max()
                     }
 
                     /// Get the center position of the bounding rectangle of this element instance.
                     ///
                     /// This is cached directly in the handle so this is very cheap to call frequently.
-                    pub fn center(&self) -> Point {
+                    pub fn center(&self) -> #crate_name::math::Point {
                         self.el.rect().center()
                     }
 
@@ -408,7 +430,7 @@ pub fn element_handle(_args: TokenStream, input: TokenStream) -> TokenStream {
                     /// Get the z index of this element instance.
                     ///
                     /// This is cached directly in the handle so this is very cheap to call frequently.
-                    pub fn z_index(&self) -> ZIndex {
+                    pub fn z_index(&self) -> #crate_name::math::ZIndex {
                         self.el.z_index()
                     }
 
@@ -452,7 +474,7 @@ pub fn element_handle(_args: TokenStream, input: TokenStream) -> TokenStream {
 
                     /// Get the actual bounding rectangle of this element, accounting for the offset
                     /// introduced by its assigned scissoring rectangle.
-                    pub fn rect_in_window<A_: Clone + 'static>(&self, cx: &WindowContext<'_, A_>) -> Rect {
+                    pub fn rect_in_window<A_: Clone + 'static>(&self, cx: &#crate_name::WindowContext<'_, A_>) -> Rect {
                         self.el.rect_in_window(cx)
                     }
                 }
@@ -472,6 +494,8 @@ pub fn element_handle_set_rect(_args: TokenStream, input: TokenStream) -> TokenS
     let generics = ast.generics.clone();
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
+    let crate_name = root();
+
     match &ast.data {
         syn::Data::Struct(_) => {
             quote! {
@@ -486,7 +510,7 @@ pub fn element_handle_set_rect(_args: TokenStream, input: TokenStream) -> TokenS
                     ///
                     /// This will *NOT* trigger an element update unless the value has changed,
                     /// so this method is very cheap to call frequently.
-                    pub fn set_rect(&mut self, rect: ::rootvg::math::Rect) -> bool {
+                    pub fn set_rect(&mut self, rect: #crate_name::math::Rect) -> bool {
                         self.el.set_rect(rect)
                     }
 
@@ -501,7 +525,7 @@ pub fn element_handle_set_rect(_args: TokenStream, input: TokenStream) -> TokenS
                     ///
                     /// This will *NOT* trigger an element update unless the value has changed,
                     /// so this method is very cheap to call frequently.
-                    pub fn set_pos(&mut self, pos: ::rootvg::math::Point) -> bool {
+                    pub fn set_pos(&mut self, pos: #crate_name::math::Point) -> bool {
                         self.el.set_pos(pos)
                     }
 
@@ -516,7 +540,7 @@ pub fn element_handle_set_rect(_args: TokenStream, input: TokenStream) -> TokenS
                     ///
                     /// This will *NOT* trigger an element update unless the value has changed,
                     /// so this method is very cheap to call frequently.
-                    pub fn set_size(&mut self, size: ::rootvg::math::Size) -> bool {
+                    pub fn set_size(&mut self, size: #crate_name::math::Size) -> bool {
                         self.el.set_size(size)
                     }
 
@@ -588,7 +612,7 @@ pub fn element_handle_set_rect(_args: TokenStream, input: TokenStream) -> TokenS
                     ///
                     /// Note, this will *always* cause an element update even if the offset
                     /// is zero, so prefer to call this method sparingly.
-                    pub fn offset_pos(&mut self, offset: ::rootvg::math::Vector) {
+                    pub fn offset_pos(&mut self, offset: #crate_name::math::Vector) {
                         self.el.offset_pos(offset)
                     }
                 }
@@ -611,6 +635,8 @@ pub fn element_handle_class(_args: TokenStream, input: TokenStream) -> TokenStre
     let generics = ast.generics.clone();
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
+    let crate_name = root();
+
     match &ast.data {
         syn::Data::Struct(_) => {
             quote! {
@@ -620,7 +646,7 @@ pub fn element_handle_class(_args: TokenStream, input: TokenStream) -> TokenStre
                     /// The current style class of the element.
                     ///
                     /// This is cached directly in the handle so this is very cheap to call frequently.
-                    pub fn class(&self) -> ClassID {
+                    pub fn class(&self) -> #crate_name::style::ClassID {
                         self.el.class()
                     }
 
@@ -631,7 +657,7 @@ pub fn element_handle_class(_args: TokenStream, input: TokenStream) -> TokenStre
                     /// This will *NOT* trigger an element update unless the value has changed,
                     /// and the class ID is cached in the handle itself, so this is relatively
                     /// cheap to call frequently (although a String comparison is performed).
-                    pub fn set_class(&mut self, class: ClassID) -> bool {
+                    pub fn set_class(&mut self, class: #crate_name::style::ClassID) -> bool {
                         self.el.set_class(class)
                     }
                 }
@@ -654,6 +680,8 @@ pub fn element_handle_layout_aligned(_args: TokenStream, input: TokenStream) -> 
     let generics = ast.generics.clone();
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
+    let crate_name = root();
+
     match &ast.data {
         syn::Data::Struct(_) => {
             quote! {
@@ -666,7 +694,7 @@ pub fn element_handle_layout_aligned(_args: TokenStream, input: TokenStream) -> 
                     ///
                     /// This will *NOT* trigger an element update unless the value has changed,
                     /// so this method is relatively cheap to call frequently.
-                    pub fn layout_aligned(&mut self, size: ::rootvg::math::Size, point: ::rootvg::math::Point, align: Align2) -> bool {
+                    pub fn layout_aligned(&mut self, size: #crate_name::math::Size, point: #crate_name::math::Point, align: #crate_name::layout::Align2) -> bool {
                         self.el.set_rect(align.align_rect_to_point(point, size))
                     }
                 }
@@ -689,6 +717,8 @@ pub fn element_handle_set_tooltip(_args: TokenStream, input: TokenStream) -> Tok
     let generics = ast.generics.clone();
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
+    let crate_name = root();
+
     match &ast.data {
         syn::Data::Struct(_) => {
             quote! {
@@ -705,7 +735,7 @@ pub fn element_handle_set_tooltip(_args: TokenStream, input: TokenStream) -> Tok
                     /// This will *NOT* trigger an element update unless the value has changed,
                     /// so this method is relatively cheap to call frequently (although a string
                     /// comparison is performed).
-                    pub fn set_tooltip(mut self, text: Option<&str>, align: Align2) -> bool {
+                    pub fn set_tooltip(mut self, text: Option<&str>, align: #crate_name::layout::Align2) -> bool {
                         if RefCell::borrow_mut(&self.shared_state).tooltip_inner.set_data(text, align) {
                             self.el.notify_custom_state_change();
                             true
