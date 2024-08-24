@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse::Parser, parse_macro_input, DeriveInput};
+use syn::{parse::Parser, parse_macro_input, spanned::Spanned, DeriveInput};
 
 #[proc_macro_attribute]
 pub fn element_builder(_args: TokenStream, input: TokenStream) -> TokenStream {
@@ -37,7 +37,7 @@ pub fn element_builder(_args: TokenStream, input: TokenStream) -> TokenStream {
                 );
             }
 
-            return quote! {
+            quote! {
                 #ast
 
                 impl #impl_generics #name #ty_generics #where_clause {
@@ -60,9 +60,11 @@ pub fn element_builder(_args: TokenStream, input: TokenStream) -> TokenStream {
                     }
                 }
             }
-            .into();
+            .into()
         }
-        _ => panic!("`element_builder` has to be used with structs "),
+        _ => syn::Error::new(ast.span(), "`element_builder` has to be used with structs")
+            .to_compile_error()
+            .into(),
     }
 }
 
@@ -89,7 +91,7 @@ pub fn element_builder_class(_args: TokenStream, input: TokenStream) -> TokenStr
                 );
             }
 
-            return quote! {
+            quote! {
                 #ast
 
                 impl #impl_generics #name #ty_generics #where_clause {
@@ -103,9 +105,14 @@ pub fn element_builder_class(_args: TokenStream, input: TokenStream) -> TokenStr
                     }
                 }
             }
-            .into();
+            .into()
         }
-        _ => panic!("`element_builder_class` has to be used with structs "),
+        _ => syn::Error::new(
+            ast.span(),
+            "`element_builder_class` has to be used with structs ",
+        )
+        .to_compile_error()
+        .into(),
     }
 }
 
@@ -126,13 +133,13 @@ pub fn element_builder_rect(_args: TokenStream, input: TokenStream) -> TokenStre
                             ///
                             /// If this method is not used, then the element will have a size and position of
                             /// zero and will not be visible until its bounding rectangle is set.
-                            pub rect: Rect
+                            pub rect: ::rootvg::math::Rect
                         })
                         .unwrap(),
                 );
             }
 
-            return quote! {
+            quote! {
                 #ast
 
                 impl #impl_generics #name #ty_generics #where_clause {
@@ -140,15 +147,20 @@ pub fn element_builder_rect(_args: TokenStream, input: TokenStream) -> TokenStre
                     ///
                     /// If this method is not used, then the element will have a size and position of
                     /// zero and will not be visible until its bounding rectangle is set.
-                    pub const fn rect(mut self, rect: Rect) -> Self {
+                    pub const fn rect(mut self, rect: ::rootvg::math::Rect) -> Self {
                         self.rect = rect;
                         self
                     }
                 }
             }
-            .into();
+            .into()
         }
-        _ => panic!("`element_builder_rect` has to be used with structs "),
+        _ => syn::Error::new(
+            ast.span(),
+            "`element_builder_rect` has to be used with structs ",
+        )
+        .to_compile_error()
+        .into(),
     }
 }
 
@@ -174,7 +186,7 @@ pub fn element_builder_hidden(_args: TokenStream, input: TokenStream) -> TokenSt
                 );
             }
 
-            return quote! {
+            quote! {
                 #ast
 
                 impl #impl_generics #name #ty_generics #where_clause {
@@ -187,9 +199,14 @@ pub fn element_builder_hidden(_args: TokenStream, input: TokenStream) -> TokenSt
                     }
                 }
             }
-            .into();
+            .into()
         }
-        _ => panic!("`element_builder_rect` has to be used with structs "),
+        _ => syn::Error::new(
+            ast.span(),
+            "`element_builder_rect` has to be used with structs ",
+        )
+        .to_compile_error()
+        .into(),
     }
 }
 
@@ -215,7 +232,7 @@ pub fn element_builder_disabled(_args: TokenStream, input: TokenStream) -> Token
                 );
             }
 
-            return quote! {
+            quote! {
                 #ast
 
                 impl #impl_generics #name #ty_generics #where_clause {
@@ -228,9 +245,14 @@ pub fn element_builder_disabled(_args: TokenStream, input: TokenStream) -> Token
                     }
                 }
             }
-            .into();
+            .into()
         }
-        _ => panic!("`element_builder_disabled` has to be used with structs "),
+        _ => syn::Error::new(
+            ast.span(),
+            "`element_builder_disabled` has to be used with structs ",
+        )
+        .to_compile_error()
+        .into(),
     }
 }
 
@@ -258,7 +280,7 @@ pub fn element_builder_tooltip(_args: TokenStream, input: TokenStream) -> TokenS
                 );
             }
 
-            return quote! {
+            quote! {
                 #ast
 
                 impl #impl_generics #name #ty_generics #where_clause {
@@ -272,9 +294,14 @@ pub fn element_builder_tooltip(_args: TokenStream, input: TokenStream) -> TokenS
                     }
                 }
             }
-            .into();
+            .into()
         }
-        _ => panic!("`element_builder_tooltip` has to be used with structs "),
+        _ => syn::Error::new(
+            ast.span(),
+            "`element_builder_tooltip` has to be used with structs ",
+        )
+        .to_compile_error()
+        .into(),
     }
 }
 
@@ -297,7 +324,7 @@ pub fn element_handle(_args: TokenStream, input: TokenStream) -> TokenStream {
                 );
             }
 
-            return quote! {
+            quote! {
                 #ast
 
                 impl #impl_generics #name #ty_generics #where_clause {
@@ -430,9 +457,11 @@ pub fn element_handle(_args: TokenStream, input: TokenStream) -> TokenStream {
                     }
                 }
             }
-            .into();
+            .into()
         }
-        _ => panic!("`element_handle` has to be used with structs "),
+        _ => syn::Error::new(ast.span(), "`element_handle` has to be used with structs ")
+            .to_compile_error()
+            .into(),
     }
 }
 
@@ -445,7 +474,7 @@ pub fn element_handle_set_rect(_args: TokenStream, input: TokenStream) -> TokenS
 
     match &ast.data {
         syn::Data::Struct(_) => {
-            return quote! {
+            quote! {
                 #ast
 
                 impl #impl_generics #name #ty_generics #where_clause {
@@ -457,7 +486,7 @@ pub fn element_handle_set_rect(_args: TokenStream, input: TokenStream) -> TokenS
                     ///
                     /// This will *NOT* trigger an element update unless the value has changed,
                     /// so this method is very cheap to call frequently.
-                    pub fn set_rect(&mut self, rect: Rect) -> bool {
+                    pub fn set_rect(&mut self, rect: ::rootvg::math::Rect) -> bool {
                         self.el.set_rect(rect)
                     }
 
@@ -472,7 +501,7 @@ pub fn element_handle_set_rect(_args: TokenStream, input: TokenStream) -> TokenS
                     ///
                     /// This will *NOT* trigger an element update unless the value has changed,
                     /// so this method is very cheap to call frequently.
-                    pub fn set_pos(&mut self, pos: Point) -> bool {
+                    pub fn set_pos(&mut self, pos: ::rootvg::math::Point) -> bool {
                         self.el.set_pos(pos)
                     }
 
@@ -487,7 +516,7 @@ pub fn element_handle_set_rect(_args: TokenStream, input: TokenStream) -> TokenS
                     ///
                     /// This will *NOT* trigger an element update unless the value has changed,
                     /// so this method is very cheap to call frequently.
-                    pub fn set_size(&mut self, size: Size) -> bool {
+                    pub fn set_size(&mut self, size: ::rootvg::math::Size) -> bool {
                         self.el.set_size(size)
                     }
 
@@ -559,14 +588,19 @@ pub fn element_handle_set_rect(_args: TokenStream, input: TokenStream) -> TokenS
                     ///
                     /// Note, this will *always* cause an element update even if the offset
                     /// is zero, so prefer to call this method sparingly.
-                    pub fn offset_pos(&mut self, offset: Vector) {
+                    pub fn offset_pos(&mut self, offset: ::rootvg::math::Vector) {
                         self.el.offset_pos(offset)
                     }
                 }
             }
-            .into();
+            .into()
         }
-        _ => panic!("`element_handle_set_rect` has to be used with structs "),
+        _ => syn::Error::new(
+            ast.span(),
+            "`element_handle_set_rect` has to be used with structs ",
+        )
+        .to_compile_error()
+        .into(),
     }
 }
 
@@ -579,7 +613,7 @@ pub fn element_handle_class(_args: TokenStream, input: TokenStream) -> TokenStre
 
     match &ast.data {
         syn::Data::Struct(_) => {
-            return quote! {
+            quote! {
                 #ast
 
                 impl #impl_generics #name #ty_generics #where_clause {
@@ -602,9 +636,14 @@ pub fn element_handle_class(_args: TokenStream, input: TokenStream) -> TokenStre
                     }
                 }
             }
-            .into();
+            .into()
         }
-        _ => panic!("`element_handle_class` has to be used with structs "),
+        _ => syn::Error::new(
+            ast.span(),
+            "`element_handle_class` has to be used with structs ",
+        )
+        .to_compile_error()
+        .into(),
     }
 }
 
@@ -617,7 +656,7 @@ pub fn element_handle_layout_aligned(_args: TokenStream, input: TokenStream) -> 
 
     match &ast.data {
         syn::Data::Struct(_) => {
-            return quote! {
+            quote! {
                 #ast
 
                 impl #impl_generics #name #ty_generics #where_clause {
@@ -627,14 +666,19 @@ pub fn element_handle_layout_aligned(_args: TokenStream, input: TokenStream) -> 
                     ///
                     /// This will *NOT* trigger an element update unless the value has changed,
                     /// so this method is relatively cheap to call frequently.
-                    pub fn layout_aligned(&mut self, size: Size, point: Point, align: Align2) -> bool {
+                    pub fn layout_aligned(&mut self, size: ::rootvg::math::Size, point: ::rootvg::math::Point, align: Align2) -> bool {
                         self.el.set_rect(align.align_rect_to_point(point, size))
                     }
                 }
             }
-            .into();
+            .into()
         }
-        _ => panic!("`element_handle_layout_aligned` has to be used with structs "),
+        _ => syn::Error::new(
+            ast.span(),
+            "`element_handle_layout_aligned` has to be used with structs ",
+        )
+        .to_compile_error()
+        .into(),
     }
 }
 
@@ -647,7 +691,7 @@ pub fn element_handle_set_tooltip(_args: TokenStream, input: TokenStream) -> Tok
 
     match &ast.data {
         syn::Data::Struct(_) => {
-            return quote! {
+            quote! {
                 #ast
 
                 impl #impl_generics #name #ty_generics #where_clause {
@@ -671,8 +715,13 @@ pub fn element_handle_set_tooltip(_args: TokenStream, input: TokenStream) -> Tok
                     }
                 }
             }
-            .into();
+            .into()
         }
-        _ => panic!("`element_handle_set_tooltip` has to be used with structs "),
+        _ => syn::Error::new(
+            ast.span(),
+            "`element_handle_set_tooltip` has to be used with structs ",
+        )
+        .to_compile_error()
+        .into(),
     }
 }
