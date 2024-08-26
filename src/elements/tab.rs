@@ -62,6 +62,7 @@ pub struct TabBuilder<A: Clone + 'static> {
     pub toggled: bool,
     pub text: Option<String>,
     pub icon: Option<IconID>,
+    pub icon_size: Option<Size>,
     pub icon_scale: IconScale,
     pub text_offset: Vector,
     pub icon_offset: Vector,
@@ -123,6 +124,12 @@ impl<A: Clone + 'static> TabBuilder<A> {
         self
     }
 
+    /// The size of the icon (Overrides the size in the style.)
+    pub fn icon_size(mut self, size: impl Into<Option<Size>>) -> Self {
+        self.icon_size = size.into();
+        self
+    }
+
     /// The scale of an icon, used to make icons look more consistent.
     ///
     /// Note this does not affect any layout, this is just a visual thing.
@@ -174,6 +181,7 @@ impl<A: Clone + 'static> TabElement<A> {
             toggled,
             text,
             icon,
+            icon_size,
             icon_scale,
             text_offset,
             icon_offset,
@@ -197,6 +205,7 @@ impl<A: Clone + 'static> TabElement<A> {
                 icon,
                 text_offset,
                 icon_offset,
+                icon_size,
                 icon_scale,
                 toggled,
                 disabled,
@@ -544,6 +553,28 @@ impl Tab {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.set_icon_offset(offset) {
+            self.el.notify_custom_state_change();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Set the size of the icon
+    ///
+    /// If `size` is `None`, then the size specified by the style will be used.
+    ///
+    /// Returns `true` if the size has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call frequently.
+    pub fn set_icon_size(&mut self, size: impl Into<Option<Size>>) -> bool {
+        let size: Option<Size> = size.into();
+
+        if RefCell::borrow_mut(&self.shared_state)
+            .inner
+            .set_icon_size(size.into())
+        {
             self.el.notify_custom_state_change();
             true
         } else {

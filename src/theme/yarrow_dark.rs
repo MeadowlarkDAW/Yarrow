@@ -52,7 +52,7 @@ pub fn button(config: &Config) -> ButtonStyle {
         },
         text_padding: TEXT_PADDING,
         icon_padding: ICON_PADDING,
-        icon_size: config.icon_size,
+        default_icon_size: config.default_icon_size,
         text_icon_spacing: TEXT_ICON_SPACING,
         text_color: TEXT_COLOR,
         text_color_hover: Some(TEXT_COLOR_BRIGHT),
@@ -76,7 +76,7 @@ pub fn menu_button(config: &Config) -> ButtonStyle {
         },
         text_padding: TEXT_PADDING,
         icon_padding: ICON_PADDING,
-        icon_size: config.icon_size,
+        default_icon_size: config.default_icon_size,
         text_icon_spacing: TEXT_ICON_SPACING,
         text_color: TEXT_COLOR,
         text_color_hover: Some(TEXT_COLOR_BRIGHT),
@@ -97,7 +97,7 @@ pub fn toggle_button(config: &Config) -> ToggleButtonStyle {
         text_padding: TEXT_PADDING,
         icon_padding: ICON_PADDING,
         text_icon_spacing: TEXT_ICON_SPACING,
-        icon_size: config.icon_size,
+        default_icon_size: config.default_icon_size,
         text_color: TEXT_COLOR,
         text_color_on_hover: Some(TEXT_COLOR_BRIGHT),
         text_color_off_hover: Some(TEXT_COLOR_BRIGHT),
@@ -194,7 +194,7 @@ pub fn text_input(config: &Config) -> TextInputStyle {
 pub fn icon_text_input(config: &Config) -> IconTextInputStyle {
     IconTextInputStyle {
         text_input: text_input(config),
-        icon_size: config.icon_size,
+        default_icon_size: config.default_icon_size,
         icon_padding: padding(0.0, 0.0, 0.0, 5.0),
         ..Default::default()
     }
@@ -210,7 +210,7 @@ pub fn tab(config: &Config) -> TabStyle {
             },
             text_padding: TEXT_PADDING,
             icon_padding: ICON_PADDING,
-            icon_size: config.icon_size,
+            default_icon_size: config.default_icon_size,
             text_icon_spacing: TEXT_ICON_SPACING,
             text_color: TEXT_COLOR,
             text_color_on_hover: Some(TEXT_COLOR_BRIGHT),
@@ -267,7 +267,7 @@ pub fn dropdown_menu(config: &Config) -> DropDownMenuStyle {
             attrs: config.text_attrs,
             ..Default::default()
         },
-        icon_size: config.icon_size,
+        icon_size: config.default_icon_size,
         text_color: TEXT_COLOR,
         text_color_hover: Some(TEXT_COLOR_BRIGHT),
         back_quad: QuadStyle {
@@ -301,7 +301,7 @@ pub fn label(config: &Config) -> LabelStyle {
             ..Default::default()
         },
         text_color: TEXT_COLOR,
-        icon_size: config.icon_size,
+        default_icon_size: config.default_icon_size,
         ..Default::default()
     }
 }
@@ -433,7 +433,7 @@ pub struct Config {
     pub radius: f32,
     pub text_metrics: Metrics,
     pub text_attrs: Attrs<'static>,
-    pub icon_size: f32,
+    pub default_icon_size: f32,
 }
 
 impl Default for Config {
@@ -447,7 +447,7 @@ impl Default for Config {
                 line_height: 16.0,
             },
             text_attrs: Attrs::new(),
-            icon_size: crate::theme::DEFAULT_ICON_SIZE,
+            default_icon_size: crate::theme::DEFAULT_ICON_SIZE,
         }
     }
 }

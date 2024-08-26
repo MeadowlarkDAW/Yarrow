@@ -132,7 +132,7 @@ impl MyStyle {
             true,
             IconStyle {
                 color: yarrow::theme::DEFAULT_ACCENT_COLOR,
-                size: 20.0,
+                default_size: 20.0,
                 back_quad: quad_style(background(LABEL_BG_COLOR), border_radius_only(radius(30.0))),
                 padding: padding_vh(4.0, 10.0),
                 ..Default::default()

@@ -9,7 +9,7 @@ use crate::vg::{
 };
 
 #[cfg(feature = "svg-icons")]
-use crate::vg::text::CustomGlyphDesc;
+use crate::vg::text::CustomGlyph;
 
 /// The style of a [`Label`] element
 #[derive(Debug, Clone, PartialEq)]
@@ -17,10 +17,17 @@ pub struct LabelStyle {
     /// The properties of the text.
     pub text_properties: TextProperties,
 
-    /// The size of the icon in points.
+    /// The width and height of the icon in points (if the user hasn't
+    /// manually set a size for the icon).
     ///
     /// By default this is set to `20.0`.
-    pub icon_size: f32,
+    pub default_icon_size: f32,
+
+    /// Whether or not the icon should be snapped to the nearset physical
+    /// pixel when rendering.
+    ///
+    /// By default this is set to `true`.
+    pub snap_icon_to_physical_pixel: bool,
 
     /// The color of the text
     ///
@@ -63,7 +70,7 @@ pub struct LabelStyle {
 impl LabelStyle {
     pub fn padding_info(&self) -> LabelPaddingInfo {
         LabelPaddingInfo {
-            icon_size: self.icon_size,
+            default_icon_size: self.default_icon_size,
             text_padding: self.text_padding,
             icon_padding: self.icon_padding,
             text_icon_spacing: self.text_icon_spacing,
@@ -75,7 +82,8 @@ impl Default for LabelStyle {
     fn default() -> Self {
         Self {
             text_properties: Default::default(),
-            icon_size: DEFAULT_ICON_SIZE,
+            default_icon_size: DEFAULT_ICON_SIZE,
+            snap_icon_to_physical_pixel: true,
             text_color: color::WHITE,
             icon_color: None,
             text_padding: Padding::default(),
@@ -117,7 +125,7 @@ pub enum TextIconLayout {
 // Information used to calculate label padding.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LabelPaddingInfo {
-    pub icon_size: f32,
+    pub default_icon_size: f32,
     pub text_padding: Padding,
     pub icon_padding: Padding,
     pub text_icon_spacing: f32,
@@ -144,6 +152,7 @@ pub struct LabelInner {
     /// This does not effect the position of the background quad.
     pub icon_offset: Vector,
     pub icon_scale: IconScale,
+    icon_size: Option<Size>,
     text_inner: Option<TextInner>,
     unclipped_text_size: Size,
     text_size_needs_calculated: bool,
@@ -162,6 +171,7 @@ impl LabelInner {
         icon: Option<IconID>,
         text_offset: Vector,
         icon_offset: Vector,
+        icon_size: Option<Size>,
         icon_scale: IconScale,
         text_icon_layout: TextIconLayout,
         style: &LabelStyle,
@@ -188,6 +198,7 @@ impl LabelInner {
             text_offset,
             icon_offset,
             icon,
+            icon_size,
             icon_scale,
             text_inner,
             // This will be overwritten later.
@@ -230,13 +241,14 @@ impl LabelInner {
             };
 
             let icon_size = if self.icon.is_some() {
+                let size = self.icon_size.unwrap_or(Size::new(
+                    padding_info.default_icon_size,
+                    padding_info.default_icon_size,
+                ));
+
                 Size::new(
-                    padding_info.icon_size
-                        + padding_info.icon_padding.left
-                        + padding_info.icon_padding.right,
-                    padding_info.icon_size
-                        + padding_info.icon_padding.top
-                        + padding_info.icon_padding.bottom,
+                    size.width + padding_info.icon_padding.left + padding_info.icon_padding.right,
+                    size.height + padding_info.icon_padding.top + padding_info.icon_padding.bottom,
                 )
             } else {
                 Size::zero()
@@ -349,6 +361,20 @@ impl LabelInner {
         self.icon
     }
 
+    pub fn set_icon_size(&mut self, size: Option<Size>) -> bool {
+        if self.icon_size != size {
+            self.icon_size = size;
+            self.padded_size_needs_calculated = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn icon_size(&self) -> Option<Size> {
+        self.icon_size
+    }
+
     pub fn sync_new_style(&mut self, style: &LabelStyle, font_system: &mut FontSystem) {
         if let Some(inner) = &mut self.text_inner {
             let mut text_properties = style.text_properties.clone();
@@ -385,10 +411,15 @@ impl LabelInner {
         if needs_layout {
             let _ = self.unclipped_text_size();
 
+            let icon_size = self
+                .icon_size
+                .unwrap_or(Size::new(style.default_icon_size, style.default_icon_size));
+
             let layout_res = layout(
                 bounds.size,
                 self.unclipped_text_size,
                 self.icon,
+                icon_size,
                 self.text_icon_layout,
                 style,
             );
@@ -421,13 +452,17 @@ impl LabelInner {
 
         #[cfg(feature = "svg-icons")]
         let icon = if let Some(icon) = self.icon {
+            let size = self
+                .icon_size
+                .unwrap_or(Size::new(style.default_icon_size, style.default_icon_size));
+
             let (size, offset) = if self.icon_scale.0 != 1.0 {
                 (
-                    style.icon_size * self.icon_scale.0,
-                    (style.icon_size - (style.icon_size * self.icon_scale.0)) * 0.5,
+                    size * self.icon_scale.0,
+                    ((size - (size * self.icon_scale.0)) * 0.5).to_vector(),
                 )
             } else {
-                (style.icon_size, 0.0)
+                (size, Vector::zero())
             };
 
             Some(TextPrimitive::new_with_icons(
@@ -438,11 +473,13 @@ impl LabelInner {
                     Point::new(-1.0, -1.0),
                     Size::new(bounds.width() + 2.0, bounds.height() + 2.0),
                 )),
-                smallvec::smallvec![CustomGlyphDesc {
+                smallvec::smallvec![CustomGlyph {
                     id: icon,
-                    left: offset,
-                    top: offset,
-                    size,
+                    left: offset.x,
+                    top: offset.y,
+                    width: size.width,
+                    height: size.height,
+                    snap_to_physical_pixel: style.snap_icon_to_physical_pixel,
                     color: None,
                     metadata: 0,
                 }],
@@ -476,6 +513,7 @@ impl LabelInner {
 pub struct LabelBuilder {
     pub text: Option<String>,
     pub icon: Option<IconID>,
+    pub icon_size: Option<Size>,
     pub icon_scale: IconScale,
     pub text_offset: Vector,
     pub icon_offset: Vector,
@@ -519,6 +557,12 @@ impl LabelBuilder {
     /// If this is set to `None`, then the label will have no icon.
     pub fn icon_optional(mut self, icon: Option<impl Into<IconID>>) -> Self {
         self.icon = icon.map(|i| i.into());
+        self
+    }
+
+    /// The size of the icon (Overrides the size in the style.)
+    pub fn icon_size(mut self, size: impl Into<Option<Size>>) -> Self {
+        self.icon_size = size.into();
         self
     }
 
@@ -570,6 +614,7 @@ impl LabelElement {
         let LabelBuilder {
             text,
             icon,
+            icon_size,
             icon_scale,
             text_offset,
             icon_offset,
@@ -590,6 +635,7 @@ impl LabelElement {
                 icon,
                 text_offset,
                 icon_offset,
+                icon_size,
                 icon_scale,
                 text_icon_layout,
                 &style,
@@ -780,6 +826,28 @@ impl Label {
         }
     }
 
+    /// Set the size of the icon
+    ///
+    /// If `size` is `None`, then the size specified by the style will be used.
+    ///
+    /// Returns `true` if the size has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call frequently.
+    pub fn set_icon_size(&mut self, size: impl Into<Option<Size>>) -> bool {
+        let size: Option<Size> = size.into();
+
+        if RefCell::borrow_mut(&self.shared_state)
+            .inner
+            .set_icon_size(size.into())
+        {
+            self.el.notify_custom_state_change();
+            true
+        } else {
+            false
+        }
+    }
+
     /// The scale of the icon, used to make icons look more consistent.
     ///
     /// Note this does not affect any layout, this is just a visual thing.
@@ -834,6 +902,7 @@ fn layout(
     bounds_size: Size,
     unclipped_text_size: Size,
     icon: Option<IconID>,
+    icon_size: Size,
     text_icon_layout: TextIconLayout,
     style: &LabelStyle,
 ) -> LayoutResult {
@@ -852,7 +921,7 @@ fn layout(
     if unclipped_text_size.is_empty() {
         return LayoutResult {
             text_bounds_rect: Rect::zero(),
-            icon_bounds_rect: layout_icon_only(style.icon_size, &style.icon_padding, bounds_size),
+            icon_bounds_rect: layout_icon_only(icon_size, &style.icon_padding, bounds_size),
         };
     }
 
@@ -875,7 +944,7 @@ fn layout(
     let text_padding = style.text_padding;
 
     let text_padded_width = unclipped_text_size.width + text_padding.left + text_padding.right;
-    let icon_padded_width = style.icon_size + icon_padding.left + icon_padding.right;
+    let icon_padded_width = icon_size.width + icon_padding.left + icon_padding.right;
 
     let total_padded_width = text_padded_width + icon_padded_width;
 
@@ -927,8 +996,8 @@ fn layout(
     };
 
     let icon_bounds_height =
-        if style.icon_size + icon_padding.top + icon_padding.bottom <= bounds_size.height {
-            style.icon_size
+        if icon_size.height + icon_padding.top + icon_padding.bottom <= bounds_size.height {
+            icon_size.height
         } else {
             (bounds_size.height - icon_padding.top - icon_padding.bottom).max(0.0)
         };
@@ -994,10 +1063,10 @@ fn layout_label_only(
     )
 }
 
-fn layout_icon_only(size: f32, padding: &Padding, bounds_size: Size) -> Rect {
+fn layout_icon_only(size: Size, padding: &Padding, bounds_size: Size) -> Rect {
     let padded_size = Size::new(
-        size + padding.left + padding.right,
-        size + padding.top + padding.bottom,
+        size.width + padding.left + padding.right,
+        size.height + padding.top + padding.bottom,
     );
 
     let padded_rect =
@@ -1008,6 +1077,6 @@ fn layout_icon_only(size: f32, padding: &Padding, bounds_size: Size) -> Rect {
             padded_rect.min_x() + padding.left,
             padded_rect.min_y() + padding.top,
         ),
-        Size::new(size, size),
+        size,
     )
 }

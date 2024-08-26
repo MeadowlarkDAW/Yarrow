@@ -242,6 +242,7 @@ impl TooltipElement {
                 None,
                 text_offset,
                 Vector::default(),
+                None,
                 IconScale::default(),
                 Default::default(),
                 &style.label_style(),

@@ -5,16 +5,23 @@ use crate::prelude::*;
 use crate::theme::DEFAULT_ICON_SIZE;
 use crate::vg::{
     quad::QuadPrimitive,
-    text::{CustomGlyphDesc, TextPrimitive},
+    text::{CustomGlyph, TextPrimitive},
 };
 
 /// The style of an [`Icon`] element
 #[derive(Debug, Clone, PartialEq)]
 pub struct IconStyle {
-    /// The size of the icon in points.
+    /// The width and height of the icon in points (if the user hasn't
+    /// manually set a size for the icon).
     ///
     /// By default this is set to `24.0`.
-    pub size: f32,
+    pub default_size: f32,
+
+    /// Whether or not the icon should be snapped to the nearset physical
+    /// pixel when rendering.
+    ///
+    /// By default this is set to `true`.
+    pub snap_to_physical_pixel: bool,
 
     /// The color of the icon
     ///
@@ -37,7 +44,7 @@ pub struct IconStyle {
 impl IconStyle {
     pub fn padding_info(&self) -> IconPaddingInfo {
         IconPaddingInfo {
-            icon_size: self.size,
+            default_icon_size: self.default_size,
             padding: self.padding,
         }
     }
@@ -46,7 +53,8 @@ impl IconStyle {
 impl Default for IconStyle {
     fn default() -> Self {
         Self {
-            size: DEFAULT_ICON_SIZE,
+            default_size: DEFAULT_ICON_SIZE,
+            snap_to_physical_pixel: true,
             color: color::WHITE,
             back_quad: QuadStyle::TRANSPARENT,
             padding: Padding::zero(),
@@ -72,7 +80,7 @@ impl ElementStyle for IconStyle {
 // Information used to calculate icon padding.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct IconPaddingInfo {
-    pub icon_size: f32,
+    pub default_icon_size: f32,
     pub padding: Padding,
 }
 
@@ -91,16 +99,18 @@ pub struct IconInner {
     pub offset: Vector,
     pub icon_id: IconID,
     pub scale: IconScale,
+    icon_size: Option<Size>,
     desired_size: Size,
     size_needs_calculated: bool,
 }
 
 impl IconInner {
-    pub fn new(icon_id: IconID, scale: IconScale, offset: Vector) -> Self {
+    pub fn new(icon_id: IconID, icon_size: Option<Size>, scale: IconScale, offset: Vector) -> Self {
         Self {
             offset,
             icon_id,
             scale,
+            icon_size,
             desired_size: Size::default(),
             size_needs_calculated: true,
         }
@@ -114,9 +124,13 @@ impl IconInner {
 
             let info = (get_padding_info)();
 
+            let size = self
+                .icon_size
+                .unwrap_or(Size::new(info.default_icon_size, info.default_icon_size));
+
             self.desired_size = Size::new(
-                info.icon_size + info.padding.left + info.padding.right,
-                info.icon_size + info.padding.top + info.padding.bottom,
+                size.width + info.padding.left + info.padding.right,
+                size.height + info.padding.top + info.padding.bottom,
             );
         }
 
@@ -125,8 +139,25 @@ impl IconInner {
 
     /// Returns the rectangular area of the icon from the given bounds size
     /// (icons are assumed to be square).
-    pub fn icon_rect(&self, style: &IconStyle, bounds_size: Size) -> Rect {
-        layout(style.size, &style.padding, bounds_size)
+    pub fn padded_icon_rect(&self, style: &IconStyle, bounds_size: Size) -> Rect {
+        let size = self
+            .icon_size
+            .unwrap_or(Size::new(style.default_size, style.default_size));
+        layout(size, &style.padding, bounds_size)
+    }
+
+    pub fn set_icon_size(&mut self, size: Option<Size>) -> bool {
+        if self.icon_size != size {
+            self.icon_size = size;
+            self.size_needs_calculated = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn icon_size(&self) -> Option<Size> {
+        self.icon_size
     }
 
     pub fn notify_style_change(&mut self) {
@@ -134,15 +165,18 @@ impl IconInner {
     }
 
     pub fn render_primitives(&mut self, bounds: Rect, style: &IconStyle) -> IconPrimitives {
-        let icon_rect = self.icon_rect(style, bounds.size);
+        let icon_rect = self.padded_icon_rect(style, bounds.size);
+        let size = self
+            .icon_size
+            .unwrap_or(Size::new(style.default_size, style.default_size));
 
         let (size, offset) = if self.scale.0 != 1.0 {
             (
-                style.size * self.scale.0,
-                (style.size - (style.size * self.scale.0)) * 0.5,
+                size * self.scale.0,
+                ((size - (size * self.scale.0)) * 0.5).to_vector(),
             )
         } else {
-            (style.size, 0.0)
+            (size, Vector::zero())
         };
 
         IconPrimitives {
@@ -151,11 +185,13 @@ impl IconInner {
                 bounds.origin + icon_rect.origin.to_vector() + self.offset,
                 style.color,
                 None,
-                smallvec::smallvec![CustomGlyphDesc {
+                smallvec::smallvec![CustomGlyph {
                     id: self.icon_id,
-                    left: offset,
-                    top: offset,
-                    size,
+                    left: offset.x,
+                    top: offset.y,
+                    width: size.width,
+                    height: size.height,
+                    snap_to_physical_pixel: style.snap_to_physical_pixel,
                     color: None,
                     metadata: 0,
                 }],
@@ -176,6 +212,7 @@ impl IconInner {
 #[derive(Default)]
 pub struct IconBuilder {
     pub icon: IconID,
+    pub icon_size: Option<Size>,
     pub scale: IconScale,
     pub offset: Vector,
 }
@@ -187,6 +224,12 @@ impl IconBuilder {
 
     pub fn icon(mut self, id: impl Into<IconID>) -> Self {
         self.icon = id.into();
+        self
+    }
+
+    /// The size of the icon (Overrides the size in the style.)
+    pub fn icon_size(mut self, size: impl Into<Option<Size>>) -> Self {
+        self.icon_size = size.into();
         self
     }
 
@@ -215,6 +258,7 @@ impl IconElement {
     pub fn create<A: Clone + 'static>(builder: IconBuilder, cx: &mut WindowContext<'_, A>) -> Icon {
         let IconBuilder {
             icon,
+            icon_size,
             scale,
             offset,
             class,
@@ -227,7 +271,7 @@ impl IconElement {
         let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
 
         let shared_state = Rc::new(RefCell::new(SharedState {
-            inner: IconInner::new(icon, scale, offset),
+            inner: IconInner::new(icon, icon_size, scale, offset),
         }));
 
         let element_builder = ElementBuilder {
@@ -339,6 +383,28 @@ impl Icon {
         RefCell::borrow(&self.shared_state).inner.icon_id
     }
 
+    /// Set the size of the icon
+    ///
+    /// If `size` is `None`, then the size specified by the style will be used.
+    ///
+    /// Returns `true` if the size has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call frequently.
+    pub fn set_icon_size(&mut self, size: impl Into<Option<Size>>) -> bool {
+        let size: Option<Size> = size.into();
+
+        if RefCell::borrow_mut(&self.shared_state)
+            .inner
+            .set_icon_size(size.into())
+        {
+            self.el.notify_custom_state_change();
+            true
+        } else {
+            false
+        }
+    }
+
     /// An offset that can be used mainly to correct the position of icon glyphs.
     /// This does not effect the position of the background quad.
     ///
@@ -403,10 +469,10 @@ impl Icon {
     }
 }
 
-fn layout(size: f32, padding: &Padding, bounds_size: Size) -> Rect {
+fn layout(size: Size, padding: &Padding, bounds_size: Size) -> Rect {
     let padded_size = Size::new(
-        size + padding.left + padding.right,
-        size + padding.top + padding.bottom,
+        size.width + padding.left + padding.right,
+        size.height + padding.top + padding.bottom,
     );
 
     let padded_rect =
@@ -417,6 +483,6 @@ fn layout(size: f32, padding: &Padding, bounds_size: Size) -> Rect {
             padded_rect.min_x() + padding.left,
             padded_rect.min_y() + padding.top,
         ),
-        Size::new(size, size),
+        size,
     )
 }

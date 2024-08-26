@@ -86,7 +86,7 @@ thiserror = "1.0.61"
 serde = { version = "1.0", default-features = false, features = [
     "derive",
 ], optional = true }
-rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "a98b6addb26f68345330cbb1f80313f5571ba9a1", default-features = false, features = [
+rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "75150bdf2fbbf7f5339b1d24741a84981d33c220", default-features = false, features = [
     "quad",
     "text",
     "default-surface",

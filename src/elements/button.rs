@@ -31,10 +31,17 @@ pub struct ButtonStyle {
     /// The properties of the text
     pub text_properties: TextProperties,
 
-    /// The size of the icon in points.
+    /// The width and height of the icon in points (if the user hasn't
+    /// manually set a size for the icon).
     ///
     /// By default this is set to `20.0`.
-    pub icon_size: f32,
+    pub default_icon_size: f32,
+
+    /// Whether or not the icon should be snapped to the nearset physical
+    /// pixel when rendering.
+    ///
+    /// By default this is set to `true`.
+    pub snap_icon_to_physical_pixel: bool,
 
     /// The padding around the text.
     ///
@@ -155,7 +162,8 @@ impl Default for ButtonStyle {
     fn default() -> Self {
         Self {
             text_properties: Default::default(),
-            icon_size: DEFAULT_ICON_SIZE,
+            default_icon_size: DEFAULT_ICON_SIZE,
+            snap_icon_to_physical_pixel: true,
             text_padding: Default::default(),
             icon_padding: Default::default(),
             text_icon_spacing: 0.0,
@@ -188,7 +196,7 @@ impl Default for ButtonStyle {
 impl ButtonStyle {
     pub fn padding_info(&self) -> LabelPaddingInfo {
         LabelPaddingInfo {
-            icon_size: self.icon_size,
+            default_icon_size: self.default_icon_size,
             text_padding: self.text_padding,
             icon_padding: self.icon_padding,
             text_icon_spacing: self.text_icon_spacing,
@@ -279,9 +287,10 @@ impl ButtonStyle {
         LabelStyle {
             text_color,
             icon_color,
+            snap_icon_to_physical_pixel: self.snap_icon_to_physical_pixel,
             back_quad,
             text_properties: self.text_properties,
-            icon_size: self.icon_size,
+            default_icon_size: self.default_icon_size,
             text_padding: self.text_padding,
             icon_padding: self.icon_padding,
             text_icon_spacing: self.text_icon_spacing,
@@ -317,6 +326,7 @@ impl ButtonInner {
         icon_id: Option<IconID>,
         text_offset: Vector,
         icon_offset: Vector,
+        icon_size: Option<Size>,
         icon_scale: IconScale,
         disabled: bool,
         text_icon_layout: TextIconLayout,
@@ -330,6 +340,7 @@ impl ButtonInner {
             icon_id,
             text_offset,
             icon_offset,
+            icon_size,
             icon_scale,
             text_icon_layout,
             &style.label_style(state),
@@ -425,12 +436,12 @@ impl ButtonInner {
         }
     }
 
-    pub fn text_offset(&self) -> Vector {
-        self.label_inner.text_offset
+    pub fn set_icon_size(&mut self, size: Option<Size>) -> bool {
+        self.label_inner.set_icon_size(size)
     }
 
-    pub fn icon_offset(&self) -> Vector {
-        self.label_inner.icon_offset
+    pub fn icon_size(&self) -> Option<Size> {
+        self.label_inner.icon_size()
     }
 
     /// Returns `true` if the icon scale has changed.
@@ -445,6 +456,14 @@ impl ButtonInner {
 
     pub fn icon_scale(&self) -> IconScale {
         self.label_inner.icon_scale
+    }
+
+    pub fn text_offset(&self) -> Vector {
+        self.label_inner.text_offset
+    }
+
+    pub fn icon_offset(&self) -> Vector {
+        self.label_inner.icon_offset
     }
 
     pub fn disabled(&self) -> bool {
@@ -463,6 +482,7 @@ pub struct ButtonBuilder<A: Clone + 'static> {
     pub on_select_action: Option<A>,
     pub text: Option<String>,
     pub icon: Option<IconID>,
+    pub icon_size: Option<Size>,
     pub icon_scale: IconScale,
     pub text_offset: Vector,
     pub icon_offset: Vector,
@@ -518,6 +538,12 @@ impl<A: Clone + 'static> ButtonBuilder<A> {
         self
     }
 
+    /// The size of the icon (Overrides the size in the style.)
+    pub fn icon_size(mut self, size: impl Into<Option<Size>>) -> Self {
+        self.icon_size = size.into();
+        self
+    }
+
     /// The scale of an icon, used to make icons look more consistent.
     ///
     /// Note this does not affect any layout, this is just a visual thing.
@@ -566,6 +592,7 @@ impl<A: Clone + 'static> ButtonElement<A> {
             on_select_action,
             text,
             icon,
+            icon_size,
             icon_scale,
             text_offset,
             icon_offset,
@@ -589,6 +616,7 @@ impl<A: Clone + 'static> ButtonElement<A> {
                 icon,
                 text_offset,
                 icon_offset,
+                icon_size,
                 icon_scale,
                 disabled,
                 text_icon_layout,
@@ -861,6 +889,28 @@ impl Button {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.set_icon_offset(offset) {
+            self.el.notify_custom_state_change();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Set the size of the icon
+    ///
+    /// If `size` is `None`, then the size specified by the style will be used.
+    ///
+    /// Returns `true` if the size has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call frequently.
+    pub fn set_icon_size(&mut self, size: impl Into<Option<Size>>) -> bool {
+        let size: Option<Size> = size.into();
+
+        if RefCell::borrow_mut(&self.shared_state)
+            .inner
+            .set_icon_size(size.into())
+        {
             self.el.notify_custom_state_change();
             true
         } else {

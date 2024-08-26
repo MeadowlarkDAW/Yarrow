@@ -12,13 +12,23 @@ use super::{TextInputAction, TextInputInner, TextInputStyle, TextInputUpdateResu
 pub struct IconTextInputStyle {
     pub text_input: TextInputStyle,
 
-    pub icon_size: f32,
+    /// The width and height of the icon in points (if the user hasn't
+    /// manually set a size for the icon).
+    ///
+    /// By default this is set to `20.0`.
+    pub default_icon_size: f32,
     pub icon_color: Option<RGBA8>,
     pub icon_color_hover: Option<RGBA8>,
     pub icon_color_focused: Option<RGBA8>,
     pub icon_color_disabled: DisabledColor,
     pub icon_padding: Padding,
     pub icon_align: StartEndAlign,
+
+    /// Whether or not the icon should be snapped to the nearset physical
+    /// pixel when rendering.
+    ///
+    /// By default this is set to `true`.
+    pub snap_icon_to_physical_pixel: bool,
 }
 
 impl IconTextInputStyle {
@@ -58,10 +68,11 @@ impl IconTextInputStyle {
         };
 
         IconStyle {
-            size: self.icon_size,
+            default_size: self.default_icon_size,
             color,
             back_quad: QuadStyle::TRANSPARENT,
             padding: self.icon_padding,
+            snap_to_physical_pixel: self.snap_icon_to_physical_pixel,
         }
     }
 }
@@ -70,13 +81,14 @@ impl Default for IconTextInputStyle {
     fn default() -> Self {
         Self {
             text_input: TextInputStyle::default(),
-            icon_size: DEFAULT_ICON_SIZE,
+            default_icon_size: DEFAULT_ICON_SIZE,
             icon_color: None,
             icon_color_hover: None,
             icon_color_focused: None,
             icon_color_disabled: Default::default(),
             icon_padding: Padding::default(),
             icon_align: StartEndAlign::Start,
+            snap_icon_to_physical_pixel: true,
         }
     }
 }
@@ -112,6 +124,7 @@ pub struct IconTextInputBuilder<A: Clone + 'static> {
     pub text: String,
     pub text_offset: Vector,
     pub icon: IconID,
+    pub icon_size: Option<Size>,
     pub icon_scale: IconScale,
     pub icon_offset: Vector,
     pub select_all_when_focused: bool,
@@ -129,6 +142,7 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
             text_offset: Vector::default(),
             icon: Default::default(),
             icon_scale: Default::default(),
+            icon_size: None,
             icon_offset: Default::default(),
             select_all_when_focused: false,
             password_mode: false,
@@ -176,6 +190,12 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
 
     pub fn icon(mut self, id: impl Into<IconID>) -> Self {
         self.icon = id.into();
+        self
+    }
+
+    /// The size of the icon (Overrides the size in the style.)
+    pub fn icon_size(mut self, size: impl Into<Option<Size>>) -> Self {
+        self.icon_size = size.into();
         self
     }
 
@@ -239,6 +259,7 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
             text,
             text_offset,
             icon,
+            icon_size,
             icon_scale,
             icon_offset,
             select_all_when_focused,
@@ -255,9 +276,13 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
         let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
         let style = cx.res.style_system.get::<IconTextInputStyle>(cx.class());
 
-        let icon = IconInner::new(icon, icon_scale, icon_offset);
+        let icon = IconInner::new(icon, icon_size, icon_scale, icon_offset);
 
-        let layout_res = layout(rect.size, &style);
+        let icon_size = icon
+            .icon_size()
+            .unwrap_or(Size::new(style.default_icon_size, style.default_icon_size));
+
+        let layout_res = layout(rect.size, &style, icon_size);
 
         let shared_state = Rc::new(RefCell::new(SharedState {
             inner: TextInputInner::new(
@@ -331,7 +356,12 @@ impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
                 let bounds_size = cx.rect().size;
                 let style: &IconTextInputStyle = cx.res.style_system.get(cx.class());
 
-                let layout_res = layout(bounds_size, &style);
+                let icon_size = self
+                    .icon
+                    .icon_size()
+                    .unwrap_or(Size::new(style.default_icon_size, style.default_icon_size));
+
+                let layout_res = layout(bounds_size, &style, icon_size);
 
                 shared_state.inner.on_size_changed(
                     bounds_size,
@@ -610,10 +640,10 @@ struct LayoutResult {
     text_input_style: TextInputStyle,
 }
 
-fn layout(bounds_size: Size, style: &IconTextInputStyle) -> LayoutResult {
+fn layout(bounds_size: Size, style: &IconTextInputStyle, icon_size: Size) -> LayoutResult {
     let icon_padded_size = Size::new(
-        style.icon_size + style.icon_padding.left + style.icon_padding.right,
-        style.icon_size + style.icon_padding.top + style.icon_padding.bottom,
+        icon_size.width + style.icon_padding.left + style.icon_padding.right,
+        icon_size.height + style.icon_padding.top + style.icon_padding.bottom,
     );
 
     let mut text_input_style = style.text_input.clone();

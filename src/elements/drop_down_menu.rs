@@ -99,10 +99,16 @@ pub struct DropDownMenuStyle {
     /// By default this is set to `None`.
     pub right_text_properties: Option<TextProperties>,
 
-    /// The size of the icon in points.
+    /// The width and height of the icon in points
     ///
     /// By default this is set to `20.0`.
     pub icon_size: f32,
+
+    /// Whether or not the icon should be snapped to the nearset physical
+    /// pixel when rendering.
+    ///
+    /// By default this is set to `true`.
+    pub snap_icon_to_physical_pixel: bool,
 
     /// The color of the text
     ///
@@ -181,6 +187,7 @@ impl Default for DropDownMenuStyle {
             text_properties: Default::default(),
             right_text_properties: None,
             icon_size: DEFAULT_ICON_SIZE,
+            snap_icon_to_physical_pixel: true,
             text_color: color::WHITE,
             text_color_hover: None,
             icon_color: None,
@@ -207,7 +214,8 @@ impl DropDownMenuStyle {
         (
             LabelStyle {
                 text_properties: self.text_properties,
-                icon_size: self.icon_size,
+                default_icon_size: self.icon_size,
+                snap_icon_to_physical_pixel: self.snap_icon_to_physical_pixel,
                 text_color: if hovered {
                     self.text_color_hover.unwrap_or(self.text_color)
                 } else {
@@ -230,7 +238,8 @@ impl DropDownMenuStyle {
             },
             LabelStyle {
                 text_properties: self.right_text_properties.unwrap_or(self.text_properties),
-                icon_size: self.icon_size,
+                default_icon_size: self.icon_size,
+                snap_icon_to_physical_pixel: self.snap_icon_to_physical_pixel,
                 text_color: if hovered {
                     self.right_text_color_hover.unwrap_or(
                         self.right_text_color
@@ -255,7 +264,7 @@ impl DropDownMenuStyle {
 
     fn left_padding_info(&self) -> LabelPaddingInfo {
         LabelPaddingInfo {
-            icon_size: self.icon_size,
+            default_icon_size: self.icon_size,
             text_padding: self.left_text_padding,
             icon_padding: self.left_icon_padding,
             text_icon_spacing: self.left_text_icon_spacing,
@@ -264,7 +273,7 @@ impl DropDownMenuStyle {
 
     fn right_padding_info(&self) -> LabelPaddingInfo {
         LabelPaddingInfo {
-            icon_size: 0.0,
+            default_icon_size: 0.0,
             text_padding: self.right_text_padding,
             icon_padding: Padding::zero(),
             text_icon_spacing: 0.0,
@@ -768,6 +777,7 @@ fn build_entries(
                     left_icon,
                     Vector::default(),
                     Vector::default(),
+                    None,
                     icon_scale,
                     Default::default(),
                     &left_style,
@@ -779,6 +789,7 @@ fn build_entries(
                         None,
                         Vector::default(),
                         Vector::default(),
+                        None,
                         IconScale::default(),
                         Default::default(),
                         &right_style,
