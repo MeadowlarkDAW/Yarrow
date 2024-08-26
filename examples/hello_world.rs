@@ -8,11 +8,12 @@ pub fn main() {
     let (action_sender, action_receiver) = yarrow::action_channel();
 
     yarrow::run_blocking(
-        MyApp {
-            main_window_elements: None,
-        },
+        WindowConfig::default(),
         action_sender,
         action_receiver,
+        || MyApp {
+            main_window_elements: None,
+        },
     )
     .unwrap();
 }
@@ -73,6 +74,7 @@ impl Application for MyApp {
         window_id: WindowID,
         cx: &mut AppContext<()>,
     ) {
+        println!("{event:?}");
         match event {
             AppWindowEvent::WindowOpened => {
                 // Yarrow has first-class mutli-window support.

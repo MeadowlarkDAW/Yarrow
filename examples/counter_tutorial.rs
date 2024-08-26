@@ -197,6 +197,11 @@ impl MyStyle {
 
 pub fn main() {
     let (action_sender, action_receiver) = yarrow::action_channel();
-
-    yarrow::run_blocking(MyApp::default(), action_sender, action_receiver).unwrap();
+    yarrow::run_blocking(
+        WindowConfig::default(),
+        action_sender,
+        action_receiver,
+        || MyApp::default(),
+    )
+    .unwrap();
 }

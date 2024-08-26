@@ -1,6 +1,5 @@
 use keyboard_types::{CompositionEvent, Modifiers};
-use rootvg::surface::{DefaultSurface, DefaultSurfaceConfig, NewSurfaceError};
-use std::sync::Arc;
+use rootvg::surface::{DefaultSurface, DefaultSurfaceConfig};
 use std::time::{Duration, Instant};
 
 use crate::action_queue::ActionSender;
@@ -20,7 +19,14 @@ use crate::{CursorIcon, ScissorRectID};
 #[cfg(feature = "winit")]
 mod winit_backend;
 #[cfg(feature = "winit")]
-pub use winit_backend::{run_blocking, OpenWindowError};
+use winit_backend as windowing_backend;
+
+#[cfg(feature = "baseview")]
+mod baseview_backend;
+#[cfg(feature = "baseview")]
+use baseview_backend as windowing_backend;
+
+pub use windowing_backend::{run_blocking, OpenWindowError};
 
 pub type WindowID = u32;
 
@@ -59,85 +65,61 @@ impl PointerLockState {
     }
 }
 
+pub(crate) trait WindowBackend {
+    fn set_pointer_position(
+        &mut self,
+        window_id: WindowID,
+        position: PhysicalPoint,
+    ) -> Result<(), ()>;
+    fn unlock_pointer(&mut self, window_id: WindowID, prev_lock_state: PointerLockState);
+    fn request_redraw(&mut self, window_id: WindowID);
+    fn has_focus(&mut self, window_id: WindowID) -> bool;
+    fn try_lock_pointer(&mut self, window_id: WindowID) -> PointerLockState;
+    fn set_cursor_icon(&mut self, window_id: WindowID, icon: CursorIcon);
+    fn resize(
+        &mut self,
+        window_id: WindowID,
+        logical_size: Size,
+        scale_factor: ScaleFactor,
+    ) -> Result<(), ()>;
+    fn set_minimized(&mut self, window_id: WindowID, minimized: bool);
+    fn set_maximized(&mut self, window_id: WindowID, maximized: bool);
+    fn focus_window(&mut self, window_id: WindowID);
+    fn set_window_title(&mut self, window_id: WindowID, title: String);
+    fn create_window<A: Clone + 'static>(
+        &mut self,
+        window_id: WindowID,
+        config: &WindowConfig,
+        action_sender: &ActionSender<A>,
+        res: &mut ResourceCtx,
+    ) -> Result<WindowState<A>, OpenWindowError>;
+    fn close_window(&mut self, window_id: WindowID);
+}
+
 pub(crate) struct WindowState<A: Clone + 'static> {
-    view: View<A>,
+    pub queued_pointer_position: Option<PhysicalPoint>,
+    pub queued_pointer_delta: Option<(f64, f64)>,
+    pub prev_pointer_pos: Option<Point>,
+
+    pub(crate) view: View<A>,
+    pub(crate) clipboard: Clipboard,
+    pub(crate) scale_factor: ScaleFactor,
+    pub(crate) scale_factor_recip: f32,
+    pub(crate) pointer_lock_state: PointerLockState,
+
     renderer: rootvg::Canvas,
     surface: Option<DefaultSurface<'static>>,
     logical_size: Size,
     physical_size: PhysicalSizeI32,
-    scale_factor: ScaleFactor,
-    scale_factor_recip: f32,
     system_scale_factor: ScaleFactor,
     scale_factor_config: ScaleFactorConfig,
-    pub queued_pointer_position: Option<PhysicalPoint>,
-    pub queued_pointer_delta: Option<(f64, f64)>,
-    #[cfg(feature = "winit")]
-    pub winit_window: Arc<winit::window::Window>,
-    clipboard: Clipboard,
-
-    pub prev_pointer_pos: Option<Point>,
     pointer_btn_states: [PointerBtnState; 5],
-    pointer_lock_state: PointerLockState,
 
     modifiers: Modifiers,
     current_cursor_icon: CursorIcon,
 }
 
 impl<A: Clone + 'static> WindowState<A> {
-    pub fn new(
-        #[cfg(feature = "winit")] winit_window: &Arc<winit::window::Window>,
-        logical_size: Size,
-        physical_size: PhysicalSizeI32,
-        system_scale_factor: ScaleFactor,
-        scale_factor_config: ScaleFactorConfig,
-        view_config: ViewConfig,
-        surface_config: DefaultSurfaceConfig,
-        action_sender: ActionSender<A>,
-        id: WindowID,
-        res: &mut ResourceCtx,
-    ) -> Result<Self, NewSurfaceError> {
-        let scale_factor = scale_factor_config.scale_factor(system_scale_factor);
-
-        let surface = DefaultSurface::new(
-            physical_size,
-            scale_factor,
-            Arc::clone(winit_window),
-            surface_config,
-        )?;
-        let renderer = rootvg::Canvas::new(
-            &surface.device,
-            &surface.queue,
-            surface.format(),
-            surface.canvas_config(),
-            &mut res.font_system,
-        );
-
-        let view = View::new(physical_size, scale_factor, view_config, action_sender, id);
-
-        let clipboard = Clipboard::new(winit_window);
-
-        Ok(Self {
-            view,
-            renderer,
-            surface: Some(surface),
-            logical_size,
-            physical_size,
-            scale_factor,
-            scale_factor_recip: scale_factor.recip(),
-            system_scale_factor,
-            scale_factor_config,
-            queued_pointer_position: None,
-            queued_pointer_delta: None,
-            winit_window: Arc::clone(winit_window),
-            prev_pointer_pos: None,
-            pointer_btn_states: [PointerBtnState::default(); 5],
-            modifiers: Modifiers::empty(),
-            current_cursor_icon: CursorIcon::Default,
-            pointer_lock_state: PointerLockState::NotLocked,
-            clipboard,
-        })
-    }
-
     pub fn set_size(&mut self, new_size: PhysicalSizeI32, new_system_scale_factor: ScaleFactor) {
         if self.physical_size == new_size && self.system_scale_factor == new_system_scale_factor {
             return;
@@ -159,10 +141,7 @@ impl<A: Clone + 'static> WindowState<A> {
             .resize(new_size, scale_factor);
     }
 
-    pub fn set_scale_factor_config(
-        &mut self,
-        config: ScaleFactorConfig,
-    ) -> Option<PhysicalSizeI32> {
+    pub fn set_scale_factor_config(&mut self, config: ScaleFactorConfig) -> Option<Size> {
         if self.scale_factor_config == config {
             return None;
         }
@@ -177,10 +156,6 @@ impl<A: Clone + 'static> WindowState<A> {
         }
 
         let logical_size = crate::math::to_logical_size_i32(self.physical_size, self.scale_factor);
-        let requested_physical_size: PhysicalSizeI32 =
-            crate::math::to_physical_size(logical_size, scale_factor)
-                .round()
-                .cast();
 
         self.scale_factor = scale_factor;
         self.scale_factor_recip = scale_factor.recip();
@@ -191,7 +166,7 @@ impl<A: Clone + 'static> WindowState<A> {
             .unwrap()
             .resize(self.physical_size, scale_factor);
 
-        Some(requested_physical_size)
+        Some(logical_size)
     }
 
     pub fn set_pointer_locked(&mut self, state: PointerLockState) {
@@ -244,6 +219,8 @@ impl<A: Clone + 'static> WindowState<A> {
         event: KeyboardEvent,
         res: &mut ResourceCtx,
     ) -> EventCaptureStatus {
+        self.modifiers = event.modifiers;
+
         self.view
             .handle_event(&CanvasEvent::Keyboard(event), res, &mut self.clipboard)
     }

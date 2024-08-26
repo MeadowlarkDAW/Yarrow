@@ -36,5 +36,4 @@ pub use yarrow_derive as derive;
 pub use rootvg as vg;
 pub use rootvg::math;
 
-#[cfg(feature = "winit")]
 pub use window::run_blocking;
