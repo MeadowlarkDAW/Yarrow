@@ -37,3 +37,5 @@ pub use rootvg as vg;
 pub use rootvg::math;
 
 pub use window::run_blocking;
+
+pub use derive_where;
