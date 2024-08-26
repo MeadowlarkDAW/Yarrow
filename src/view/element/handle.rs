@@ -1,17 +1,3 @@
-// ---------------------------------------------------------------------------------
-//
-//    '%%' '%% '%%'
-//    %'%\% | %/%'%     Yarrow GUI Library
-//        \ | /
-//         \|/          https://github.com/MeadowlarkDAW/Yarrow
-//          |
-//
-//
-// MIT License Copyright (c) 2024 Billy Messenger
-// https://github.com/MeadowlarkDAW/Yarrow/blob/main/LICENSE
-//
-// ---------------------------------------------------------------------------------
-
 use super::ElementModificationType;
 use crate::layout::Align2;
 use crate::math::{Point, Rect, Size, Vector, ZIndex};

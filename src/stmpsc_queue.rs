@@ -1,17 +1,3 @@
-// ---------------------------------------------------------------------------------
-//
-//    '%%' '%% '%%'
-//    %'%\% | %/%'%     Yarrow GUI Library
-//        \ | /
-//         \|/          https://github.com/MeadowlarkDAW/Yarrow
-//          |
-//
-//
-// MIT License Copyright (c) 2024 Billy Messenger
-// https://github.com/MeadowlarkDAW/Yarrow/blob/main/LICENSE
-//
-// ---------------------------------------------------------------------------------
-
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::rc::Rc;
