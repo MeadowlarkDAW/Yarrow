@@ -1,11 +1,9 @@
 use yarrow::prelude::*;
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub enum MyAction {
     OffsetCounterBy(i32),
     ResetCounter,
-    #[default]
-    None, // A quirk needed to get Yarrow's macros to work
 }
 
 #[derive(Default)]
@@ -50,7 +48,6 @@ impl Application for MyApp {
 
         while let Ok(action) = cx.action_receiver.try_recv() {
             match action {
-                MyAction::None => {}
                 MyAction::OffsetCounterBy(offset) => {
                     self.count += offset;
                     state_changed = true;

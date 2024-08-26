@@ -1,3 +1,4 @@
+use derive_where::derive_where;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -116,7 +117,7 @@ impl ElementStyle for SwitchStyle {
 #[element_builder_hidden]
 #[element_builder_disabled]
 #[element_builder_tooltip]
-#[derive(Default)]
+#[derive_where(Default)]
 pub struct SwitchBuilder<A: Clone + 'static> {
     pub action: Option<Box<dyn FnMut(bool) -> A>>,
     pub toggled: bool,
@@ -481,7 +482,7 @@ struct SharedState {
 }
 
 impl Switch {
-    pub fn builder<A: Clone + 'static + Default>() -> SwitchBuilder<A> {
+    pub fn builder<A: Clone + 'static>() -> SwitchBuilder<A> {
         SwitchBuilder::default()
     }
 

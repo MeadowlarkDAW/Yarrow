@@ -1,3 +1,4 @@
+use derive_where::derive_where;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -13,7 +14,7 @@ pub struct ClickAreaInfo {
 #[element_builder_rect]
 #[element_builder_disabled]
 #[element_builder_tooltip]
-#[derive(Default)]
+#[derive_where(Default)]
 pub struct ClickAreaBuilder<A: Clone + 'static> {
     pub click_action: Option<Box<dyn FnMut(ClickAreaInfo) -> A>>,
     pub button: PointerButton,
@@ -196,7 +197,7 @@ pub struct ClickArea {
 }
 
 impl ClickArea {
-    pub fn builder<A: Clone + 'static + Default>() -> ClickAreaBuilder<A> {
+    pub fn builder<A: Clone + 'static>() -> ClickAreaBuilder<A> {
         ClickAreaBuilder::default()
     }
 

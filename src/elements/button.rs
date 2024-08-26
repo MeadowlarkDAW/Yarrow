@@ -1,3 +1,4 @@
+use derive_where::derive_where;
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
@@ -457,7 +458,7 @@ impl ButtonInner {
 #[element_builder_hidden]
 #[element_builder_disabled]
 #[element_builder_tooltip]
-#[derive(Default)]
+#[derive_where(Default)]
 pub struct ButtonBuilder<A: Clone + 'static> {
     pub on_select_action: Option<A>,
     pub text: Option<String>,
@@ -760,7 +761,7 @@ struct SharedState {
 }
 
 impl Button {
-    pub fn builder<A: Clone + 'static + Default>() -> ButtonBuilder<A> {
+    pub fn builder<A: Clone + 'static>() -> ButtonBuilder<A> {
         ButtonBuilder::default()
     }
 

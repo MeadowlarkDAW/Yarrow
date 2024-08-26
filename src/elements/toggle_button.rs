@@ -1,3 +1,4 @@
+use derive_where::derive_where;
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
@@ -660,7 +661,7 @@ impl ToggleButtonInner {
 #[element_builder_hidden]
 #[element_builder_disabled]
 #[element_builder_tooltip]
-#[derive(Default)]
+#[derive_where(Default)]
 pub struct ToggleButtonBuilder<A: Clone + 'static> {
     pub action: Option<Box<dyn FnMut(bool) -> A>>,
     pub toggled: bool,
@@ -966,7 +967,7 @@ struct SharedState {
 }
 
 impl ToggleButton {
-    pub fn builder<A: Clone + 'static + Default>() -> ToggleButtonBuilder<A> {
+    pub fn builder<A: Clone + 'static>() -> ToggleButtonBuilder<A> {
         ToggleButtonBuilder::default()
     }
 

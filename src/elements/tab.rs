@@ -1,3 +1,4 @@
+use derive_where::derive_where;
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
@@ -55,7 +56,7 @@ pub enum IndicatorLinePlacement {
 #[element_builder_hidden]
 #[element_builder_disabled]
 #[element_builder_tooltip]
-#[derive(Default)]
+#[derive_where(Default)]
 pub struct TabBuilder<A: Clone + 'static> {
     pub action: Option<A>,
     pub toggled: bool,
@@ -419,7 +420,7 @@ pub struct Tab {
     shared_state: Rc<RefCell<SharedState>>,
 }
 impl Tab {
-    pub fn builder<A: Clone + 'static + Default>() -> TabBuilder<A> {
+    pub fn builder<A: Clone + 'static>() -> TabBuilder<A> {
         TabBuilder::default()
     }
 
@@ -654,7 +655,7 @@ pub struct TabGroup {
 }
 
 impl TabGroup {
-    pub fn new<'a, A: Clone + 'static + Default, F>(
+    pub fn new<'a, A: Clone + 'static, F>(
         options: impl IntoIterator<Item = impl Into<TabGroupOption>>,
         selected_index: usize,
         mut on_selected: F,

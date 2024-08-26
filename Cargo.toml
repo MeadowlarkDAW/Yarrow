@@ -91,6 +91,7 @@ rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "a98b6addb26f6
     "text",
     "default-surface",
 ] }
+derive-where = "1.2.7"
 
 [dev-dependencies]
 wgpu = { version = "22", default-features = true }

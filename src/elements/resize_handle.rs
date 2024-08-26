@@ -508,7 +508,7 @@ pub struct ResizeHandle {
 }
 
 impl ResizeHandle {
-    pub fn builder<A: Clone + 'static + Default>() -> ResizeHandleBuilder<A> {
+    pub fn builder<A: Clone + 'static>() -> ResizeHandleBuilder<A> {
         ResizeHandleBuilder::default()
     }
 

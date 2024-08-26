@@ -78,7 +78,7 @@ pub fn main() {
     .unwrap();
 }
 
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 enum MyAction {
     BasicElements(basic_elements::Action),
     KnobsAndSliders(knobs_and_sliders::Action),
@@ -91,8 +91,6 @@ enum MyAction {
     HideTooltip(WindowID),
     TabSelected(MyTab),
     OpenAboutWindow,
-    #[default]
-    None, // A quirk needed to get Yarrow's macros to work
 }
 
 impl From<basic_elements::Action> for MyAction {
@@ -238,7 +236,6 @@ impl MyApp {
         let mut needs_layout = false;
 
         match action {
-            MyAction::None => {}
             MyAction::BasicElements(action) => {
                 let mut cx = cx.window_context(MAIN_WINDOW).unwrap();
                 needs_layout = elements.basic_elements.handle_action(action, &mut cx);

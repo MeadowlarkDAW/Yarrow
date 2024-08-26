@@ -1,3 +1,4 @@
+use derive_where::derive_where;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -335,7 +336,7 @@ impl ElementStyle for DropDownMenuStyle {
 
 #[element_builder]
 #[element_builder_class]
-#[derive(Default)]
+#[derive_where(Default)]
 pub struct DropDownMenuBuilder<A: Clone + 'static> {
     pub action: Option<Box<dyn FnMut(usize) -> A>>,
     pub entries: Vec<MenuEntry>,
@@ -712,7 +713,7 @@ pub struct DropDownMenu {
 }
 
 impl DropDownMenu {
-    pub fn builder<A: Clone + 'static + Default>() -> DropDownMenuBuilder<A> {
+    pub fn builder<A: Clone + 'static>() -> DropDownMenuBuilder<A> {
         DropDownMenuBuilder::default()
     }
 

@@ -1,3 +1,4 @@
+use derive_where::derive_where;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -92,7 +93,7 @@ impl ElementStyle for RadioButtonStyle {
 #[element_builder_hidden]
 #[element_builder_disabled]
 #[element_builder_tooltip]
-#[derive(Default)]
+#[derive_where(Default)]
 pub struct RadioButtonBuilder<A: Clone + 'static> {
     pub action: Option<A>,
     pub toggled: bool,
@@ -392,7 +393,7 @@ struct SharedState {
 }
 
 impl RadioButton {
-    pub fn builder<A: Clone + 'static + Default>() -> RadioButtonBuilder<A> {
+    pub fn builder<A: Clone + 'static>() -> RadioButtonBuilder<A> {
         RadioButtonBuilder::default()
     }
 
@@ -476,7 +477,7 @@ pub struct RadioButtonGroup {
 }
 
 impl RadioButtonGroup {
-    pub fn new<A: Clone + 'static + Default, F>(
+    pub fn new<A: Clone + 'static, F>(
         options: impl IntoIterator<Item = impl Into<String>>,
         selected_index: usize,
         mut on_selected: F,
