@@ -26,6 +26,8 @@ mod baseview_backend;
 #[cfg(feature = "baseview")]
 use baseview_backend as windowing_backend;
 
+#[cfg(feature = "baseview")]
+pub use windowing_backend::run_parented;
 pub use windowing_backend::{run_blocking, OpenWindowError};
 
 pub type WindowID = u32;

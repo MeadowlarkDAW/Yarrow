@@ -1,5 +1,5 @@
 use baseview::{
-    MouseCursor, Window as BaseviewWindow, WindowHandler as BaseviewWindowHandler,
+    MouseCursor, Window as BaseviewWindow, WindowHandle, WindowHandler as BaseviewWindowHandler,
     WindowOpenOptions, WindowScalePolicy,
 };
 use keyboard_types::{CompositionEvent, KeyState, Modifiers};
@@ -514,6 +514,49 @@ where
     });
 
     Ok(())
+}
+
+pub fn run_parented<P: HasRawWindowHandle, A: Application + 'static, B>(
+    parent: &P,
+    main_window_config: WindowConfig,
+    action_sender: ActionSender<A::Action>,
+    action_receiver: ActionReceiver<A::Action>,
+    mut build_app: B,
+) -> Result<WindowHandle, Box<dyn Error>>
+where
+    A::Action: Send,
+    B: FnMut() -> A,
+    B: 'static + Send,
+{
+    let options = WindowOpenOptions {
+        title: main_window_config.title.clone(),
+        scale: match main_window_config.scale_factor {
+            ScaleFactorConfig::System => WindowScalePolicy::SystemScaleFactor,
+            ScaleFactorConfig::Custom(c) => WindowScalePolicy::ScaleFactor(c.into()),
+        },
+        size: baseview::Size::new(
+            main_window_config.size.width as f64,
+            main_window_config.size.height as f64,
+        ),
+    };
+
+    Ok(BaseviewWindow::open_parented(
+        parent,
+        options,
+        move |window: &mut BaseviewWindow| {
+            let user_app = (build_app)();
+
+            // TODO: get rid of unwrap once baseview supports erros on build closures.
+            BaseviewAppHandler::new(
+                user_app,
+                action_sender,
+                action_receiver,
+                main_window_config,
+                window,
+            )
+            .unwrap()
+        },
+    ))
 }
 
 fn new_window<A: Application>(
