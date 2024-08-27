@@ -1,5 +1,5 @@
 use baseview::{
-    MouseCursor, Window as BaseviewWindow, WindowHandler as BaseviewWindowHandler,
+    MouseCursor, Window as BaseviewWindow, WindowHandle, WindowHandler as BaseviewWindowHandler,
     WindowOpenOptions, WindowScalePolicy,
 };
 use keyboard_types::{CompositionEvent, KeyState, Modifiers};
@@ -522,7 +522,7 @@ pub fn run_parented<P: HasRawWindowHandle, A: Application + 'static, B>(
     action_sender: ActionSender<A::Action>,
     action_receiver: ActionReceiver<A::Action>,
     mut build_app: B,
-) -> Result<(), Box<dyn Error>>
+) -> Result<WindowHandle, Box<dyn Error>>
 where
     A::Action: Send,
     B: FnMut() -> A,
@@ -540,21 +540,23 @@ where
         ),
     };
 
-    BaseviewWindow::open_parented(parent, options, move |window: &mut BaseviewWindow| {
-        let user_app = (build_app)();
+    Ok(BaseviewWindow::open_parented(
+        parent,
+        options,
+        move |window: &mut BaseviewWindow| {
+            let user_app = (build_app)();
 
-        // TODO: get rid of unwrap once baseview supports erros on build closures.
-        BaseviewAppHandler::new(
-            user_app,
-            action_sender,
-            action_receiver,
-            main_window_config,
-            window,
-        )
-        .unwrap()
-    });
-
-    Ok(())
+            // TODO: get rid of unwrap once baseview supports erros on build closures.
+            BaseviewAppHandler::new(
+                user_app,
+                action_sender,
+                action_receiver,
+                main_window_config,
+                window,
+            )
+            .unwrap()
+        },
+    ))
 }
 
 fn new_window<A: Application>(
