@@ -3,6 +3,7 @@ pub mod click_area;
 pub mod drop_down_menu;
 pub mod label;
 pub mod paragraph;
+pub mod progress_bar;
 pub mod quad;
 pub mod radio_button;
 pub mod resize_handle;

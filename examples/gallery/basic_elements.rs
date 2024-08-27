@@ -1,5 +1,6 @@
 use crate::style::{MyIcon, MyStyle};
 use crate::{MyAction, OVERLAY_Z_INDEX, RIGHT_CLICK_AREA_Z_INDEX, SCROLL_AREA_Z_INDEX};
+use yarrow::elements::progress_bar::ProgressBar;
 use yarrow::prelude::*;
 
 const SCROLL_AREA_SRECT: ScissorRectID = ScissorRectID(0);
@@ -480,6 +481,7 @@ impl Elements {
             scroll_area,
             separator_1,
             separator_2,
+
             active_text_input_menu: _,
         } = self;
 
