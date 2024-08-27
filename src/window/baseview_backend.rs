@@ -516,6 +516,47 @@ where
     Ok(())
 }
 
+pub fn run_parented<P: HasRawWindowHandle, A: Application + 'static, B>(
+    parent: &P,
+    main_window_config: WindowConfig,
+    action_sender: ActionSender<A::Action>,
+    action_receiver: ActionReceiver<A::Action>,
+    mut build_app: B,
+) -> Result<(), Box<dyn Error>>
+where
+    A::Action: Send,
+    B: FnMut() -> A,
+    B: 'static + Send,
+{
+    let options = WindowOpenOptions {
+        title: main_window_config.title.clone(),
+        scale: match main_window_config.scale_factor {
+            ScaleFactorConfig::System => WindowScalePolicy::SystemScaleFactor,
+            ScaleFactorConfig::Custom(c) => WindowScalePolicy::ScaleFactor(c.into()),
+        },
+        size: baseview::Size::new(
+            main_window_config.size.width as f64,
+            main_window_config.size.height as f64,
+        ),
+    };
+
+    BaseviewWindow::open_parented(parent, options, move |window: &mut BaseviewWindow| {
+        let user_app = (build_app)();
+
+        // TODO: get rid of unwrap once baseview supports erros on build closures.
+        BaseviewAppHandler::new(
+            user_app,
+            action_sender,
+            action_receiver,
+            main_window_config,
+            window,
+        )
+        .unwrap()
+    });
+
+    Ok(())
+}
+
 fn new_window<A: Application>(
     config: WindowConfig,
     app_handler: &mut AppHandler<A>,

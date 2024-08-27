@@ -37,5 +37,7 @@ pub use rootvg as vg;
 pub use rootvg::math;
 
 pub use window::run_blocking;
+#[cfg(feature = "baseview")]
+pub use window::run_parented;
 
 pub use derive_where;
