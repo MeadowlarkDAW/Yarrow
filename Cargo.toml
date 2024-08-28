@@ -47,6 +47,8 @@ svg-icons = ["rootvg/svg-icons"]
 # See: https://github.com/iced-rs/iced/pull/1888
 #      https://github.com/pop-os/cosmic-text/issues/195
 web-colors = ["rootvg/web-colors"]
+# Enables using custom shaders to render elements
+custom-shaders = ["rootvg/custom-primitive"]
 # Enables X11 support on Linux platforms
 x11 = ["winit?/x11"]
 # Enables Wayland support on Linux platforms
@@ -62,7 +64,7 @@ all-features = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace]
-members = ["yarrow_derive"]
+members = [ "examples/custom_shader", "yarrow_derive"]
 
 [dependencies]
 yarrow_derive = { path = "yarrow_derive" }
@@ -87,7 +89,7 @@ thiserror = "1.0.61"
 serde = { version = "1.0", default-features = false, features = [
     "derive",
 ], optional = true }
-rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "75150bdf2fbbf7f5339b1d24741a84981d33c220", default-features = false, features = [
+rootvg = { git = "https://github.com/MeadowlarkDAW/rootvg", rev = "5ce3fe0f5ca28e823dc0c0dfb128d02071fb297d", default-features = false, features = [
     "quad",
     "text",
     "default-surface",

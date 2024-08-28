@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::derive::*;
 use crate::prelude::*;
 use crate::vg::quad::SolidQuadBuilder;
 
@@ -449,7 +450,7 @@ impl<A: Clone + 'static> Element<A> for ResizeHandleElement<A> {
         EventCaptureStatus::NotCaptured
     }
 
-    fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
+    fn render(&mut self, cx: RenderContext, primitives: &mut PrimitiveGroup) {
         let bounds_rect = Rect::new(Point::zero(), cx.bounds_size);
 
         let style = cx.res.style_system.get::<ResizeHandleStyle>(cx.class);

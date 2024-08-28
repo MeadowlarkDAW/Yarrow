@@ -2,6 +2,7 @@ use derive_where::derive_where;
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
+use crate::derive::*;
 use crate::prelude::*;
 use crate::theme::DEFAULT_ICON_SIZE;
 
@@ -400,14 +401,14 @@ impl ButtonInner {
         self.label_inner.icon()
     }
 
-    pub fn render_primitives(
+    pub fn render(
         &mut self,
         bounds: Rect,
         style: &ButtonStyle,
         font_system: &mut FontSystem,
     ) -> LabelPrimitives {
         self.label_inner
-            .render_primitives(bounds, &style.label_style(self.state), font_system)
+            .render(bounds, &style.label_style(self.state), font_system)
     }
 
     /// An offset that can be used mainly to correct the position of text.
@@ -749,10 +750,10 @@ impl<A: Clone + 'static> Element<A> for ButtonElement<A> {
         EventCaptureStatus::NotCaptured
     }
 
-    fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
+    fn render(&mut self, cx: RenderContext, primitives: &mut PrimitiveGroup) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
-        let label_primitives = shared_state.inner.render_primitives(
+        let label_primitives = shared_state.inner.render(
             Rect::from_size(cx.bounds_size),
             cx.res.style_system.get(cx.class),
             &mut cx.res.font_system,

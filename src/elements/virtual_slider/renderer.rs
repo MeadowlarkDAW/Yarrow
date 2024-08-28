@@ -85,10 +85,10 @@ pub trait VirtualSliderRenderer: 'static {
     }
 
     #[allow(unused)]
-    fn render_primitives(
+    fn render(
         &mut self,
         info: VirtualSliderRenderInfo<'_>,
-        cx: RenderContext<'_>,
+        cx: RenderContext,
         primitives: &mut PrimitiveGroup,
     ) {
     }

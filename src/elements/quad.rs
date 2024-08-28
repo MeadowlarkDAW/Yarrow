@@ -1,5 +1,6 @@
 use rootvg::PrimitiveGroup;
 
+use crate::derive::*;
 use crate::prelude::*;
 
 #[element_builder]
@@ -67,7 +68,7 @@ impl<A: Clone + 'static> Element<A> for QuadElementInternal {
         EventCaptureStatus::NotCaptured
     }
 
-    fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
+    fn render(&mut self, cx: RenderContext, primitives: &mut PrimitiveGroup) {
         primitives.add(
             cx.res
                 .style_system

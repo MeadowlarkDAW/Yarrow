@@ -111,6 +111,7 @@ pub(crate) struct WindowState<A: Clone + 'static> {
 
     renderer: rootvg::Canvas,
     surface: Option<DefaultSurface<'static>>,
+    multisample: wgpu::MultisampleState,
     logical_size: Size,
     physical_size: PhysicalSizeI32,
     system_scale_factor: ScaleFactor,
@@ -398,6 +399,8 @@ impl<A: Clone + 'static> WindowState<A> {
             &surface.surface,
             &surface.device,
             &surface.queue,
+            surface.format(),
+            self.multisample,
             &mut self.renderer,
             pre_present_notify,
             res,

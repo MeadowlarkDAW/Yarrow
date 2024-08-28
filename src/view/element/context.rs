@@ -311,7 +311,7 @@ impl<'a, A: Clone + 'static> ElementContext<'a, A> {
 }
 
 /// A context for this element instance for use in rendering primitives.
-pub struct RenderContext<'a> {
+pub struct RenderContext<'a, 'b> {
     /// The font system.
     pub res: &'a mut ResourceCtx,
     /// The size of this element's bounding rectangle.
@@ -331,4 +331,27 @@ pub struct RenderContext<'a> {
     pub window_size: Size,
     /// The optional global render cache.
     pub render_cache: Option<&'a mut Box<dyn ElementRenderCache>>,
+
+    /// The RootVG Canvas context
+    ///
+    /// Note, element must *NOT* add primitives directly to this context. Elements
+    /// must only add primitives to the `PrimitiveGroup` passed into the `render`
+    /// method.
+    pub vg: &'a mut rootvg::CanvasCtx<'b>,
+
+    #[cfg(feature = "custom-shaders")]
+    /// The custom pipelines in this window
+    pub custom_pipelines: &'a mut crate::CustomPipelines,
+    /// The wgpu device
+    #[cfg(feature = "custom-shaders")]
+    pub device: &'a wgpu::Device,
+    /// The wgpu queue
+    #[cfg(feature = "custom-shaders")]
+    pub queue: &'a wgpu::Queue,
+    /// The wgpu texture format
+    #[cfg(feature = "custom-shaders")]
+    pub texture_format: wgpu::TextureFormat,
+    /// The wgpu multisample state
+    #[cfg(feature = "custom-shaders")]
+    pub multisample: wgpu::MultisampleState,
 }

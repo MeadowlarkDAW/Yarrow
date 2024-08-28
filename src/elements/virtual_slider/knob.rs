@@ -167,10 +167,10 @@ impl VirtualSliderRenderer for KnobRenderer {
     }
 
     #[allow(unused_mut)]
-    fn render_primitives(
+    fn render(
         &mut self,
         info: VirtualSliderRenderInfo<'_>,
-        mut cx: RenderContext<'_>,
+        mut cx: RenderContext,
         primitives: &mut PrimitiveGroup,
     ) {
         let style = self.style.downcast_ref::<KnobStyle>().unwrap();

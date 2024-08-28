@@ -626,11 +626,14 @@ fn new_window<A: Application>(
     let surface = unsafe {
         DefaultSurface::new_unsafe(physical_size, scale_factor, target, config.surface_config)?
     };
+
+    let canvas_config = surface.canvas_config();
+
     let renderer = rootvg::Canvas::new(
         &surface.device,
         &surface.queue,
         surface.format(),
-        surface.canvas_config(),
+        canvas_config,
         &mut app_handler.context.res.font_system,
     );
 
@@ -648,6 +651,7 @@ fn new_window<A: Application>(
         view,
         renderer,
         surface: Some(surface),
+        multisample: canvas_config.multisample,
         logical_size: config.size,
         physical_size,
         scale_factor,

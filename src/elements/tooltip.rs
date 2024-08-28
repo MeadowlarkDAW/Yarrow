@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::derive::*;
 use crate::prelude::*;
 
 use super::label::LabelInner;
@@ -328,11 +329,11 @@ impl<A: Clone + 'static> Element<A> for TooltipElement {
         EventCaptureStatus::NotCaptured
     }
 
-    fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
+    fn render(&mut self, cx: RenderContext, primitives: &mut PrimitiveGroup) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
         let style: &TooltipStyle = cx.res.style_system.get(cx.class);
 
-        let label_primitives = shared_state.inner.render_primitives(
+        let label_primitives = shared_state.inner.render(
             Rect::from_size(cx.bounds_size),
             &style.label_style(),
             &mut cx.res.font_system,

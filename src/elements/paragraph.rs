@@ -1,6 +1,7 @@
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
+use crate::derive::*;
 use crate::prelude::*;
 use crate::vg::text::{RcTextBuffer, TextPrimitive};
 
@@ -212,7 +213,7 @@ impl ParagraphInner {
         self.padded_size_needs_calculated = true;
     }
 
-    pub fn render_primitives(&mut self, bounds: Rect, style: &ParagraphStyle) -> LabelPrimitives {
+    pub fn render(&mut self, bounds: Rect, style: &ParagraphStyle) -> LabelPrimitives {
         let mut needs_layout = self.text_size_needs_calculated;
 
         if self.prev_bounds_size != bounds.size {
@@ -374,10 +375,10 @@ impl<A: Clone + 'static> Element<A> for ParagraphElement {
         EventCaptureStatus::NotCaptured
     }
 
-    fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
+    fn render(&mut self, cx: RenderContext, primitives: &mut PrimitiveGroup) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
-        let paragraph_primitives = shared_state.inner.render_primitives(
+        let paragraph_primitives = shared_state.inner.render(
             Rect::from_size(cx.bounds_size),
             cx.res.style_system.get(cx.class),
         );

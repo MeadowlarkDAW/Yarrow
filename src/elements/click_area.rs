@@ -2,6 +2,7 @@ use derive_where::derive_where;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::derive::*;
 use crate::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq)]

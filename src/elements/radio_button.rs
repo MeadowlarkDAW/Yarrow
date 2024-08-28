@@ -2,6 +2,7 @@ use derive_where::derive_where;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::derive::*;
 use crate::prelude::*;
 
 use super::label::Label;
@@ -245,7 +246,7 @@ impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
         EventCaptureStatus::NotCaptured
     }
 
-    fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
+    fn render(&mut self, cx: RenderContext, primitives: &mut PrimitiveGroup) {
         let shared_state = RefCell::borrow(&self.shared_state);
 
         let style = cx.res.style_system.get::<RadioButtonStyle>(cx.class);

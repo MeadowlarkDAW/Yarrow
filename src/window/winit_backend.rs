@@ -947,11 +947,14 @@ fn create_window<A: Clone + 'static>(
         Arc::clone(&window),
         config.surface_config.clone(),
     )?;
+
+    let canvas_config = surface.canvas_config();
+
     let renderer = rootvg::Canvas::new(
         &surface.device,
         &surface.queue,
         surface.format(),
-        surface.canvas_config(),
+        canvas_config,
         &mut res.font_system,
     );
 
@@ -971,6 +974,7 @@ fn create_window<A: Clone + 'static>(
             view,
             renderer,
             surface: Some(surface),
+            multisample: canvas_config.multisample,
             logical_size: config.size,
             physical_size,
             scale_factor,

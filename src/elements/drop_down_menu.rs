@@ -2,6 +2,7 @@ use derive_where::derive_where;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::derive::*;
 use crate::prelude::*;
 use crate::theme::DEFAULT_ICON_SIZE;
 use crate::vg::{
@@ -608,7 +609,7 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
         EventCaptureStatus::NotCaptured
     }
 
-    fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
+    fn render(&mut self, cx: RenderContext, primitives: &mut PrimitiveGroup) {
         let style: &DropDownMenuStyle = cx.res.style_system.get(cx.class);
 
         let (left_style_idle, right_style_idle) = style.label_styles(false);
@@ -651,7 +652,7 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
                         )));
                     }
 
-                    let left_primitives = left_label.render_primitives(
+                    let left_primitives = left_label.render(
                         Rect::new(Point::new(style.outer_padding, *start_y), label_size),
                         if hovered {
                             &left_style_hover
@@ -681,7 +682,7 @@ impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
                                 .desired_size(|| style.right_padding_info())
                                 .width;
 
-                        let right_primitives = right_label.render_primitives(
+                        let right_primitives = right_label.render(
                             Rect::new(Point::new(right_x, *start_y), label_size),
                             right_style,
                             &mut cx.res.font_system,

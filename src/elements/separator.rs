@@ -1,3 +1,4 @@
+use crate::derive::*;
 use crate::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -138,7 +139,7 @@ impl<A: Clone + 'static> Element<A> for SeparatorElement {
         EventCaptureStatus::NotCaptured
     }
 
-    fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
+    fn render(&mut self, cx: RenderContext, primitives: &mut PrimitiveGroup) {
         let style = cx.res.style_system.get::<SeparatorStyle>(cx.class);
 
         let rect = if self.vertical {
