@@ -1,6 +1,7 @@
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
+use crate::derive::*;
 use crate::prelude::*;
 use crate::theme::DEFAULT_ICON_SIZE;
 use crate::vg::{
@@ -395,7 +396,7 @@ impl LabelInner {
         self.padded_size_needs_calculated = true;
     }
 
-    pub fn render_primitives(
+    pub fn render(
         &mut self,
         bounds: Rect,
         style: &LabelStyle,
@@ -679,10 +680,10 @@ impl<A: Clone + 'static> Element<A> for LabelElement {
         EventCaptureStatus::NotCaptured
     }
 
-    fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
+    fn render(&mut self, cx: RenderContext, primitives: &mut PrimitiveGroup) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
-        let label_primitives = shared_state.inner.render_primitives(
+        let label_primitives = shared_state.inner.render(
             Rect::from_size(cx.bounds_size),
             cx.res.style_system.get(cx.class),
             &mut cx.res.font_system,

@@ -1,6 +1,7 @@
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
+use crate::derive::*;
 use crate::prelude::*;
 use crate::theme::DEFAULT_ICON_SIZE;
 
@@ -451,7 +452,7 @@ impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
         res.capture_status
     }
 
-    fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
+    fn render(&mut self, cx: RenderContext, primitives: &mut PrimitiveGroup) {
         let shared_state = RefCell::borrow(&self.shared_state);
         let style: &IconTextInputStyle = cx.res.style_system.get(cx.class);
         let disabled = shared_state.inner.disabled;
@@ -476,7 +477,7 @@ impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
             primitives.add_text(text);
         }
 
-        let icon_primitives = self.icon.render_primitives(
+        let icon_primitives = self.icon.render(
             self.icon_rect,
             &style.icon_style(self.hovered, shared_state.inner.focused(), disabled),
         );

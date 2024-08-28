@@ -27,17 +27,20 @@ pub(crate) struct ElementID(pub thunderdome::Index);
 pub trait Element<A: Clone + 'static> {
     fn flags(&self) -> ElementFlags;
 
+    #[allow(unused)]
     fn on_event(
         &mut self,
         event: ElementEvent,
         cx: &mut ElementContext<'_, A>,
-    ) -> EventCaptureStatus;
+    ) -> EventCaptureStatus {
+        EventCaptureStatus::NotCaptured
+    }
 
     #[allow(unused)]
     fn on_dropped(&mut self, action_sender: &mut ActionSender<A>) {}
 
     #[allow(unused)]
-    fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {}
+    fn render(&mut self, cx: RenderContext, primitives: &mut PrimitiveGroup) {}
 
     /// A unique identifier for the optional global render cache.
     ///
@@ -54,8 +57,6 @@ pub trait Element<A: Clone + 'static> {
     fn global_render_cache(&self) -> Option<Box<dyn ElementRenderCache>> {
         None
     }
-
-    // TODO: Implement draw method for custom shader.
 }
 
 pub trait ElementRenderCache {

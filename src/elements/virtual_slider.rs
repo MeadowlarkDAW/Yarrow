@@ -3,6 +3,7 @@ use std::cell::{Ref, RefCell};
 use std::ops::Range;
 use std::rc::Rc;
 
+use crate::derive::*;
 use crate::prelude::*;
 
 mod inner;
@@ -969,7 +970,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
         EventCaptureStatus::NotCaptured
     }
 
-    fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
+    fn render(&mut self, cx: RenderContext, primitives: &mut PrimitiveGroup) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
         let SharedState {
             inner,
@@ -980,7 +981,7 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
             ..
         } = &mut *shared_state;
 
-        renderer.render_primitives(
+        renderer.render(
             VirtualSliderRenderInfo {
                 normal_value: inner.normal_value(),
                 default_normal: inner.default_normal(),

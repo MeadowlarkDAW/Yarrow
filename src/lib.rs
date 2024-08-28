@@ -33,9 +33,10 @@ pub use view::{ScissorRectID, TooltipInfo, View};
 pub use window::{WindowContext, WindowID, MAIN_WINDOW};
 pub use yarrow_derive as derive;
 
+#[cfg(feature = "custom-shaders")]
+pub use view::CustomPipelines;
+
 pub use rootvg as vg;
 pub use rootvg::math;
 
 pub use window::run_blocking;
-
-pub use derive_where;

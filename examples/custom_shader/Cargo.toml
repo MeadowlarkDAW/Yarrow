@@ -1,0 +1,10 @@
+[package]
+name = "custom_shader"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+yarrow = { path = "../../", features = ["custom-shaders"] }
+wgpu = { version = "22", default-features = false, features = ["wgsl"] }
+bytemuck = { version = "1.14.1", features = ["derive"] }

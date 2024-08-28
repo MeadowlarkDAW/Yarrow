@@ -1,6 +1,7 @@
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
+use crate::derive::*;
 use crate::prelude::*;
 
 use super::{TextInputAction, TextInputInner, TextInputStyle, TextInputUpdateResult};
@@ -276,7 +277,7 @@ impl<A: Clone + 'static> Element<A> for TextInputElement<A> {
         res.capture_status
     }
 
-    fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
+    fn render(&mut self, cx: RenderContext, primitives: &mut PrimitiveGroup) {
         let shared_state = RefCell::borrow(&self.shared_state);
         let style: &TextInputStyle = cx.res.style_system.get(cx.class);
 

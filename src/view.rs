@@ -40,6 +40,11 @@ use self::element::{
 };
 use self::scissor_rect::ScissorRect;
 
+#[cfg(feature = "custom-shaders")]
+mod custom_shaders;
+#[cfg(feature = "custom-shaders")]
+pub use self::custom_shaders::CustomPipelines;
+
 /// The settings for a new `View`.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -120,6 +125,9 @@ pub struct View<A: Clone + 'static> {
     window_visible: bool,
 
     render_caches: FxHashMap<u32, Box<dyn ElementRenderCache>>,
+
+    #[cfg(feature = "custom-shaders")]
+    custom_pipelines: CustomPipelines,
 }
 
 impl<A: Clone + 'static> View<A> {
@@ -204,6 +212,9 @@ impl<A: Clone + 'static> View<A> {
             hide_tooltip_action: None,
 
             render_caches: FxHashMap::default(),
+
+            #[cfg(feature = "custom-shaders")]
+            custom_pipelines: CustomPipelines::new(),
         }
     }
 
@@ -1836,11 +1847,14 @@ impl<A: Clone + 'static> View<A> {
         }
     }
 
+    #[allow(unused)]
     pub fn render<P: FnOnce()>(
         &mut self,
         surface: &wgpu::Surface,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
+        texture_format: wgpu::TextureFormat,
+        multisample: wgpu::MultisampleState,
         vg: &mut rootvg::Canvas,
         pre_present_notify: P,
         res: &mut ResourceCtx,
@@ -1884,7 +1898,7 @@ impl<A: Clone + 'static> View<A> {
                         None
                     };
 
-                    element_entry.element.render_primitives(
+                    element_entry.element.render(
                         RenderContext {
                             res,
                             bounds_size: element_entry.stack_data.rect.size,
@@ -1894,6 +1908,20 @@ impl<A: Clone + 'static> View<A> {
                             window_size: self.context.logical_size,
                             render_cache,
                             class: element_entry.stack_data.class,
+                            // For some reason the borrow checker doesn't like `vg` being
+                            // borrwed mutably here, even though it's fine with it being
+                            // borrwed mutably three times in the methods below.
+                            vg: &mut vg,
+                            #[cfg(feature = "custom-shaders")]
+                            custom_pipelines: &mut self.custom_pipelines,
+                            #[cfg(feature = "custom-shaders")]
+                            device,
+                            #[cfg(feature = "custom-shaders")]
+                            queue,
+                            #[cfg(feature = "custom-shaders")]
+                            texture_format,
+                            #[cfg(feature = "custom-shaders")]
+                            multisample,
                         },
                         &mut cache.primitives,
                     );

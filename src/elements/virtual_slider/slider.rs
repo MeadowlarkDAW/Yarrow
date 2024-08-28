@@ -362,10 +362,10 @@ impl VirtualSliderRenderer for SliderRenderer {
         }
     }
 
-    fn render_primitives(
+    fn render(
         &mut self,
         info: VirtualSliderRenderInfo<'_>,
-        cx: RenderContext<'_>,
+        cx: RenderContext,
         primitives: &mut PrimitiveGroup,
     ) {
         let style = self.style.downcast_ref::<SliderStyle>().unwrap();

@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::derive::*;
 use crate::prelude::*;
 
 /// The style of a scroll bar in a [`ScrollArea`] element.
@@ -783,7 +784,7 @@ impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
         EventCaptureStatus::NotCaptured
     }
 
-    fn render_primitives(&mut self, cx: RenderContext<'_>, primitives: &mut PrimitiveGroup) {
+    fn render(&mut self, cx: RenderContext, primitives: &mut PrimitiveGroup) {
         let style = cx.res.style_system.get::<ScrollBarStyle>(cx.class);
 
         let bg_style = |state| -> QuadStyle {
