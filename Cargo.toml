@@ -76,6 +76,7 @@ smallvec = "1.13.1"
 thunderdome = "0.6.1"
 unicode-segmentation = "1.11.0"
 derive-where = "1.2.7"
+smol_str = "0.2.2"
 keyboard-types = { version = "0.6.1", default-features = false }
 raw-window-handle = { version = "0.5.0", features = ["std"] }
 raw-window-handle-06 = { package = "raw-window-handle", version = "0.6.0" }

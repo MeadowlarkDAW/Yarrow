@@ -322,7 +322,12 @@ impl TextInput {
     /// so this method is relatively cheap to call frequently. However, this method still
     /// involves a string comparison so you may want to call this method
     /// sparingly.
-    pub fn set_text(&mut self, text: &str, res: &mut ResourceCtx, select_all: bool) -> bool {
+    pub fn set_text<T: AsRef<str> + Into<String>>(
+        &mut self,
+        text: T,
+        res: &mut ResourceCtx,
+        select_all: bool,
+    ) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         let result = shared_state
@@ -342,9 +347,17 @@ impl TextInput {
 
     /// Set the placeholder text.
     ///
-    /// Note, this will *always* cause an element update even if
-    /// the placeholder text has not changed, so prefer to use this method sparingly.
-    pub fn set_placeholder_text(&mut self, text: &str, res: &mut ResourceCtx) {
+    /// Returns `true` if the text has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call frequently. However, this method still
+    /// involves a string comparison so you may want to call this method
+    /// sparingly.
+    pub fn set_placeholder_text<T: AsRef<str> + Into<String>>(
+        &mut self,
+        text: T,
+        res: &mut ResourceCtx,
+    ) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         let result = shared_state
@@ -356,6 +369,9 @@ impl TextInput {
             });
         if result.needs_repaint {
             self.el.notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 

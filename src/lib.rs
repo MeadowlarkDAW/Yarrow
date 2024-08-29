@@ -44,3 +44,4 @@ pub use window::run_blocking;
 pub use window::run_parented;
 
 pub use derive_where;
+pub use smol_str;

@@ -159,15 +159,19 @@ impl ParagraphInner {
     }
 
     /// Returns `true` if the text has changed.
-    pub fn set_text(&mut self, text: &str, font_system: &mut FontSystem) -> bool {
+    pub fn set_text<T: AsRef<str> + Into<String>>(
+        &mut self,
+        text: T,
+        font_system: &mut FontSystem,
+    ) -> bool {
         // TODO: If the text is sufficiently large, use a hash for comparison
         // for better performance.
-        if &self.text != text {
-            self.text = String::from(text);
+        if self.text.as_str() != text.as_ref() {
+            self.text = text.into();
             self.text_size_needs_calculated = true;
             self.padded_size_needs_calculated = true;
 
-            self.text_buffer.set_text(text, font_system);
+            self.text_buffer.set_text(&self.text, font_system);
 
             true
         } else {
@@ -426,7 +430,11 @@ impl Paragraph {
     /// This will *NOT* trigger an element update unless the value has changed.
     /// However, calling this method can be expensive if the text is particuarly
     /// long, so prefer to call this method sparingly.
-    pub fn set_text(&mut self, text: &str, res: &mut ResourceCtx) -> bool {
+    pub fn set_text<T: AsRef<str> + Into<String>>(
+        &mut self,
+        text: T,
+        res: &mut ResourceCtx,
+    ) -> bool {
         let changed = RefCell::borrow_mut(&self.shared_state)
             .inner
             .set_text(text, &mut res.font_system);

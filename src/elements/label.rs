@@ -289,20 +289,20 @@ impl LabelInner {
     }
 
     /// Returns `true` if the text has changed.
-    pub fn set_text<F: FnOnce() -> TextProperties>(
+    pub fn set_text<T: AsRef<str> + Into<String>, F: FnOnce() -> TextProperties>(
         &mut self,
-        text: Option<&str>,
+        text: Option<T>,
         font_system: &mut FontSystem,
         get_text_props: F,
     ) -> bool {
         if let Some(inner) = &mut self.text_inner {
             if let Some(new_text) = text {
-                if &inner.text != new_text {
-                    inner.text = String::from(new_text);
+                if inner.text.as_str() != new_text.as_ref() {
+                    inner.text = new_text.into();
                     self.text_size_needs_calculated = true;
                     self.padded_size_needs_calculated = true;
 
-                    inner.text_buffer.set_text(new_text, font_system);
+                    inner.text_buffer.set_text(&inner.text, font_system);
 
                     true
                 } else {
@@ -727,7 +727,11 @@ impl Label {
     /// so this method is relatively cheap to call frequently. However, this method still
     /// involves a string comparison so you may want to call this method
     /// sparingly.
-    pub fn set_text(&mut self, text: Option<&str>, res: &mut ResourceCtx) -> bool {
+    pub fn set_text<T: AsRef<str> + Into<String>>(
+        &mut self,
+        text: Option<T>,
+        res: &mut ResourceCtx,
+    ) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.set_text(text, &mut res.font_system, || {

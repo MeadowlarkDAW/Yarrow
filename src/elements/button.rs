@@ -380,9 +380,9 @@ impl ButtonInner {
     }
 
     /// Returns `true` if the text has changed.
-    pub fn set_text<F: FnOnce() -> TextProperties>(
+    pub fn set_text<T: AsRef<str> + Into<String>, F: FnOnce() -> TextProperties>(
         &mut self,
-        text: Option<&str>,
+        text: Option<T>,
         font_system: &mut FontSystem,
         get_text_props: F,
     ) -> bool {
@@ -803,7 +803,11 @@ impl Button {
     /// so this method is relatively cheap to call frequently. However, this method still
     /// involves a string comparison so you may want to call this method
     /// sparingly.
-    pub fn set_text(&mut self, text: Option<&str>, res: &mut ResourceCtx) -> bool {
+    pub fn set_text<T: AsRef<str> + Into<String>>(
+        &mut self,
+        text: Option<T>,
+        res: &mut ResourceCtx,
+    ) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.set_text(text, &mut res.font_system, || {

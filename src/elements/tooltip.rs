@@ -38,13 +38,17 @@ impl TooltipInner {
         Self { data }
     }
 
-    pub fn set_data(&mut self, text: Option<&str>, align: Align2) -> bool {
+    pub fn set_data<T: AsRef<str> + Into<String>>(
+        &mut self,
+        text: Option<T>,
+        align: Align2,
+    ) -> bool {
         let mut state_changed = false;
 
         if let Some(old_data) = &mut self.data {
             if let Some(text) = text {
-                if &old_data.text != text || old_data.align != align {
-                    old_data.text = String::from(text);
+                if old_data.text.as_str() != text.as_ref() || old_data.align != align {
+                    old_data.text = text.into();
                     old_data.align = align;
                     state_changed = true;
                 }
@@ -54,7 +58,7 @@ impl TooltipInner {
             }
         } else if let Some(text) = text {
             self.data = Some(TooltipData {
-                text: String::from(text),
+                text: text.into(),
                 align,
             });
             state_changed = true;
@@ -320,7 +324,13 @@ impl Tooltip {
         TooltipBuilder::new()
     }
 
-    pub fn show(&mut self, text: &str, align: Align2, element_bounds: Rect, res: &mut ResourceCtx) {
+    pub fn show<T: AsRef<str> + Into<String>>(
+        &mut self,
+        text: T,
+        align: Align2,
+        element_bounds: Rect,
+        res: &mut ResourceCtx,
+    ) {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         shared_state

@@ -1,4 +1,5 @@
 use smallvec::SmallVec;
+use smol_str::{SmolStr, ToSmolStr};
 use std::cell::{Ref, RefCell};
 use std::ops::Range;
 use std::rc::Rc;
@@ -15,7 +16,7 @@ pub mod slider;
 pub use inner::*;
 pub use renderer::*;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ParamOpenTextEntryInfo {
     pub param_info: ParamInfo,
     /// The bounding rectangle of this element
@@ -242,7 +243,7 @@ pub struct VirtualSliderBuilder<A: Clone + 'static> {
     pub on_open_text_entry: Option<Box<dyn FnMut(ParamOpenTextEntryInfo) -> A>>,
     pub on_tooltip_request: Option<Box<dyn FnMut(ParamElementTooltipInfo) -> A>>,
     pub tooltip_align: Align2,
-    pub param_id: u32,
+    pub param_id: SmolStr,
     pub normal_value: f64,
     pub default_normal: f64,
     pub num_quantized_steps: Option<u32>,
@@ -255,7 +256,7 @@ pub struct VirtualSliderBuilder<A: Clone + 'static> {
 }
 
 impl<A: Clone + 'static> VirtualSliderBuilder<A> {
-    pub fn new(param_id: u32) -> Self {
+    pub fn new(param_id: impl ToSmolStr) -> Self {
         Self {
             on_gesture: None,
             on_right_click: None,
@@ -263,7 +264,7 @@ impl<A: Clone + 'static> VirtualSliderBuilder<A> {
             on_tooltip_request: None,
             class: None,
             tooltip_align: Align2::default(),
-            param_id,
+            param_id: param_id.to_smolstr(),
             normal_value: 0.0,
             default_normal: 0.0,
             num_quantized_steps: None,
@@ -1032,7 +1033,7 @@ pub struct VirtualSlider<R: VirtualSliderRenderer> {
 }
 
 impl<R: VirtualSliderRenderer> VirtualSlider<R> {
-    pub fn builder<A: Clone + 'static>(param_id: u32) -> VirtualSliderBuilder<A> {
+    pub fn builder<A: Clone + 'static>(param_id: impl ToSmolStr) -> VirtualSliderBuilder<A> {
         VirtualSliderBuilder::new(param_id)
     }
 
@@ -1276,6 +1277,26 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
             shared_state.disabled = disabled;
             shared_state.needs_repaint = true;
             self.el.notify_custom_state_change();
+        }
+    }
+
+    /// Set the parameter ID.
+    ///
+    /// Returns `true` if the parameter ID has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call frequently. However, this method still
+    /// involves a string comparison so you may want to call this method
+    /// sparingly.
+    pub fn set_param_id<T: AsRef<str> + ToSmolStr>(&mut self, param_id: T) -> bool {
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+
+        if shared_state.inner.param_id.as_str() != param_id.as_ref() {
+            shared_state.inner.param_id = param_id.to_smolstr();
+            self.el.notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 

@@ -1,5 +1,6 @@
 use keyboard_types::Modifiers;
 use rootvg::math::{Point, Vector};
+use smol_str::SmolStr;
 
 use crate::event::WheelDeltaType;
 
@@ -36,11 +37,11 @@ pub enum ParamValue {
     Stepped(u32),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ParamInfo {
     /// The parameter ID
-    pub id: u32,
+    pub id: SmolStr,
     /// The normalized value in the range `[0.0, 1.0]`
     pub normal_value: f64,
     /// The stepped value (if this parameter is stepped)
@@ -57,13 +58,13 @@ impl ParamInfo {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct InnerParamUpdate {
     pub inner: ParamUpdate,
     pub pointer_lock_request: Option<bool>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ParamUpdate {
     pub param_info: ParamInfo,
@@ -94,7 +95,7 @@ enum BeginGestureType {
 /// A reusable "virtual slider" struct that can be used to make
 /// elements like knobs and sliders.
 pub struct VirtualSliderInner {
-    pub param_id: u32,
+    pub param_id: SmolStr,
     pub config: VirtualSliderConfig,
     pub drag_horizontally: bool,
     pub scroll_horizontally: bool,
@@ -109,7 +110,7 @@ pub struct VirtualSliderInner {
 
 impl VirtualSliderInner {
     pub fn new(
-        param_id: u32,
+        param_id: SmolStr,
         normal_value: f64,
         default_normal: f64,
         num_quantized_steps: Option<u32>,
@@ -404,7 +405,7 @@ impl VirtualSliderInner {
 
     pub fn param_info(&self) -> ParamInfo {
         ParamInfo {
-            id: self.param_id,
+            id: self.param_id.clone(),
             normal_value: self.normal_value,
             stepped_value: self.stepped_value,
         }
