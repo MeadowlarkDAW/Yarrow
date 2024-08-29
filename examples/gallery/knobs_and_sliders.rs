@@ -36,19 +36,19 @@ pub struct Elements {
 }
 
 impl Elements {
-    pub fn new(style: &MyStyle, cx: &mut WindowContext<'_, MyAction>) -> Self {
+    pub fn new(style: &MyStyle, window_cx: &mut WindowContext<MyAction>) -> Self {
         let scroll_area = ScrollArea::builder()
             .control_scissor_rect(SCROLL_AREA_SRECT)
             .z_index(RIGHT_CLICK_AREA_Z_INDEX)
-            .build(cx);
+            .build(window_cx);
 
         let floating_text_input = FloatingTextInput::builder()
             .on_result(|new_text| Action::FloatingTextInput(new_text).into())
             .rect(Rect::from_size(style.floating_text_input_size))
             .z_index(OVERLAY_Z_INDEX)
-            .build(cx);
+            .build(window_cx);
 
-        cx.with_scissor_rect(SCROLL_AREA_SRECT, |cx| Self {
+        window_cx.with_scissor_rect(SCROLL_AREA_SRECT, |window_cx| Self {
             knob_0: Knob::builder(0)
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
                 .on_open_text_entry(|info| Action::OpenTextInput(info).into())
@@ -56,8 +56,8 @@ impl Elements {
                     |info| Action::ShowParamTooltip(info).into(),
                     Align2::TOP_CENTER,
                 )
-                .build(cx),
-            knob_0_label: Label::builder().text("Normal").build(cx),
+                .build(window_cx),
+            knob_0_label: Label::builder().text("Normal").build(window_cx),
 
             knob_1: Knob::builder(1)
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
@@ -69,8 +69,8 @@ impl Elements {
                 .bipolar(true)
                 .normal_value(0.5)
                 .default_normal(0.5)
-                .build(cx),
-            knob_1_label: Label::builder().text("Bipolar").build(cx),
+                .build(window_cx),
+            knob_1_label: Label::builder().text("Bipolar").build(window_cx),
 
             knob_2: Knob::builder(2)
                 .class(MyStyle::CLASS_KNOB_2)
@@ -81,8 +81,8 @@ impl Elements {
                     Align2::TOP_CENTER,
                 )
                 .num_quantized_steps(Some(5))
-                .build(cx),
-            knob_2_label: Label::builder().text("Stepped").build(cx),
+                .build(window_cx),
+            knob_2_label: Label::builder().text("Stepped").build(window_cx),
 
             slider_3: Slider::builder(3)
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
@@ -91,7 +91,7 @@ impl Elements {
                     |info| Action::ShowParamTooltip(info).into(),
                     Align2::TOP_CENTER,
                 )
-                .build(cx),
+                .build(window_cx),
 
             slider_4: Slider::builder(4)
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
@@ -103,7 +103,7 @@ impl Elements {
                 .bipolar(true)
                 .default_normal(0.5)
                 .normal_value(0.5)
-                .build(cx),
+                .build(window_cx),
 
             slider_5: Slider::builder(5)
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
@@ -114,7 +114,7 @@ impl Elements {
                 )
                 .horizontal(true)
                 .drag_horizontally(true)
-                .build(cx),
+                .build(window_cx),
 
             slider_6: Slider::builder(6)
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
@@ -128,9 +128,9 @@ impl Elements {
                 .bipolar(true)
                 .default_normal(0.5)
                 .normal_value(0.5)
-                .build(cx),
+                .build(window_cx),
 
-            separator: Separator::builder().build(cx),
+            separator: Separator::builder().build(window_cx),
 
             scroll_area,
             floating_text_input,
@@ -144,20 +144,20 @@ impl Elements {
         &mut self,
         action: Action,
         style: &MyStyle,
-        cx: &mut WindowContext<'_, MyAction>,
+        window_cx: &mut WindowContext<MyAction>,
     ) -> bool {
         let needs_layout = false;
 
         match action {
             Action::ParamUpdate(info) => {
-                self.show_param_tooltip(info.param_info, cx);
+                self.show_param_tooltip(info.param_info, window_cx);
 
                 if !info.is_gesturing() {
                     // Set the tooltip to auto-hide when gesturing is finished.
-                    cx.view.auto_hide_tooltip();
+                    window_cx.auto_hide_tooltip();
                 }
             }
-            Action::ShowParamTooltip(info) => self.show_param_tooltip(info.param_info, cx),
+            Action::ShowParamTooltip(info) => self.show_param_tooltip(info.param_info, window_cx),
             Action::OpenTextInput(info) => {
                 self.text_input_param_id = Some(info.param_info.id);
                 let text = match info.param_info.value() {
@@ -171,7 +171,7 @@ impl Elements {
                     info.bounds,
                     style.floating_text_input_align,
                     style.floating_text_input_padding,
-                    &mut cx.res,
+                    window_cx.res,
                 );
             }
             Action::FloatingTextInput(new_text) => {
@@ -223,20 +223,34 @@ impl Elements {
         needs_layout
     }
 
-    fn show_param_tooltip(&mut self, param_info: ParamInfo, cx: &WindowContext<'_, MyAction>) {
+    fn show_param_tooltip(&mut self, param_info: ParamInfo, window_cx: &WindowContext<MyAction>) {
         let get_text = || match param_info.value() {
             ParamValue::Normal(n) => format!("{:.4}", n),
             ParamValue::Stepped(s) => format!("{}", s),
         };
 
         match param_info.id {
-            0 => self.knob_0.show_tooltip(get_text, Align2::TOP_CENTER, cx),
-            1 => self.knob_1.show_tooltip(get_text, Align2::TOP_CENTER, cx),
-            2 => self.knob_2.show_tooltip(get_text, Align2::TOP_CENTER, cx),
-            3 => self.slider_3.show_tooltip(get_text, Align2::TOP_CENTER, cx),
-            4 => self.slider_4.show_tooltip(get_text, Align2::TOP_CENTER, cx),
-            5 => self.slider_5.show_tooltip(get_text, Align2::TOP_CENTER, cx),
-            6 => self.slider_6.show_tooltip(get_text, Align2::TOP_CENTER, cx),
+            0 => self
+                .knob_0
+                .show_tooltip(get_text, Align2::TOP_CENTER, window_cx),
+            1 => self
+                .knob_1
+                .show_tooltip(get_text, Align2::TOP_CENTER, window_cx),
+            2 => self
+                .knob_2
+                .show_tooltip(get_text, Align2::TOP_CENTER, window_cx),
+            3 => self
+                .slider_3
+                .show_tooltip(get_text, Align2::TOP_CENTER, window_cx),
+            4 => self
+                .slider_4
+                .show_tooltip(get_text, Align2::TOP_CENTER, window_cx),
+            5 => self
+                .slider_5
+                .show_tooltip(get_text, Align2::TOP_CENTER, window_cx),
+            6 => self
+                .slider_6
+                .show_tooltip(get_text, Align2::TOP_CENTER, window_cx),
             _ => return,
         };
     }
@@ -245,7 +259,7 @@ impl Elements {
         &mut self,
         content_rect: Rect,
         style: &MyStyle,
-        cx: &mut WindowContext<'_, MyAction>,
+        window_cx: &mut WindowContext<MyAction>,
     ) {
         self.scroll_area.set_rect(content_rect);
 
@@ -263,7 +277,7 @@ impl Elements {
                 self.knob_0.max_y() + style.param_label_padding,
             ),
             Align2::TOP_CENTER,
-            cx.res,
+            window_cx.res,
         );
 
         self.knob_1.set_rect(rect(
@@ -278,7 +292,7 @@ impl Elements {
                 self.knob_1.max_y() + style.param_label_padding,
             ),
             Align2::TOP_CENTER,
-            cx.res,
+            window_cx.res,
         );
 
         self.knob_2.set_rect(rect(
@@ -293,7 +307,7 @@ impl Elements {
                 self.knob_2.max_y() + style.param_label_padding,
             ),
             Align2::TOP_CENTER,
-            cx.res,
+            window_cx.res,
         );
 
         self.separator.set_rect(rect(

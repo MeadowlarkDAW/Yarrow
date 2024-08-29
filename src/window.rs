@@ -1,9 +1,12 @@
 use keyboard_types::{CompositionEvent, Modifiers};
+use rootvg::color::PackedSrgb;
+use rootvg::math::{Rect, RectI32};
 use rootvg::surface::{DefaultSurface, DefaultSurfaceConfig};
 use std::time::{Duration, Instant};
 
 use crate::action_queue::ActionSender;
 use crate::clipboard::Clipboard;
+use crate::element_system::ElementSystem;
 use crate::event::{
     CanvasEvent, EventCaptureStatus, KeyboardEvent, PointerButton, PointerEvent, PointerType,
     WheelDeltaType,
@@ -11,10 +14,9 @@ use crate::event::{
 use crate::math::{
     to_logical_size_i32, PhysicalPoint, PhysicalSizeI32, Point, ScaleFactor, Size, Vector, ZIndex,
 };
-use crate::prelude::{ActionReceiver, ResourceCtx};
+use crate::prelude::{ActionReceiver, ElementBuilder, ElementHandle, ResourceCtx};
 use crate::style::ClassID;
-use crate::{view::ViewConfig, View};
-use crate::{CursorIcon, ScissorRectID};
+use crate::{CursorIcon, ScissorRectID, TooltipInfo};
 
 #[cfg(feature = "winit")]
 mod winit_backend;
@@ -103,7 +105,7 @@ pub(crate) struct WindowState<A: Clone + 'static> {
     pub queued_pointer_delta: Option<(f64, f64)>,
     pub prev_pointer_pos: Option<Point>,
 
-    pub(crate) view: View<A>,
+    pub(crate) element_system: ElementSystem<A>,
     pub(crate) clipboard: Clipboard,
     pub(crate) scale_factor: ScaleFactor,
     pub(crate) scale_factor_recip: f32,
@@ -137,7 +139,7 @@ impl<A: Clone + 'static> WindowState<A> {
         self.scale_factor = scale_factor;
         self.scale_factor_recip = scale_factor.recip();
 
-        self.view.resize(new_size, scale_factor);
+        self.element_system.resize(new_size, scale_factor);
         self.surface
             .as_mut()
             .unwrap()
@@ -163,7 +165,7 @@ impl<A: Clone + 'static> WindowState<A> {
         self.scale_factor = scale_factor;
         self.scale_factor_recip = scale_factor.recip();
 
-        self.view.resize(self.physical_size, scale_factor);
+        self.element_system.resize(self.physical_size, scale_factor);
         self.surface
             .as_mut()
             .unwrap()
@@ -174,7 +176,7 @@ impl<A: Clone + 'static> WindowState<A> {
 
     pub fn set_pointer_locked(&mut self, state: PointerLockState) {
         self.pointer_lock_state = state;
-        self.view.on_pointer_locked(state.is_locked());
+        self.element_system.on_pointer_locked(state.is_locked());
     }
 
     pub fn pointer_lock_state(&self) -> PointerLockState {
@@ -182,7 +184,7 @@ impl<A: Clone + 'static> WindowState<A> {
     }
 
     pub fn on_animation_tick(&mut self, dt: f64, res: &mut ResourceCtx) {
-        self.view.handle_event(
+        self.element_system.handle_event(
             &CanvasEvent::Animation {
                 delta_seconds: dt,
                 pointer_position: self.prev_pointer_pos,
@@ -193,23 +195,23 @@ impl<A: Clone + 'static> WindowState<A> {
     }
 
     pub fn handle_window_unfocused(&mut self, res: &mut ResourceCtx) {
-        self.view
+        self.element_system
             .handle_event(&CanvasEvent::WindowUnfocused, res, &mut self.clipboard);
     }
 
     pub fn handle_window_focused(&mut self, res: &mut ResourceCtx) {
-        self.view
+        self.element_system
             .handle_event(&CanvasEvent::WindowFocused, res, &mut self.clipboard);
     }
 
     pub fn handle_window_hidden(&mut self, res: &mut ResourceCtx) {
         self.handle_window_unfocused(res);
-        self.view
+        self.element_system
             .handle_event(&CanvasEvent::WindowHidden, res, &mut self.clipboard);
     }
 
     pub fn handle_window_shown(&mut self, res: &mut ResourceCtx) {
-        self.view
+        self.element_system
             .handle_event(&CanvasEvent::WindowShown, res, &mut self.clipboard);
     }
 
@@ -224,7 +226,7 @@ impl<A: Clone + 'static> WindowState<A> {
     ) -> EventCaptureStatus {
         self.modifiers = event.modifiers;
 
-        self.view
+        self.element_system
             .handle_event(&CanvasEvent::Keyboard(event), res, &mut self.clipboard)
     }
 
@@ -244,7 +246,7 @@ impl<A: Clone + 'static> WindowState<A> {
             return EventCaptureStatus::NotCaptured;
         }
 
-        self.view.handle_event(
+        self.element_system.handle_event(
             &CanvasEvent::TextComposition(event),
             res,
             &mut self.clipboard,
@@ -252,7 +254,7 @@ impl<A: Clone + 'static> WindowState<A> {
     }
 
     pub fn handle_pointer_left(&mut self, res: &mut ResourceCtx) {
-        self.view.handle_event(
+        self.element_system.handle_event(
             &CanvasEvent::Pointer(PointerEvent::PointerLeft),
             res,
             &mut self.clipboard,
@@ -273,7 +275,7 @@ impl<A: Clone + 'static> WindowState<A> {
         };
         self.prev_pointer_pos = Some(new_pos);
 
-        self.view.handle_event(
+        self.element_system.handle_event(
             &CanvasEvent::Pointer(PointerEvent::Moved {
                 position: new_pos,
                 delta,
@@ -288,7 +290,7 @@ impl<A: Clone + 'static> WindowState<A> {
     }
 
     pub fn handle_locked_pointer_delta(&mut self, delta: Vector, res: &mut ResourceCtx) {
-        self.view.handle_event(
+        self.element_system.handle_event(
             &CanvasEvent::Pointer(PointerEvent::Moved {
                 position: self.prev_pointer_pos.unwrap_or_default(),
                 delta: Some(delta),
@@ -344,7 +346,7 @@ impl<A: Clone + 'static> WindowState<A> {
 
         match state {
             State::JustPressed => {
-                self.view.handle_event(
+                self.element_system.handle_event(
                     &CanvasEvent::Pointer(PointerEvent::ButtonJustPressed {
                         position,
                         button,
@@ -357,7 +359,7 @@ impl<A: Clone + 'static> WindowState<A> {
                 );
             }
             State::JustUnpressed => {
-                self.view.handle_event(
+                self.element_system.handle_event(
                     &CanvasEvent::Pointer(PointerEvent::ButtonJustReleased {
                         position,
                         button,
@@ -376,7 +378,7 @@ impl<A: Clone + 'static> WindowState<A> {
     pub fn handle_mouse_wheel(&mut self, delta_type: WheelDeltaType, res: &mut ResourceCtx) {
         let position = self.prev_pointer_pos.unwrap_or(Point::zero());
 
-        self.view.handle_event(
+        self.element_system.handle_event(
             &CanvasEvent::Pointer(PointerEvent::ScrollWheel {
                 position,
                 delta_type,
@@ -395,7 +397,7 @@ impl<A: Clone + 'static> WindowState<A> {
     ) -> Result<(), wgpu::SurfaceError> {
         let surface = self.surface.as_ref().unwrap();
 
-        self.view.render(
+        self.element_system.render(
             &surface.surface,
             &surface.device,
             &surface.queue,
@@ -418,7 +420,7 @@ impl<A: Clone + 'static> WindowState<A> {
         action_receiver: &'b mut ActionReceiver<A>,
     ) -> WindowContext<'b, A> {
         WindowContext {
-            view: &mut self.view,
+            element_system: &mut self.element_system,
             res,
             clipboard: &mut self.clipboard,
             action_sender,
@@ -435,8 +437,8 @@ impl<A: Clone + 'static> WindowState<A> {
     }
 
     pub fn new_cursor_icon(&mut self) -> Option<CursorIcon> {
-        if self.current_cursor_icon != self.view.cursor_icon() {
-            self.current_cursor_icon = self.view.cursor_icon();
+        if self.current_cursor_icon != self.element_system.cursor_icon() {
+            self.current_cursor_icon = self.element_system.cursor_icon();
             Some(self.current_cursor_icon)
         } else {
             None
@@ -444,11 +446,21 @@ impl<A: Clone + 'static> WindowState<A> {
     }
 
     pub fn new_pointer_lock_request(&mut self) -> Option<bool> {
-        self.view.pointer_lock_request()
+        self.element_system.pointer_lock_request()
     }
 
     pub fn on_theme_changed(&mut self, res: &mut ResourceCtx) {
-        self.view.on_theme_changed(res, &mut self.clipboard);
+        self.element_system
+            .on_theme_changed(res, &mut self.clipboard);
+    }
+
+    pub fn process_updates(&mut self, res: &mut ResourceCtx) -> bool {
+        self.element_system
+            .process_updates(res, &mut self.clipboard)
+    }
+
+    pub fn needs_repaint(&self) -> bool {
+        self.element_system.needs_repaint()
     }
 }
 
@@ -462,14 +474,32 @@ impl<A: Clone + 'static> Drop for WindowState<A> {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct WindowConfig {
     pub title: String,
     pub size: Size,
     pub resizable: bool,
-    pub view_config: ViewConfig,
     pub surface_config: DefaultSurfaceConfig,
     pub focus_on_creation: bool,
     pub scale_factor: ScaleFactorConfig,
+
+    /// The clear color.
+    pub clear_color: PackedSrgb,
+
+    /// An estimate for how many elements are expected to be in this view in a
+    /// typical use case. This is used to pre-allocate capacity to improve slightly
+    /// improve load-up times.
+    ///
+    /// By default this is set to `0` (no capacity will be pre-allocated).
+    pub preallocate_for_this_many_elements: u32,
+
+    /// The duration between when an element is first hovered and when it receives the
+    /// `ElementEvent::Pointer(PointerEvent::HoverTimeout)` event.
+    ///
+    /// By default this is set to 0.5 seconds.
+    pub hover_timeout_duration: Duration,
+
+    pub scroll_wheel_timeout_duration: Duration,
 }
 
 impl Default for WindowConfig {
@@ -478,10 +508,13 @@ impl Default for WindowConfig {
             title: String::from("Window"),
             size: Size::new(400.0, 250.0),
             resizable: true,
-            view_config: ViewConfig::default(),
             surface_config: DefaultSurfaceConfig::default(),
             focus_on_creation: true,
             scale_factor: ScaleFactorConfig::default(),
+            clear_color: PackedSrgb::BLACK,
+            preallocate_for_this_many_elements: 0,
+            hover_timeout_duration: Duration::from_millis(500),
+            scroll_wheel_timeout_duration: Duration::from_millis(250),
         }
     }
 }
@@ -510,13 +543,13 @@ impl ScaleFactorConfig {
 }
 
 pub struct WindowContext<'a, A: Clone + 'static> {
-    pub view: &'a mut View<A>,
     pub res: &'a mut ResourceCtx,
     pub clipboard: &'a mut Clipboard,
     /// The sending end of the action queue.
     pub action_sender: &'a mut ActionSender<A>,
     /// The receiving end of the action queue.
     pub action_receiver: &'a mut ActionReceiver<A>,
+    element_system: &'a mut ElementSystem<A>,
     z_index_stack: Vec<ZIndex>,
     scissor_rect_stack: Vec<ScissorRectID>,
     class_stack: Vec<ClassID>,
@@ -608,18 +641,9 @@ impl<'a, A: Clone + 'static> WindowContext<'a, A> {
         self.scissor_rect_stack.clear();
     }
 
-    /// Returns the z index, scissor rect ID, and class ID from the given builder values.
-    pub fn builder_values(
-        &self,
-        z_index: Option<ZIndex>,
-        scissor_rect: Option<ScissorRectID>,
-        class: Option<ClassID>,
-    ) -> (ZIndex, ScissorRectID, ClassID) {
-        (
-            z_index.unwrap_or_else(|| self.z_index()),
-            scissor_rect.unwrap_or_else(|| self.scissor_rect()),
-            class.unwrap_or_else(|| self.class()),
-        )
+    /// Get the class ID from the builder value
+    pub fn builder_class(&self, class: Option<ClassID>) -> ClassID {
+        class.unwrap_or_else(|| self.class())
     }
 
     pub fn with_z_index<T, F: FnOnce(&mut Self) -> T>(&mut self, z_index: ZIndex, f: F) -> T {
@@ -652,6 +676,83 @@ impl<'a, A: Clone + 'static> WindowContext<'a, A> {
         self.pop_z_index();
         self.pop_scissor_rect();
         r
+    }
+
+    pub fn add_element(&mut self, element_builder: ElementBuilder<A>) -> ElementHandle {
+        self.element_system
+            .add_element(element_builder, &mut self.res, &mut self.clipboard)
+    }
+
+    pub fn set_clear_color(&mut self, color: impl Into<PackedSrgb>) {
+        self.element_system.clear_color = color.into()
+    }
+
+    pub fn clear_color(&self) -> PackedSrgb {
+        self.element_system.clear_color
+    }
+
+    pub fn set_tooltip_actions<S, H>(&mut self, on_show_tooltip: S, on_hide_tooltip: H)
+    where
+        S: FnMut(TooltipInfo) -> A + 'static,
+        H: FnMut() -> A + 'static,
+    {
+        self.element_system
+            .set_tooltip_actions(on_show_tooltip, on_hide_tooltip)
+    }
+
+    /// Get the current rectangle of the given scissoring rectangle.
+    ///
+    /// If a scissoring rectangle with the given ID does not exist, then
+    /// one will be created.
+    pub fn get_scissor_rect(&mut self, scissor_rect_id: ScissorRectID) -> RectI32 {
+        self.element_system.scissor_rect(scissor_rect_id)
+    }
+
+    /// Get the current scroll offset vector of the given scissoring rectangle.
+    ///
+    /// If a scissoring rectangle with the given ID does not exist, then
+    /// one will be created.
+    pub fn get_scissor_rect_scroll_offset(&mut self, scissor_rect_id: ScissorRectID) -> Vector {
+        self.element_system
+            .scissor_rect_scroll_offset(scissor_rect_id)
+    }
+
+    /// Update the given scissoring rectangle with the given values.
+    ///
+    /// If `new_rect` or `new_scroll_offset` is `None`, then the
+    /// current respecting value will not be changed.
+    ///
+    /// This will *NOT* trigger an update unless the value has changed,
+    /// so this method is relatively cheap to call frequently.
+    ///
+    /// If a scissoring rectangle with the given ID does not exist, then
+    /// one will be created.
+    ///
+    /// If `scissor_rect_id == ScissorRectID::DEFAULT`, then this
+    /// will do nothing.
+    pub fn update_scissor_rect(
+        &mut self,
+        scissor_rect_id: ScissorRectID,
+        new_rect: Option<Rect>,
+        new_scroll_offset: Option<Vector>,
+    ) {
+        self.element_system
+            .update_scissor_rect(scissor_rect_id, new_rect, new_scroll_offset)
+    }
+
+    /// Returns the bounding rectangle of the given element, accounting for scroll offset.
+    ///
+    /// If the element has been dropped, then this will return `None`.
+    pub fn element_rect(&self, handle: &ElementHandle) -> Option<Rect> {
+        self.element_system.element_rect(handle)
+    }
+
+    pub fn element_is_hovered(&self, element: &ElementHandle) -> bool {
+        self.element_system.element_is_hovered(element)
+    }
+
+    pub fn auto_hide_tooltip(&mut self) {
+        self.element_system.auto_hide_tooltip()
     }
 }
 

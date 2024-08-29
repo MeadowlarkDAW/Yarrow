@@ -149,12 +149,11 @@ impl ElementStyle for TooltipStyle {
     }
 }
 
+#[element_builder]
+#[element_builder_class]
 pub struct TooltipBuilder {
     pub text_offset: Vector,
-    pub class: Option<ClassID>,
     pub element_padding: Padding,
-    pub z_index: Option<ZIndex>,
-    pub scissor_rect_id: Option<ScissorRectID>,
 }
 
 impl TooltipBuilder {
@@ -164,12 +163,8 @@ impl TooltipBuilder {
             class: None,
             element_padding: Padding::new(10.0, 10.0, 10.0, 10.0),
             z_index: None,
-            scissor_rect_id: None,
+            scissor_rect: None,
         }
-    }
-
-    pub fn build<A: Clone + 'static>(self, cx: &mut WindowContext<'_, A>) -> Tooltip {
-        TooltipElement::create(self, cx)
     }
 
     /// The padding between the tooltip and the element that is being hovered.
@@ -187,55 +182,19 @@ impl TooltipBuilder {
         self
     }
 
-    /// The style class ID
-    ///
-    /// If this method is not used, then the current class from the window context will
-    /// be used.
-    pub const fn class(mut self, class: ClassID) -> Self {
-        self.class = Some(class);
-        self
-    }
-
-    /// The z index of the element
-    ///
-    /// If this method is not used, then the current z index from the window context will
-    /// be used.
-    pub const fn z_index(mut self, z_index: ZIndex) -> Self {
-        self.z_index = Some(z_index);
-        self
-    }
-
-    /// The ID of the scissoring rectangle this element belongs to.
-    ///
-    /// If this method is not used, then the current scissoring rectangle ID from the
-    /// window context will be used.
-    pub const fn scissor_rect(mut self, scissor_rect_id: ScissorRectID) -> Self {
-        self.scissor_rect_id = Some(scissor_rect_id);
-        self
-    }
-}
-
-pub struct TooltipElement {
-    shared_state: Rc<RefCell<SharedState>>,
-    element_padding: Padding,
-}
-
-impl TooltipElement {
-    pub fn create<A: Clone + 'static>(
-        builder: TooltipBuilder,
-        cx: &mut WindowContext<'_, A>,
-    ) -> Tooltip {
+    pub fn build<A: Clone + 'static>(self, window_cx: &mut WindowContext<'_, A>) -> Tooltip {
         let TooltipBuilder {
             text_offset,
             class,
             element_padding,
             z_index,
-            scissor_rect_id,
-        } = builder;
+            scissor_rect,
+        } = self;
 
-        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect_id, class);
-
-        let style: &TooltipStyle = cx.res.style_system.get(class);
+        let style: &TooltipStyle = window_cx
+            .res
+            .style_system
+            .get(window_cx.builder_class(class));
 
         let shared_state = Rc::new(RefCell::new(SharedState {
             inner: LabelInner::new(
@@ -247,36 +206,30 @@ impl TooltipElement {
                 IconScale::default(),
                 Default::default(),
                 &style.label_style(),
-                &mut cx.res.font_system,
+                &mut window_cx.res.font_system,
             ),
             show_with_info: None,
         }));
 
-        let element_builder = ElementBuilder {
-            element: Box::new(Self {
-                shared_state: Rc::clone(&shared_state),
-                element_padding,
-            }),
-            z_index,
-            rect: Rect::default(),
-            manually_hidden: true,
-            scissor_rect,
-            class,
-        };
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
+        let el = ElementBuilder::new(TooltipElement {
+            shared_state: Rc::clone(&shared_state),
+            element_padding,
+        })
+        .builder_values(z_index, scissor_rect, class, window_cx)
+        .hidden(true)
+        .flags(ElementFlags::PAINTS)
+        .build(window_cx);
 
         Tooltip { el, shared_state }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for TooltipElement {
-    fn flags(&self) -> ElementFlags {
-        ElementFlags::PAINTS
-    }
+struct TooltipElement {
+    shared_state: Rc<RefCell<SharedState>>,
+    element_padding: Padding,
+}
 
+impl<A: Clone + 'static> Element<A> for TooltipElement {
     fn on_event(
         &mut self,
         event: ElementEvent,

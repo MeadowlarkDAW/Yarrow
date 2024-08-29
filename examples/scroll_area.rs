@@ -6,55 +6,24 @@ use yarrow::prelude::*;
 /// for the "default scissoring rectangle" that covers the whole window).
 pub const CONTENT_SRECT: ScissorRectID = ScissorRectID(0);
 
-#[derive(Default)]
 struct MyApp {
-    main_window_elements: Option<MainWindowElements>,
+    long_boi: TextInput,
+    scroll_area: ScrollArea,
 }
 
 impl Application for MyApp {
     type Action = ();
 
-    fn on_window_event(
-        &mut self,
-        event: AppWindowEvent,
-        window_id: WindowID,
-        cx: &mut AppContext<()>,
-    ) {
-        match event {
-            AppWindowEvent::WindowOpened => {
-                if window_id == MAIN_WINDOW {
-                    yarrow::theme::yarrow_dark::load(Default::default(), &mut cx.res);
+    fn init(cx: &mut AppContext<Self::Action>) -> Result<Self, Box<dyn std::error::Error>> {
+        yarrow::theme::yarrow_dark::load(Default::default(), &mut cx.res);
 
-                    let mut cx = cx.window_context(MAIN_WINDOW).unwrap();
+        let mut window_cx = cx.main_window();
 
-                    self.main_window_elements = Some(MainWindowElements::build(&mut cx));
-                    self.main_window_elements.as_mut().unwrap().layout(&mut cx);
-                }
-            }
-            AppWindowEvent::WindowResized => {
-                if window_id == MAIN_WINDOW {
-                    let mut cx = cx.window_context(MAIN_WINDOW).unwrap();
-
-                    self.main_window_elements.as_mut().unwrap().layout(&mut cx);
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
-pub struct MainWindowElements {
-    long_boi: TextInput,
-    scroll_area: ScrollArea,
-}
-
-impl MainWindowElements {
-    pub fn build(cx: &mut WindowContext<'_, ()>) -> Self {
-        Self {
+        let mut new_self = Self {
             long_boi: TextInput::builder()
                 .text("L0ng b0I")
                 .scissor_rect(CONTENT_SRECT)
-                .build(cx),
+                .build(&mut window_cx),
             scroll_area: ScrollArea::builder()
                 // Set the z index higher than the contents so that it has priority
                 // on mouse events.
@@ -64,15 +33,37 @@ impl MainWindowElements {
                 // Note, do *NOT* assign the scroll area element itself to the scissoring
                 // rectangle it controls, or it will not function properly.
                 .scissor_rect(ScissorRectID::DEFAULT)
-                .build(cx),
-        }
+                .build(&mut window_cx),
+        };
+
+        new_self.layout(&mut window_cx);
+
+        Ok(new_self)
     }
 
-    pub fn layout(&mut self, cx: &mut WindowContext<'_, ()>) {
+    fn on_window_event(
+        &mut self,
+        event: AppWindowEvent,
+        window_id: WindowID,
+        cx: &mut AppContext<()>,
+    ) {
+        match event {
+            AppWindowEvent::WindowResized => {
+                if window_id == MAIN_WINDOW {
+                    self.layout(&mut cx.main_window());
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+impl MyApp {
+    pub fn layout(&mut self, window_cx: &mut WindowContext<'_, ()>) {
         // Assign the scroll area element to fill the area we want (in this case the
         // entire window).
         self.scroll_area
-            .set_rect(Rect::from_size(cx.logical_size()));
+            .set_rect(Rect::from_size(window_cx.logical_size()));
 
         // Layout the elements like normal.
         //
@@ -92,12 +83,5 @@ impl MainWindowElements {
 }
 
 pub fn main() {
-    let (action_sender, action_receiver) = yarrow::action_channel();
-    yarrow::run_blocking(
-        WindowConfig::default(),
-        action_sender,
-        action_receiver,
-        || MyApp::default(),
-    )
-    .unwrap();
+    yarrow::run_blocking::<MyApp>(AppConfig::default()).unwrap();
 }

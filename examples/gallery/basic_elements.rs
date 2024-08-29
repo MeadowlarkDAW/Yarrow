@@ -100,7 +100,7 @@ pub struct Elements {
 }
 
 impl Elements {
-    pub fn new(cx: &mut WindowContext<'_, MyAction>) -> Self {
+    pub fn new(window_cx: &mut WindowContext<MyAction>) -> Self {
         let text_input_menu = DropDownMenu::builder()
             .entries(
                 TextMenuOption::ALL
@@ -128,7 +128,7 @@ impl Elements {
                 Action::TextInputMenuOptionSelected(TextMenuOption::ALL[id]).into()
             })
             .z_index(OVERLAY_Z_INDEX)
-            .build(cx);
+            .build(window_cx);
 
         let drop_down_menu = DropDownMenu::builder()
             .entries(
@@ -140,13 +140,13 @@ impl Elements {
             )
             .on_entry_selected(|id| Action::OptionSelected(DropDownOption::ALL[id]).into())
             .z_index(OVERLAY_Z_INDEX)
-            .build(cx);
+            .build(window_cx);
 
         let right_click_area = ClickArea::builder()
             .button(PointerButton::Secondary)
             .on_clicked(|info| Action::OpenRightClickMenu(info.click_position).into())
             .z_index(RIGHT_CLICK_AREA_Z_INDEX)
-            .build(cx);
+            .build(window_cx);
 
         let right_click_menu = DropDownMenu::builder()
             .entries(
@@ -158,61 +158,61 @@ impl Elements {
             )
             .on_entry_selected(|id| Action::RightClickOptionSelected(id).into())
             .z_index(OVERLAY_Z_INDEX)
-            .build(cx);
+            .build(window_cx);
 
         let scroll_area = ScrollArea::builder()
             .control_scissor_rect(SCROLL_AREA_SRECT)
             .z_index(SCROLL_AREA_Z_INDEX)
-            .build(cx);
+            .build(window_cx);
 
-        cx.with_scissor_rect(SCROLL_AREA_SRECT, |cx| {
+        window_cx.with_scissor_rect(SCROLL_AREA_SRECT, |window_cx| {
             Self {
                 label: Label::builder()
                     .class(MyStyle::CLASS_FANCY_LABEL)
                     .text("Label")
-                    .build(cx),
+                    .build(window_cx),
 
                 icon: Icon::builder()
                     .class(MyStyle::CLASS_FANCY_LABEL)
                     .icon(MyIcon::Info)
-                    .build(cx),
+                    .build(window_cx),
 
                 icon_label: Label::builder()
                     .class(MyStyle::CLASS_FANCY_LABEL)
                     .icon(MyIcon::Info)
                     .text("Icon Label")
-                    .build(cx),
+                    .build(window_cx),
 
                 click_me_btn: Button::builder()
                     .text("Click Me!")
                     .on_select(Action::ClickMePressed.into())
                     .tooltip("A cool button", Align2::TOP_CENTER)
-                    .build(cx),
+                    .build(window_cx),
 
                 icon_btn: Button::builder()
                     .icon(MyIcon::Save)
                     .on_select(Action::IconBtnPressed.into())
-                    .build(cx),
+                    .build(window_cx),
 
                 toggle_btn: ToggleButton::builder()
                     .text("off")
                     .on_toggled(|toggled| Action::ToggleValue(toggled).into())
-                    .build(cx),
+                    .build(window_cx),
 
                 icon_toggle_btn: ToggleButton::builder()
                     .icon(MyIcon::PowerOn)
                     .on_toggled(|toggled| Action::ToggleValue(toggled).into())
-                    .build(cx),
+                    .build(window_cx),
 
                 icon_label_toggle_btn: ToggleButton::builder()
                     .icon(MyIcon::PowerOn)
                     .text("off")
                     .on_toggled(|toggled| Action::ToggleValue(toggled).into())
-                    .build(cx),
+                    .build(window_cx),
 
                 switch: Switch::builder()
                     .on_toggled(|toggled| Action::ToggleValue(toggled).into())
-                    .build(cx),
+                    .build(window_cx),
 
                 radio_group: RadioButtonGroup::new(
                     DropDownOption::ALL.iter().map(|o| format!("{}", *o)),
@@ -222,7 +222,7 @@ impl Elements {
                     None,
                     None,
                     None,
-                    cx,
+                    window_cx,
                 ),
 
                 text_input: TextInput::builder()
@@ -237,7 +237,7 @@ impl Elements {
                         .into()
                     })
                     .password_mode(false) // There is an optional password mode if desired.
-                    .build(cx),
+                    .build(window_cx),
 
                 search_text_input: IconTextInput::builder()
                     .placeholder_text("search something...")
@@ -251,17 +251,17 @@ impl Elements {
                         .into()
                     })
                     .password_mode(false) // There is an optional password mode if desired.
-                    .build(cx),
+                    .build(window_cx),
 
                 drop_down_menu_btn: Button::builder()
                     .text_icon_layout(TextIconLayout::LeftAlignTextRightAlignIcon)
                     .text(format!("{}", DropDownOption::ALL[0]))
                     .icon(MyIcon::Dropdown)
                     .on_select(Action::OpenDropDown.into())
-                    .build(cx),
+                    .build(window_cx),
 
-                separator_1: Separator::builder().build(cx),
-                separator_2: Separator::builder().build(cx),
+                separator_1: Separator::builder().build(window_cx),
+                separator_2: Separator::builder().build(window_cx),
 
                 text_input_menu,
                 drop_down_menu,
@@ -275,7 +275,11 @@ impl Elements {
     }
 
     /// Returns `true` if the the contents need to be laid out.
-    pub fn handle_action(&mut self, action: Action, cx: &mut WindowContext<'_, MyAction>) -> bool {
+    pub fn handle_action(
+        &mut self,
+        action: Action,
+        window_cx: &mut WindowContext<MyAction>,
+    ) -> bool {
         let mut needs_layout = false;
 
         match action {
@@ -288,11 +292,13 @@ impl Elements {
                 self.icon_label_toggle_btn.set_toggled(toggled);
 
                 if toggled {
-                    self.toggle_btn.set_text(Some("on"), cx.res);
-                    self.icon_label_toggle_btn.set_text(Some("on"), cx.res);
+                    self.toggle_btn.set_text(Some("on"), window_cx.res);
+                    self.icon_label_toggle_btn
+                        .set_text(Some("on"), window_cx.res);
                 } else {
-                    self.toggle_btn.set_text(Some("off"), cx.res);
-                    self.icon_label_toggle_btn.set_text(Some("off"), cx.res);
+                    self.toggle_btn.set_text(Some("off"), window_cx.res);
+                    self.icon_label_toggle_btn
+                        .set_text(Some("off"), window_cx.res);
                 }
 
                 needs_layout = true;
@@ -300,12 +306,12 @@ impl Elements {
             Action::OptionSelected(option) => {
                 self.radio_group.updated_selected(option as usize);
                 self.drop_down_menu_btn
-                    .set_text(Some(&format!("{}", option)), cx.res);
+                    .set_text(Some(&format!("{}", option)), window_cx.res);
             }
             Action::OpenDropDown => {
                 // Because the drop-down menu button may be offset by the scroll area,
                 // get the correct position via this method.
-                let rect = self.drop_down_menu_btn.rect_in_window(cx);
+                let rect = self.drop_down_menu_btn.rect_in_window(window_cx);
                 self.drop_down_menu
                     .open(Some(Point::new(rect.min_x(), rect.max_y())));
             }
@@ -341,7 +347,7 @@ impl Elements {
         &mut self,
         content_rect: Rect,
         style: &MyStyle,
-        cx: &mut WindowContext<'_, MyAction>,
+        window_cx: &mut WindowContext<MyAction>,
     ) {
         self.right_click_area.set_rect(content_rect);
         self.scroll_area.set_rect(content_rect);
@@ -350,40 +356,40 @@ impl Elements {
 
         // The position of an element is relative to the scissor rect it is
         // assigned to.
-        self.click_me_btn.layout(start_pos, cx.res);
+        self.click_me_btn.layout(start_pos, window_cx.res);
 
         self.icon_btn.layout(
             point(
                 self.click_me_btn.max_x() + style.element_padding,
                 start_pos.y,
             ),
-            cx.res,
+            window_cx.res,
         );
 
         self.label.layout(
             point(self.icon_btn.max_x() + style.element_padding, start_pos.y),
-            cx.res,
+            window_cx.res,
         );
 
         self.icon.layout(
             point(self.label.max_x() + style.element_padding, start_pos.y),
-            cx.res,
+            window_cx.res,
         );
 
         self.icon_label.layout(
             point(self.icon.max_x() + style.element_padding, start_pos.y),
-            cx.res,
+            window_cx.res,
         );
 
         let mut toggle_btn_rect = Rect::new(
             point(0.0, self.click_me_btn.max_y() + style.element_padding),
-            self.toggle_btn.desired_size(cx.res),
+            self.toggle_btn.desired_size(window_cx.res),
         );
 
         self.switch.layout_aligned(
             point(start_pos.x, toggle_btn_rect.center().y),
             Align2::CENTER_LEFT,
-            cx.res,
+            window_cx.res,
         );
 
         toggle_btn_rect.origin.x = self.switch.max_x() + style.element_padding;
@@ -394,7 +400,7 @@ impl Elements {
                 toggle_btn_rect.max_x() + style.element_padding,
                 self.toggle_btn.min_y(),
             ),
-            cx.res,
+            window_cx.res,
         );
 
         self.icon_label_toggle_btn.layout(
@@ -402,7 +408,7 @@ impl Elements {
                 self.icon_toggle_btn.max_x() + style.element_padding,
                 self.toggle_btn.min_y(),
             ),
-            cx.res,
+            window_cx.res,
         );
 
         self.separator_1.set_rect(rect(
@@ -416,7 +422,7 @@ impl Elements {
             start_pos.x,
             self.separator_1.max_y() + style.element_padding,
             style.drop_down_btn_width,
-            self.drop_down_menu_btn.desired_size(cx.res).height,
+            self.drop_down_menu_btn.desired_size(window_cx.res).height,
         ));
 
         self.radio_group.layout(
@@ -428,7 +434,7 @@ impl Elements {
             style.radio_group_column_padding,
             None,
             Default::default(),
-            cx.res,
+            window_cx.res,
         );
 
         self.separator_2.set_rect(rect(

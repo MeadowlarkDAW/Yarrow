@@ -36,10 +36,6 @@ impl<A: Clone + 'static> FloatingTextInputBuilder<A> {
         }
     }
 
-    pub fn build(self, cx: &mut WindowContext<'_, A>) -> FloatingTextInput {
-        FloatingTextInputElement::create(self, cx)
-    }
-
     pub fn on_result<F: FnMut(Option<String>) -> A + 'static>(mut self, f: F) -> Self {
         self.action = Some(Box::new(f));
         self
@@ -81,23 +77,8 @@ impl<A: Clone + 'static> FloatingTextInputBuilder<A> {
         self.max_characters = max;
         self
     }
-}
 
-pub struct FloatingTextInputElement<A: Clone + 'static> {
-    shared_state: Rc<RefCell<SharedState>>,
-    action: Option<Box<dyn FnMut(Option<String>) -> A>>,
-    right_click_action: Option<Box<dyn FnMut(Point) -> A>>,
-    start_text: String,
-    size: Size,
-    canceled: bool,
-    hovered: bool,
-}
-
-impl<A: Clone + 'static> FloatingTextInputElement<A> {
-    pub fn create(
-        builder: FloatingTextInputBuilder<A>,
-        cx: &mut WindowContext<'_, A>,
-    ) -> FloatingTextInput {
+    pub fn build(self, window_cx: &mut WindowContext<'_, A>) -> FloatingTextInput {
         let FloatingTextInputBuilder {
             action,
             right_click_action,
@@ -110,10 +91,12 @@ impl<A: Clone + 'static> FloatingTextInputElement<A> {
             z_index,
             rect,
             scissor_rect,
-        } = builder;
+        } = self;
 
-        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
-        let style = cx.res.style_system.get(cx.class());
+        let style = window_cx
+            .res
+            .style_system
+            .get(window_cx.builder_class(class));
 
         let shared_state = Rc::new(RefCell::new(SharedState {
             inner: TextInputInner::new(
@@ -125,48 +108,50 @@ impl<A: Clone + 'static> FloatingTextInputElement<A> {
                 false,
                 select_all_when_focused,
                 &style,
-                &mut cx.res.font_system,
+                &mut window_cx.res.font_system,
             ),
             text_offset,
             show_with_info: None,
         }));
 
-        let element_builder = ElementBuilder {
-            element: Box::new(Self {
-                shared_state: Rc::clone(&shared_state),
-                action,
-                right_click_action,
-                start_text: String::new(),
-                size: rect.size,
-                canceled: false,
-                hovered: false,
-            }),
-            z_index,
-            rect,
-            manually_hidden: true,
-            scissor_rect,
-            class,
-        };
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
+        let el = ElementBuilder::new(FloatingTextInputElement {
+            shared_state: Rc::clone(&shared_state),
+            action,
+            right_click_action,
+            start_text: String::new(),
+            size: rect.size,
+            canceled: false,
+            hovered: false,
+        })
+        .builder_values(z_index, scissor_rect, class, window_cx)
+        .rect(rect)
+        .hidden(true)
+        .flags(
+            ElementFlags::PAINTS
+                | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
+                | ElementFlags::LISTENS_TO_POINTER_OUTSIDE_BOUNDS_WHEN_FOCUSED
+                | ElementFlags::LISTENS_TO_TEXT_COMPOSITION_WHEN_FOCUSED
+                | ElementFlags::LISTENS_TO_KEYS_WHEN_FOCUSED
+                | ElementFlags::LISTENS_TO_SIZE_CHANGE
+                | ElementFlags::LISTENS_TO_FOCUS_CHANGE,
+        )
+        .build(window_cx);
 
         FloatingTextInput { el, shared_state }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for FloatingTextInputElement<A> {
-    fn flags(&self) -> ElementFlags {
-        ElementFlags::PAINTS
-            | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
-            | ElementFlags::LISTENS_TO_POINTER_OUTSIDE_BOUNDS_WHEN_FOCUSED
-            | ElementFlags::LISTENS_TO_TEXT_COMPOSITION_WHEN_FOCUSED
-            | ElementFlags::LISTENS_TO_KEYS_WHEN_FOCUSED
-            | ElementFlags::LISTENS_TO_SIZE_CHANGE
-            | ElementFlags::LISTENS_TO_FOCUS_CHANGE
-    }
+struct FloatingTextInputElement<A: Clone + 'static> {
+    shared_state: Rc<RefCell<SharedState>>,
+    action: Option<Box<dyn FnMut(Option<String>) -> A>>,
+    right_click_action: Option<Box<dyn FnMut(Point) -> A>>,
+    start_text: String,
+    size: Size,
+    canceled: bool,
+    hovered: bool,
+}
 
+impl<A: Clone + 'static> Element<A> for FloatingTextInputElement<A> {
     fn on_event(
         &mut self,
         event: ElementEvent,

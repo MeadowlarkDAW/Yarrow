@@ -44,10 +44,6 @@ impl<A: Clone + 'static> TextInputBuilder<A> {
         }
     }
 
-    pub fn build(self, cx: &mut WindowContext<'_, A>) -> TextInput {
-        TextInputElement::create(self, cx)
-    }
-
     pub fn on_changed<F: FnMut(String) -> A + 'static>(mut self, f: F) -> Self {
         self.action = Some(Box::new(f));
         self
@@ -95,17 +91,8 @@ impl<A: Clone + 'static> TextInputBuilder<A> {
         self.max_characters = max;
         self
     }
-}
 
-pub struct TextInputElement<A: Clone + 'static> {
-    shared_state: Rc<RefCell<SharedState>>,
-    action: Option<Box<dyn FnMut(String) -> A>>,
-    right_click_action: Option<Box<dyn FnMut(Point) -> A>>,
-    hovered: bool,
-}
-
-impl<A: Clone + 'static> TextInputElement<A> {
-    pub fn create(builder: TextInputBuilder<A>, cx: &mut WindowContext<'_, A>) -> TextInput {
+    pub fn build(self, window_cx: &mut WindowContext<'_, A>) -> TextInput {
         let TextInputBuilder {
             action,
             right_click_action,
@@ -122,10 +109,12 @@ impl<A: Clone + 'static> TextInputElement<A> {
             rect,
             manually_hidden,
             scissor_rect,
-        } = builder;
+        } = self;
 
-        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
-        let style = cx.res.style_system.get(cx.class());
+        let style = window_cx
+            .res
+            .style_system
+            .get(window_cx.builder_class(class));
 
         let shared_state = Rc::new(RefCell::new(SharedState {
             inner: TextInputInner::new(
@@ -137,45 +126,44 @@ impl<A: Clone + 'static> TextInputElement<A> {
                 disabled,
                 select_all_when_focused,
                 &style,
-                &mut cx.res.font_system,
+                &mut window_cx.res.font_system,
             ),
             text_offset,
             tooltip_inner: TooltipInner::new(tooltip_data),
         }));
 
-        let element_builder = ElementBuilder {
-            element: Box::new(Self {
-                shared_state: Rc::clone(&shared_state),
-                action,
-                right_click_action,
-                hovered: false,
-            }),
-            z_index,
-            rect,
-            manually_hidden,
-            scissor_rect,
-            class,
-        };
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
+        let el = ElementBuilder::new(TextInputElement {
+            shared_state: Rc::clone(&shared_state),
+            action,
+            right_click_action,
+            hovered: false,
+        })
+        .builder_values(z_index, scissor_rect, class, window_cx)
+        .rect(rect)
+        .hidden(manually_hidden)
+        .flags(
+            ElementFlags::PAINTS
+                | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
+                | ElementFlags::LISTENS_TO_POINTER_OUTSIDE_BOUNDS_WHEN_FOCUSED
+                | ElementFlags::LISTENS_TO_TEXT_COMPOSITION_WHEN_FOCUSED
+                | ElementFlags::LISTENS_TO_KEYS_WHEN_FOCUSED
+                | ElementFlags::LISTENS_TO_SIZE_CHANGE
+                | ElementFlags::LISTENS_TO_FOCUS_CHANGE,
+        )
+        .build(window_cx);
 
         TextInput { el, shared_state }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for TextInputElement<A> {
-    fn flags(&self) -> ElementFlags {
-        ElementFlags::PAINTS
-            | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
-            | ElementFlags::LISTENS_TO_POINTER_OUTSIDE_BOUNDS_WHEN_FOCUSED
-            | ElementFlags::LISTENS_TO_TEXT_COMPOSITION_WHEN_FOCUSED
-            | ElementFlags::LISTENS_TO_KEYS_WHEN_FOCUSED
-            | ElementFlags::LISTENS_TO_SIZE_CHANGE
-            | ElementFlags::LISTENS_TO_FOCUS_CHANGE
-    }
+struct TextInputElement<A: Clone + 'static> {
+    shared_state: Rc<RefCell<SharedState>>,
+    action: Option<Box<dyn FnMut(String) -> A>>,
+    right_click_action: Option<Box<dyn FnMut(Point) -> A>>,
+    hovered: bool,
+}
 
+impl<A: Clone + 'static> Element<A> for TextInputElement<A> {
     fn on_event(
         &mut self,
         event: ElementEvent,

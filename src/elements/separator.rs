@@ -74,26 +74,12 @@ pub struct SeparatorBuilder {
 }
 
 impl SeparatorBuilder {
-    pub fn build<A: Clone + 'static>(self, cx: &mut WindowContext<'_, A>) -> Separator {
-        SeparatorElement::create(self, cx)
-    }
-
     pub const fn vertical(mut self, vertical: bool) -> Self {
         self.vertical = vertical;
         self
     }
-}
 
-/// A simple separator element.
-pub struct SeparatorElement {
-    vertical: bool,
-}
-
-impl SeparatorElement {
-    pub fn create<A: Clone + 'static>(
-        builder: SeparatorBuilder,
-        cx: &mut WindowContext<'_, A>,
-    ) -> Separator {
+    pub fn build<A: Clone + 'static>(self, window_cx: &mut WindowContext<'_, A>) -> Separator {
         let SeparatorBuilder {
             class,
             vertical,
@@ -101,32 +87,25 @@ impl SeparatorElement {
             rect,
             manually_hidden,
             scissor_rect,
-        } = builder;
+        } = self;
 
-        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
-
-        let element_builder = ElementBuilder {
-            element: Box::new(Self { vertical }),
-            z_index,
-            rect,
-            manually_hidden,
-            scissor_rect,
-            class,
-        };
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
+        let el = ElementBuilder::new(SeparatorElement { vertical })
+            .builder_values(z_index, scissor_rect, class, window_cx)
+            .rect(rect)
+            .hidden(manually_hidden)
+            .flags(ElementFlags::PAINTS)
+            .build(window_cx);
 
         Separator { el }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for SeparatorElement {
-    fn flags(&self) -> ElementFlags {
-        ElementFlags::PAINTS
-    }
+/// A simple separator element.
+struct SeparatorElement {
+    vertical: bool,
+}
 
+impl<A: Clone + 'static> Element<A> for SeparatorElement {
     fn on_event(
         &mut self,
         event: ElementEvent,

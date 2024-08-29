@@ -52,29 +52,14 @@ pub fn main() {
     // Set up logging stuff.
     env_logger::init();
 
-    // Actions are sent via a regular Rust mpsc queue.
-    let (action_sender, action_receiver) = yarrow::action_channel();
-
-    yarrow::run_blocking(
-        WindowConfig {
+    yarrow::run_blocking::<MyApp>(AppConfig {
+        main_window_config: WindowConfig {
             title: String::from("Yarrow Gallery Demo"),
             size: Size::new(700.0, 425.0),
-            //scale_factor: ScaleFactorConfig::Custom(1.0.into()),
-            /*
-            surface_config: rootvg::surface::DefaultSurfaceConfig {
-                instance_descriptor: wgpu::InstanceDescriptor {
-                    backends: wgpu::Backends::GL,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            */
             ..Default::default()
         },
-        action_sender,
-        action_receiver,
-        || MyApp::new(),
-    )
+        ..Default::default()
+    })
     .unwrap();
 }
 
@@ -129,40 +114,42 @@ struct MainWindowElements {
 struct MyApp {
     // Yarrow is designed to work even when a window is not currently
     // open (useful in an audio plugin context).
-    main_window_elements: Option<MainWindowElements>,
+    main_window_elements: MainWindowElements,
     about_window_elements: Option<about_window::Elements>,
 
     style: MyStyle,
-    did_load_resources: bool,
     current_tab: MyTab,
 }
 
-impl MyApp {
-    fn new() -> Self {
-        Self {
-            main_window_elements: None,
-            about_window_elements: None,
-            style: MyStyle::new(),
-            did_load_resources: false,
-            current_tab: MyTab::BasicElements,
-        }
-    }
+impl Application for MyApp {
+    type Action = MyAction;
 
-    fn build_main_window(&mut self, cx: &mut WindowContext<'_, MyAction>) {
-        cx.view.clear_color = self.style.clear_color.into();
+    fn init(cx: &mut AppContext<Self::Action>) -> Result<Self, Box<dyn std::error::Error>> {
+        let style = MyStyle::new();
+        style.load(&mut cx.res);
+
+        let mut window_cx = cx.main_window();
+
+        window_cx.set_clear_color(style.clear_color);
 
         // Push the main Z index onto the stack to make it the default.
-        cx.push_z_index(MAIN_Z_INDEX);
+        window_cx.push_z_index(MAIN_Z_INDEX);
 
-        let top_panel_bg = QuadElement::builder().class(CLASS_PANEL).build(cx);
+        let current_tab = MyTab::BasicElements;
+
+        let top_panel_bg = QuadElement::builder()
+            .class(CLASS_PANEL)
+            .build(&mut window_cx);
         let top_panel_border = QuadElement::builder()
             .class(MyStyle::CLASS_PANEL_BORDER)
-            .build(cx);
+            .build(&mut window_cx);
 
-        let left_panel_bg = QuadElement::builder().class(CLASS_PANEL).build(cx);
+        let left_panel_bg = QuadElement::builder()
+            .class(CLASS_PANEL)
+            .build(&mut window_cx);
         let left_panel_border = QuadElement::builder()
             .class(MyStyle::CLASS_PANEL_BORDER)
-            .build(cx);
+            .build(&mut window_cx);
 
         let left_panel_resize_handle = ResizeHandle::builder()
             .on_resized(|new_span| MyAction::LeftPanelResized(new_span))
@@ -171,13 +158,13 @@ impl MyApp {
             // If a z index or scissoring rect ID is set in an element builder, it will
             // override the default one in `cx`.
             .z_index(OVERLAY_Z_INDEX)
-            .build(cx);
+            .build(&mut window_cx);
 
         let menu_btn = Button::builder()
             .class(CLASS_MENU)
             .icon(MyIcon::Menu)
             .on_select(MyAction::OpenMenu)
-            .build(cx);
+            .build(&mut window_cx);
         let menu = DropDownMenu::builder()
             .entries(vec![
                 MenuEntry::option_with_right_text("Hello", MenuOption::Hello.right_text(), 0),
@@ -187,211 +174,60 @@ impl MyApp {
             ])
             .on_entry_selected(|id| MyAction::MenuItemSelected(MenuOption::ALL[id]))
             .z_index(OVERLAY_Z_INDEX)
-            .build(cx);
+            .build(&mut window_cx);
 
-        let tooltip = Tooltip::builder().z_index(OVERLAY_Z_INDEX).build(cx);
+        let tooltip = Tooltip::builder()
+            .z_index(OVERLAY_Z_INDEX)
+            .build(&mut window_cx);
 
         let tab_group = TabGroup::new(
             MyTab::ALL
                 .map(|t| TabGroupOption::new(Some(format!("{t}")), None, Some(format!("{t}")))),
-            self.current_tab as usize,
+            current_tab as usize,
             |i| MyAction::TabSelected(MyTab::ALL[i]),
             None,
             IndicatorLinePlacement::Left,
             Align2::CENTER_RIGHT,
             None,
             None,
-            cx,
+            &mut window_cx,
         );
 
-        let mut basic_elements = basic_elements::Elements::new(cx);
-        let mut knobs_and_sliders = knobs_and_sliders::Elements::new(&self.style, cx);
+        let mut basic_elements = basic_elements::Elements::new(&mut window_cx);
+        let mut knobs_and_sliders = knobs_and_sliders::Elements::new(&style, &mut window_cx);
 
-        basic_elements.set_hidden(self.current_tab != MyTab::BasicElements);
-        knobs_and_sliders.set_hidden(self.current_tab != MyTab::KnobsAndSliders);
+        basic_elements.set_hidden(current_tab != MyTab::BasicElements);
+        knobs_and_sliders.set_hidden(current_tab != MyTab::KnobsAndSliders);
 
-        self.main_window_elements = Some(MainWindowElements {
-            basic_elements,
-            knobs_and_sliders,
-            menu,
-            menu_btn,
-            top_panel_bg,
-            top_panel_border,
-            left_panel_bg,
-            left_panel_border,
-            left_panel_resize_handle,
-            tab_group,
-            tooltip,
-        });
-    }
+        let mut new_self = Self {
+            main_window_elements: MainWindowElements {
+                basic_elements,
+                knobs_and_sliders,
+                menu,
+                menu_btn,
+                top_panel_bg,
+                top_panel_border,
+                left_panel_bg,
+                left_panel_border,
+                left_panel_resize_handle,
+                tab_group,
+                tooltip,
+            },
+            about_window_elements: None,
 
-    fn handle_action(&mut self, action: MyAction, cx: &mut AppContext<MyAction>) {
-        #[cfg(debug_assertions)]
-        dbg!(&action);
-
-        let Some(elements) = self.main_window_elements.as_mut() else {
-            return;
+            style,
+            current_tab,
         };
 
-        let mut needs_layout = false;
+        new_self.layout_main_window(&mut window_cx);
 
-        match action {
-            MyAction::BasicElements(action) => {
-                let mut cx = cx.window_context(MAIN_WINDOW).unwrap();
-                needs_layout = elements.basic_elements.handle_action(action, &mut cx);
-            }
-            MyAction::KnobsAndSliders(action) => {
-                let mut cx = cx.window_context(MAIN_WINDOW).unwrap();
-                needs_layout =
-                    elements
-                        .knobs_and_sliders
-                        .handle_action(action, &self.style, &mut cx);
-            }
-            MyAction::AboutWindow(action) => {
-                if let Some(mut about_window_cx) = cx.window_context(about_window::ABOUT_WINDOW_ID)
-                {
-                    let close_about_window = self
-                        .about_window_elements
-                        .as_mut()
-                        .unwrap()
-                        .handle_action(action, &mut about_window_cx);
+        window_cx.set_tooltip_actions(
+            |info| MyAction::ShowTooltip((info, MAIN_WINDOW)),
+            || MyAction::HideTooltip(MAIN_WINDOW),
+        );
 
-                    if close_about_window {
-                        cx.close_window(about_window::ABOUT_WINDOW_ID);
-                    }
-                }
-            }
-            MyAction::LeftPanelResized(_new_span) => {
-                needs_layout = true;
-            }
-            MyAction::LeftPanelResizeFinished(_new_span) => {}
-            MyAction::MenuItemSelected(option) => {
-                if option == MenuOption::About {
-                    cx.action_sender.send(MyAction::OpenAboutWindow).unwrap();
-                }
-            }
-            MyAction::OpenMenu => {
-                elements.menu.open(None);
-            }
-            MyAction::ShowTooltip((info, _window_id)) => {
-                elements
-                    .tooltip
-                    .show(&info.text, info.align, info.element_bounds, &mut cx.res);
-            }
-            MyAction::HideTooltip(_window_id) => {
-                elements.tooltip.hide();
-            }
-            MyAction::TabSelected(tab) => {
-                self.current_tab = tab;
-                elements.tab_group.updated_selected(tab as usize);
-                elements
-                    .basic_elements
-                    .set_hidden(tab != MyTab::BasicElements);
-                elements
-                    .knobs_and_sliders
-                    .set_hidden(tab != MyTab::KnobsAndSliders);
-                needs_layout = true;
-            }
-            MyAction::OpenAboutWindow => {
-                cx.open_window(about_window::ABOUT_WINDOW_ID, about_window::window_config());
-            }
-        }
-
-        if needs_layout {
-            let mut cx = cx.window_context(MAIN_WINDOW).unwrap();
-            self.layout_main_window(&mut cx);
-        }
+        Ok(new_self)
     }
-
-    fn layout_main_window(&mut self, cx: &mut WindowContext<'_, MyAction>) {
-        let Some(elements) = &mut self.main_window_elements else {
-            return;
-        };
-
-        let window_size = cx.logical_size();
-
-        elements.top_panel_bg.set_rect(rect(
-            0.0,
-            0.0,
-            window_size.width,
-            self.style.top_panel_height,
-        ));
-        elements.top_panel_border.set_rect(rect(
-            0.0,
-            self.style.top_panel_height - self.style.panel_border_width,
-            window_size.width,
-            self.style.panel_border_width,
-        ));
-
-        let left_panel_width = elements.left_panel_resize_handle.current_span();
-        elements.left_panel_bg.set_rect(rect(
-            0.0,
-            self.style.top_panel_height,
-            left_panel_width,
-            window_size.height - self.style.top_panel_height,
-        ));
-        elements.left_panel_border.set_rect(rect(
-            left_panel_width - self.style.panel_border_width,
-            self.style.top_panel_height,
-            self.style.panel_border_width,
-            window_size.height - self.style.top_panel_height,
-        ));
-        elements
-            .left_panel_resize_handle
-            .set_layout(ResizeHandleLayout {
-                anchor: point(0.0, self.style.top_panel_height),
-                length: window_size.height,
-            });
-
-        elements.menu_btn.layout_aligned(
-            point(
-                self.style.menu_btn_padding,
-                self.style.top_panel_height * 0.5,
-            ),
-            Align2::CENTER_LEFT,
-            cx.res,
-        );
-
-        elements
-            .menu
-            .set_position(point(elements.menu_btn.min_x(), elements.menu_btn.max_y()));
-
-        elements.tab_group.layout(
-            point(
-                0.0,
-                self.style.top_panel_height + self.style.tab_group_padding,
-            ),
-            self.style.tag_group_spacing,
-            LayoutDirection::Vertical,
-            Some(left_panel_width - self.style.panel_border_width),
-            cx.res,
-        );
-
-        let content_rect = rect(
-            left_panel_width,
-            self.style.top_panel_height,
-            window_size.width - left_panel_width,
-            window_size.height - self.style.top_panel_height,
-        );
-
-        match self.current_tab {
-            MyTab::BasicElements => {
-                elements
-                    .basic_elements
-                    .layout(content_rect, &self.style, cx);
-            }
-            MyTab::KnobsAndSliders => {
-                elements
-                    .knobs_and_sliders
-                    .layout(content_rect, &self.style, cx);
-            }
-            MyTab::More => {}
-        }
-    }
-}
-
-impl Application for MyApp {
-    type Action = MyAction;
 
     fn on_window_event(
         &mut self,
@@ -402,24 +238,8 @@ impl Application for MyApp {
         match event {
             AppWindowEvent::WindowOpened => {
                 // Yarrow has first-class mutli-window support.
-                if window_id == MAIN_WINDOW {
-                    if !self.did_load_resources {
-                        self.did_load_resources = true;
-                        self.style.load(&mut cx.res);
-                    }
-
-                    let mut cx = cx.window_context(MAIN_WINDOW).unwrap();
-
-                    self.build_main_window(&mut cx);
-                    self.layout_main_window(&mut cx);
-
-                    cx.view.set_tooltip_actions(
-                        |info| MyAction::ShowTooltip((info, MAIN_WINDOW)),
-                        || MyAction::HideTooltip(MAIN_WINDOW),
-                    );
-                } else if window_id == about_window::ABOUT_WINDOW_ID {
-                    let mut about_window_cx =
-                        cx.window_context(about_window::ABOUT_WINDOW_ID).unwrap();
+                if window_id == about_window::ABOUT_WINDOW_ID {
+                    let mut about_window_cx = cx.window(about_window::ABOUT_WINDOW_ID).unwrap();
 
                     self.about_window_elements = Some(about_window::Elements::new(
                         &self.style,
@@ -429,8 +249,7 @@ impl Application for MyApp {
             }
             AppWindowEvent::WindowResized => {
                 if window_id == MAIN_WINDOW {
-                    let mut cx = cx.window_context(MAIN_WINDOW).unwrap();
-                    self.layout_main_window(&mut cx);
+                    self.layout_main_window(&mut cx.main_window());
                 }
             }
             AppWindowEvent::WindowClosed => {
@@ -446,7 +265,82 @@ impl Application for MyApp {
 
     fn on_action_emitted(&mut self, cx: &mut AppContext<Self::Action>) {
         while let Ok(action) = cx.action_receiver.try_recv() {
-            self.handle_action(action, cx);
+            #[cfg(debug_assertions)]
+            dbg!(&action);
+
+            let mut needs_layout = false;
+
+            match action {
+                MyAction::BasicElements(action) => {
+                    needs_layout = self
+                        .main_window_elements
+                        .basic_elements
+                        .handle_action(action, &mut cx.main_window());
+                }
+                MyAction::KnobsAndSliders(action) => {
+                    needs_layout = self.main_window_elements.knobs_and_sliders.handle_action(
+                        action,
+                        &self.style,
+                        &mut cx.main_window(),
+                    );
+                }
+                MyAction::AboutWindow(action) => {
+                    if let Some(mut about_window_cx) = cx.window(about_window::ABOUT_WINDOW_ID) {
+                        let close_about_window = self
+                            .about_window_elements
+                            .as_mut()
+                            .unwrap()
+                            .handle_action(action, &mut about_window_cx);
+
+                        if close_about_window {
+                            cx.close_window(about_window::ABOUT_WINDOW_ID);
+                        }
+                    }
+                }
+                MyAction::LeftPanelResized(_new_span) => {
+                    needs_layout = true;
+                }
+                MyAction::LeftPanelResizeFinished(_new_span) => {}
+                MyAction::MenuItemSelected(option) => {
+                    if option == MenuOption::About {
+                        cx.action_sender.send(MyAction::OpenAboutWindow).unwrap();
+                    }
+                }
+                MyAction::OpenMenu => {
+                    self.main_window_elements.menu.open(None);
+                }
+                MyAction::ShowTooltip((info, _window_id)) => {
+                    self.main_window_elements.tooltip.show(
+                        &info.text,
+                        info.align,
+                        info.element_bounds,
+                        &mut cx.res,
+                    );
+                }
+                MyAction::HideTooltip(_window_id) => {
+                    self.main_window_elements.tooltip.hide();
+                }
+                MyAction::TabSelected(tab) => {
+                    self.current_tab = tab;
+                    self.main_window_elements
+                        .tab_group
+                        .updated_selected(tab as usize);
+                    self.main_window_elements
+                        .basic_elements
+                        .set_hidden(tab != MyTab::BasicElements);
+                    self.main_window_elements
+                        .knobs_and_sliders
+                        .set_hidden(tab != MyTab::KnobsAndSliders);
+                    needs_layout = true;
+                }
+                MyAction::OpenAboutWindow => {
+                    cx.open_window(about_window::ABOUT_WINDOW_ID, about_window::window_config());
+                }
+            }
+
+            if needs_layout {
+                self.layout_main_window(&mut cx.main_window());
+            }
         }
     }
 
@@ -464,6 +358,87 @@ impl Application for MyApp {
         {
             println!("program-wide keyboard shortcut activated: Ctrl+A");
             cx.action_sender.send(MyAction::OpenAboutWindow).unwrap();
+        }
+    }
+}
+
+impl MyApp {
+    fn layout_main_window(&mut self, window_cx: &mut WindowContext<MyAction>) {
+        let window_size = window_cx.logical_size();
+
+        let el = &mut self.main_window_elements;
+
+        el.top_panel_bg.set_rect(rect(
+            0.0,
+            0.0,
+            window_size.width,
+            self.style.top_panel_height,
+        ));
+        el.top_panel_border.set_rect(rect(
+            0.0,
+            self.style.top_panel_height - self.style.panel_border_width,
+            window_size.width,
+            self.style.panel_border_width,
+        ));
+
+        let left_panel_width = el.left_panel_resize_handle.current_span();
+        el.left_panel_bg.set_rect(rect(
+            0.0,
+            self.style.top_panel_height,
+            left_panel_width,
+            window_size.height - self.style.top_panel_height,
+        ));
+        el.left_panel_border.set_rect(rect(
+            left_panel_width - self.style.panel_border_width,
+            self.style.top_panel_height,
+            self.style.panel_border_width,
+            window_size.height - self.style.top_panel_height,
+        ));
+        el.left_panel_resize_handle.set_layout(ResizeHandleLayout {
+            anchor: point(0.0, self.style.top_panel_height),
+            length: window_size.height,
+        });
+
+        el.menu_btn.layout_aligned(
+            point(
+                self.style.menu_btn_padding,
+                self.style.top_panel_height * 0.5,
+            ),
+            Align2::CENTER_LEFT,
+            window_cx.res,
+        );
+
+        el.menu
+            .set_position(point(el.menu_btn.min_x(), el.menu_btn.max_y()));
+
+        el.tab_group.layout(
+            point(
+                0.0,
+                self.style.top_panel_height + self.style.tab_group_padding,
+            ),
+            self.style.tag_group_spacing,
+            LayoutDirection::Vertical,
+            Some(left_panel_width - self.style.panel_border_width),
+            window_cx.res,
+        );
+
+        let content_rect = rect(
+            left_panel_width,
+            self.style.top_panel_height,
+            window_size.width - left_panel_width,
+            window_size.height - self.style.top_panel_height,
+        );
+
+        match self.current_tab {
+            MyTab::BasicElements => {
+                el.basic_elements
+                    .layout(content_rect, &self.style, window_cx);
+            }
+            MyTab::KnobsAndSliders => {
+                el.knobs_and_sliders
+                    .layout(content_rect, &self.style, window_cx);
+            }
+            MyTab::More => {}
         }
     }
 }

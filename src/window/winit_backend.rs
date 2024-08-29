@@ -1,5 +1,6 @@
 use keyboard_types::{CompositionEvent, CompositionState, Modifiers};
 use rootvg::surface::DefaultSurface;
+use rootvg::text::FontSystem;
 use rustc_hash::FxHashMap;
 use std::error::Error;
 use std::sync::Arc;
@@ -15,14 +16,17 @@ use winit::window::{CursorGrabMode, Window as WinitWindow, WindowId as WinitWind
 
 use crate::action_queue::ActionSender;
 use crate::application::{Application, TimerInterval};
+use crate::element_system::ElementSystemConfig;
 use crate::event::{AppWindowEvent, EventCaptureStatus, PointerButton, WheelDeltaType};
 use crate::math::{PhysicalPoint, PhysicalSizeI32, ScaleFactor, Size, Vector};
-use crate::prelude::{ActionReceiver, AppHandler, ResourceCtx};
+use crate::prelude::{AppHandler, ResourceCtx};
+use crate::style::StyleSystem;
 use crate::window::{WindowID, MAIN_WINDOW};
+use crate::AppConfig;
 
 use super::{
-    Clipboard, CursorIcon, LinuxBackendType, PointerBtnState, PointerLockState, ScaleFactorConfig,
-    View, WindowBackend, WindowCloseRequest, WindowConfig, WindowState,
+    Clipboard, CursorIcon, ElementSystem, LinuxBackendType, PointerBtnState, PointerLockState,
+    ScaleFactorConfig, WindowBackend, WindowCloseRequest, WindowConfig, WindowState,
 };
 
 mod convert;
@@ -243,6 +247,11 @@ impl<'a> WindowBackend for WinitWindowBackend<'a> {
     }
 }
 
+struct PreMainWindowData {
+    config: AppConfig,
+    res: ResourceCtx,
+}
+
 struct WinitAppHandlerInner {
     tick_interval: Duration,
     pointer_debounce_interval: Duration,
@@ -254,26 +263,20 @@ struct WinitAppHandlerInner {
     windows: FxHashMap<WindowID, Arc<winit::window::Window>>,
 
     tick_wait_cancelled: bool,
-    got_first_resumed_event: bool,
-    main_window_config: WindowConfig,
 }
 
 struct WinitAppHandler<A: Application> {
-    app_handler: AppHandler<A>,
+    app_handler: Option<AppHandler<A>>,
     inner: WinitAppHandlerInner,
+    pre_main_window_data: Option<PreMainWindowData>,
 }
 
 impl<A: Application> WinitAppHandler<A> {
-    fn new(
-        user_app: A,
-        action_sender: ActionSender<A::Action>,
-        action_receiver: ActionReceiver<A::Action>,
-        main_window_config: WindowConfig,
-    ) -> Result<Self, Box<dyn Error>> {
-        let app_handler = AppHandler::new(user_app, action_sender, action_receiver)?;
+    fn new(config: AppConfig) -> Result<Self, Box<dyn Error>> {
+        let use_dark_theme = config.use_dark_theme;
 
         Ok(Self {
-            app_handler,
+            app_handler: None,
             inner: WinitAppHandlerInner {
                 tick_interval: Duration::default(),
                 pointer_debounce_interval: Duration::default(),
@@ -283,17 +286,26 @@ impl<A: Application> WinitAppHandler<A> {
                 winit_id_to_window_id_map: FxHashMap::default(),
                 windows: FxHashMap::default(),
                 tick_wait_cancelled: false,
-                got_first_resumed_event: false,
-                main_window_config,
             },
+            pre_main_window_data: Some(PreMainWindowData {
+                config,
+                res: ResourceCtx {
+                    style_system: StyleSystem::new(use_dark_theme),
+                    font_system: FontSystem::new(),
+                    #[cfg(feature = "svg-icons")]
+                    svg_icon_system: Default::default(),
+                },
+            }),
         })
     }
 
     fn process_updates(&mut self, event_loop: &ActiveEventLoop) {
-        self.app_handler.process_updates(&mut WinitWindowBackend {
-            inner: &mut self.inner,
-            event_loop,
-        });
+        if let Some(app_handler) = &mut self.app_handler {
+            app_handler.process_updates(&mut WinitWindowBackend {
+                inner: &mut self.inner,
+                event_loop,
+            });
+        }
     }
 }
 
@@ -306,7 +318,10 @@ impl<A: Application> WinitApplicationHandler for WinitAppHandler<A> {
                 requested_resume, ..
             } => {
                 if requested_resume == self.inner.requested_tick_resume {
-                    self.app_handler.on_tick();
+                    if let Some(app_handler) = &mut self.app_handler {
+                        app_handler.on_tick();
+                    }
+
                     self.process_updates(event_loop);
                 } else if let Some(pointer_resume_instant) =
                     self.inner.requested_cursor_debounce_resume
@@ -322,38 +337,15 @@ impl<A: Application> WinitApplicationHandler for WinitAppHandler<A> {
     }
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if !self.inner.got_first_resumed_event {
-            self.inner.got_first_resumed_event = true;
-
-            #[cfg(any(
-                target_os = "linux",
-                target_os = "freebsd",
-                target_os = "dragonfly",
-                target_os = "openbsd",
-                target_os = "netbsd",
-            ))]
-            {
-                use winit::platform::wayland::ActiveEventLoopExtWayland;
-                use winit::platform::x11::ActiveEventLoopExtX11;
-
-                self.app_handler.context.linux_backend_type = if event_loop.is_x11() {
-                    Some(LinuxBackendType::X11)
-                } else if event_loop.is_wayland() {
-                    Some(LinuxBackendType::Wayland)
-                } else {
-                    log::warn!("Could not parse whether windowing backend is X11 or Wayland");
-                    None
-                };
-            }
-
-            let main_window_config = self.inner.main_window_config.clone();
+        if let Some(mut data) = self.pre_main_window_data.take() {
+            let (action_sender, action_receiver) = crate::action_channel::<A::Action>();
 
             let (window_handle, main_window_state) = match create_window(
                 MAIN_WINDOW,
-                &main_window_config,
+                &data.config.main_window_config,
                 event_loop,
-                &self.app_handler.context.action_sender,
-                &mut self.app_handler.context.res,
+                &action_sender,
+                &mut data.res,
             ) {
                 Ok(w) => w,
                 Err(e) => {
@@ -367,17 +359,16 @@ impl<A: Application> WinitApplicationHandler for WinitAppHandler<A> {
                 .windows
                 .insert(MAIN_WINDOW, Arc::clone(&window_handle));
 
-            let find_millihertz = if let TimerInterval::PercentageOfFrameRate(_) =
-                self.app_handler.context.config.tick_timer_interval
-            {
-                true
-            } else if let TimerInterval::PercentageOfFrameRate(_) =
-                self.app_handler.context.config.pointer_debounce_interval
-            {
-                true
-            } else {
-                false
-            };
+            let find_millihertz =
+                if let TimerInterval::PercentageOfFrameRate(_) = data.config.tick_timer_interval {
+                    true
+                } else if let TimerInterval::PercentageOfFrameRate(_) =
+                    data.config.pointer_debounce_interval
+                {
+                    true
+                } else {
+                    false
+                };
             let millihertz = if find_millihertz {
                 // Attempt to get the refresh rate of the current monitor. If that's
                 // not possible, try other methods.
@@ -408,33 +399,70 @@ impl<A: Application> WinitApplicationHandler for WinitAppHandler<A> {
                 60_000
             };
 
-            self.inner.tick_interval = match self.app_handler.context.config.tick_timer_interval {
+            self.inner.tick_interval = match data.config.tick_timer_interval {
                 TimerInterval::Fixed(interval) => interval,
                 TimerInterval::PercentageOfFrameRate(percentage) => {
                     Duration::from_secs_f64(percentage * 1_000.0 / millihertz as f64)
                 }
             };
-            self.inner.pointer_debounce_interval =
-                match self.app_handler.context.config.pointer_debounce_interval {
-                    TimerInterval::Fixed(interval) => interval,
-                    TimerInterval::PercentageOfFrameRate(percentage) => {
-                        Duration::from_secs_f64(percentage * 1_000.0 / millihertz as f64)
-                    }
-                };
+            self.inner.pointer_debounce_interval = match data.config.pointer_debounce_interval {
+                TimerInterval::Fixed(interval) => interval,
+                TimerInterval::PercentageOfFrameRate(percentage) => {
+                    Duration::from_secs_f64(percentage * 1_000.0 / millihertz as f64)
+                }
+            };
 
-            self.app_handler
-                .context
-                .window_map
-                .insert(MAIN_WINDOW, main_window_state);
             self.inner
                 .winit_id_to_window_id_map
                 .insert(window_handle.id(), MAIN_WINDOW);
 
-            self.app_handler.user_app.on_window_event(
-                AppWindowEvent::WindowOpened,
-                MAIN_WINDOW,
-                &mut self.app_handler.context,
-            );
+            #[cfg(any(
+                target_os = "linux",
+                target_os = "freebsd",
+                target_os = "dragonfly",
+                target_os = "openbsd",
+                target_os = "netbsd",
+            ))]
+            let linux_backend_type = {
+                use winit::platform::wayland::ActiveEventLoopExtWayland;
+                use winit::platform::x11::ActiveEventLoopExtX11;
+
+                if event_loop.is_x11() {
+                    Some(LinuxBackendType::X11)
+                } else if event_loop.is_wayland() {
+                    Some(LinuxBackendType::Wayland)
+                } else {
+                    log::warn!("Could not parse whether windowing backend is X11 or Wayland");
+                    None
+                }
+            };
+
+            #[cfg(not(any(
+                target_os = "linux",
+                target_os = "freebsd",
+                target_os = "dragonfly",
+                target_os = "openbsd",
+                target_os = "netbsd",
+            )))]
+            let linux_backend_type = None;
+
+            let app_handler = match AppHandler::new(
+                main_window_state,
+                action_sender,
+                action_receiver,
+                data.config,
+                data.res,
+                linux_backend_type,
+            ) {
+                Ok(a) => a,
+                Err(e) => {
+                    log::error!("Application returned error on init: {}", e);
+                    event_loop.exit();
+                    return;
+                }
+            };
+
+            self.app_handler = Some(app_handler);
 
             self.process_updates(event_loop);
         }
@@ -446,6 +474,10 @@ impl<A: Application> WinitApplicationHandler for WinitAppHandler<A> {
         winit_window_id: WinitWindowId,
         event: WinitWindowEvent,
     ) {
+        let Some(app_handler) = &mut self.app_handler else {
+            return;
+        };
+
         let Some(window_id) = self
             .inner
             .winit_id_to_window_id_map
@@ -455,27 +487,35 @@ impl<A: Application> WinitApplicationHandler for WinitAppHandler<A> {
             return;
         };
 
+        let window_state = if window_id == MAIN_WINDOW {
+            &mut app_handler.cx.main_window
+        } else if let Some(window_state) = app_handler.cx.window_map.get_mut(&window_id) {
+            window_state
+        } else {
+            return;
+        };
+
         let mut process_updates = true;
 
         match event {
             WinitWindowEvent::CloseRequested => {
                 if window_id == MAIN_WINDOW {
-                    match self.app_handler.user_app.on_request_to_close_window(
+                    match app_handler.user_app.on_request_to_close_window(
                         MAIN_WINDOW,
                         false,
-                        &mut self.app_handler.context,
+                        &mut app_handler.cx,
                     ) {
                         WindowCloseRequest::CloseImmediately => event_loop.exit(),
                         WindowCloseRequest::DoNotCloseYet => {}
                     }
                 } else {
-                    match self.app_handler.user_app.on_request_to_close_window(
+                    match app_handler.user_app.on_request_to_close_window(
                         window_id,
                         false,
-                        &mut self.app_handler.context,
+                        &mut app_handler.cx,
                     ) {
                         WindowCloseRequest::CloseImmediately => {
-                            self.app_handler.context.window_map.remove(&window_id);
+                            app_handler.cx.window_map.remove(&window_id);
                             self.inner
                                 .winit_id_to_window_id_map
                                 .remove(&winit_window_id);
@@ -488,17 +528,11 @@ impl<A: Application> WinitApplicationHandler for WinitAppHandler<A> {
             WinitWindowEvent::RedrawRequested => {
                 process_updates = false;
 
-                let window_state = self
-                    .app_handler
-                    .context
-                    .window_map
-                    .get_mut(&window_id)
-                    .unwrap();
                 let window_handle = self.inner.windows.get(&window_id).unwrap();
 
                 match window_state.render(
                     || window_handle.pre_present_notify(),
-                    &mut self.app_handler.context.res,
+                    &mut app_handler.cx.res,
                 ) {
                     Ok(_) => {}
                     // Reconfigure the surface if lost
@@ -522,35 +556,22 @@ impl<A: Application> WinitApplicationHandler for WinitAppHandler<A> {
             WinitWindowEvent::Resized(new_size) => {
                 let new_size = PhysicalSizeI32::new(new_size.width as i32, new_size.height as i32);
 
-                let window_state = self
-                    .app_handler
-                    .context
-                    .window_map
-                    .get_mut(&window_id)
-                    .unwrap();
                 let window_handle = self.inner.windows.get(&window_id).unwrap();
 
                 let scale_factor = window_handle.scale_factor().into();
                 window_state.set_size(new_size, scale_factor);
                 window_handle.request_redraw();
 
-                self.app_handler.user_app.on_window_event(
+                app_handler.user_app.on_window_event(
                     AppWindowEvent::WindowResized,
                     window_id,
-                    &mut self.app_handler.context,
+                    &mut app_handler.cx,
                 );
             }
             WinitWindowEvent::ScaleFactorChanged {
                 scale_factor,
                 mut inner_size_writer,
             } => {
-                let window_state = self
-                    .app_handler
-                    .context
-                    .window_map
-                    .get_mut(&window_id)
-                    .unwrap();
-
                 let new_size: PhysicalSizeI32 =
                     crate::math::to_physical_size(window_state.logical_size(), scale_factor.into())
                         .round()
@@ -565,55 +586,37 @@ impl<A: Application> WinitApplicationHandler for WinitAppHandler<A> {
 
                 window_state.set_size(new_size, scale_factor.into());
 
-                self.app_handler.user_app.on_window_event(
+                app_handler.user_app.on_window_event(
                     AppWindowEvent::WindowResized,
                     window_id,
-                    &mut self.app_handler.context,
+                    &mut app_handler.cx,
                 );
             }
             WinitWindowEvent::Focused(focused) => {
-                let window_state = self
-                    .app_handler
-                    .context
-                    .window_map
-                    .get_mut(&window_id)
-                    .unwrap();
-
                 let event = if focused {
-                    window_state.handle_window_focused(&mut self.app_handler.context.res);
+                    window_state.handle_window_focused(&mut app_handler.cx.res);
                     AppWindowEvent::WindowFocused
                 } else {
-                    window_state.handle_window_unfocused(&mut self.app_handler.context.res);
+                    window_state.handle_window_unfocused(&mut app_handler.cx.res);
                     AppWindowEvent::WindowUnfocused
                 };
 
-                self.app_handler.user_app.on_window_event(
-                    event,
-                    window_id,
-                    &mut self.app_handler.context,
-                );
+                app_handler
+                    .user_app
+                    .on_window_event(event, window_id, &mut app_handler.cx);
             }
             WinitWindowEvent::Occluded(hidden) => {
-                let window_state = self
-                    .app_handler
-                    .context
-                    .window_map
-                    .get_mut(&window_id)
-                    .unwrap();
-
                 let event = if hidden {
-                    window_state.handle_window_hidden(&mut self.app_handler.context.res);
+                    window_state.handle_window_hidden(&mut app_handler.cx.res);
                     AppWindowEvent::WindowHidden
                 } else {
-                    window_state.handle_window_shown(&mut self.app_handler.context.res);
+                    window_state.handle_window_shown(&mut app_handler.cx.res);
                     AppWindowEvent::WindowShown
                 };
 
-                self.app_handler.user_app.on_window_event(
-                    event,
-                    window_id,
-                    &mut self.app_handler.context,
-                );
+                app_handler
+                    .user_app
+                    .on_window_event(event, window_id, &mut app_handler.cx);
             }
             WinitWindowEvent::CursorMoved {
                 device_id: _,
@@ -621,12 +624,7 @@ impl<A: Application> WinitApplicationHandler for WinitAppHandler<A> {
             } => {
                 let pos = PhysicalPoint::new(position.x as f32, position.y as f32);
 
-                self.app_handler
-                    .context
-                    .window_map
-                    .get_mut(&window_id)
-                    .unwrap()
-                    .queued_pointer_position = Some(pos);
+                window_state.queued_pointer_position = Some(pos);
 
                 let now = Instant::now();
                 if now - self.inner.prev_cursor_debounce_instant
@@ -659,32 +657,20 @@ impl<A: Application> WinitApplicationHandler for WinitAppHandler<A> {
                     _ => return,
                 };
 
-                self.app_handler
-                    .context
-                    .window_map
-                    .get_mut(&window_id)
-                    .unwrap()
-                    .handle_mouse_button(
-                        button,
-                        state.is_pressed(),
-                        &mut self.app_handler.context.res,
-                    );
+                window_state.handle_mouse_button(
+                    button,
+                    state.is_pressed(),
+                    &mut app_handler.cx.res,
+                );
             }
             WinitWindowEvent::CursorLeft { device_id: _ } => {
-                self.app_handler
-                    .context
-                    .window_map
-                    .get_mut(&window_id)
-                    .unwrap()
-                    .handle_pointer_left(&mut self.app_handler.context.res);
+                window_state.handle_pointer_left(&mut app_handler.cx.res);
             }
             WinitWindowEvent::MouseWheel {
                 device_id: _,
                 delta,
                 phase: _,
             } => {
-                let window_state = self.app_handler.context.window_map.get(&window_id).unwrap();
-
                 let delta_type = match delta {
                     MouseScrollDelta::LineDelta(x, y) => WheelDeltaType::Lines(Vector::new(x, -y)),
                     MouseScrollDelta::PixelDelta(pos) => WheelDeltaType::Points(Vector::new(
@@ -693,21 +679,16 @@ impl<A: Application> WinitApplicationHandler for WinitAppHandler<A> {
                     )),
                 };
 
-                self.app_handler
-                    .context
-                    .window_map
-                    .get_mut(&window_id)
-                    .unwrap()
-                    .handle_mouse_wheel(delta_type, &mut self.app_handler.context.res);
+                window_state.handle_mouse_wheel(delta_type, &mut app_handler.cx.res);
             }
             WinitWindowEvent::Destroyed => {
-                self.app_handler.user_app.on_window_event(
+                app_handler.user_app.on_window_event(
                     AppWindowEvent::WindowClosed,
                     window_id,
-                    &mut self.app_handler.context,
+                    &mut app_handler.cx,
                 );
 
-                self.app_handler.context.window_map.remove(&window_id);
+                app_handler.cx.window_map.remove(&window_id);
                 self.inner
                     .winit_id_to_window_id_map
                     .remove(&winit_window_id);
@@ -716,30 +697,18 @@ impl<A: Application> WinitApplicationHandler for WinitAppHandler<A> {
             WinitWindowEvent::ModifiersChanged(winit_modifiers) => {
                 let modifiers = self::convert::convert_modifiers(winit_modifiers);
 
-                self.app_handler
-                    .context
-                    .window_map
-                    .get_mut(&window_id)
-                    .unwrap()
-                    .set_modifiers(modifiers);
+                window_state.set_modifiers(modifiers);
             }
             WinitWindowEvent::KeyboardInput {
                 device_id: _,
                 event,
                 is_synthetic: _,
             } => {
-                let window_state = self
-                    .app_handler
-                    .context
-                    .window_map
-                    .get_mut(&window_id)
-                    .unwrap();
-
                 let key_event =
                     self::convert::convert_keyboard_event(&event, window_state.modifiers);
 
                 let mut captured = window_state
-                    .handle_keyboard_event(key_event.clone(), &mut self.app_handler.context.res)
+                    .handle_keyboard_event(key_event.clone(), &mut app_handler.cx.res)
                     == EventCaptureStatus::Captured;
 
                 if !captured {
@@ -750,24 +719,24 @@ impl<A: Application> WinitApplicationHandler for WinitAppHandler<A> {
                                     state: CompositionState::Start,
                                     data: String::new(),
                                 },
-                                &mut self.app_handler.context.res,
+                                &mut app_handler.cx.res,
                             ) == EventCaptureStatus::Captured;
                             captured |= window_state.handle_text_composition_event(
                                 CompositionEvent {
                                     state: CompositionState::End,
                                     data: text.to_string(),
                                 },
-                                &mut self.app_handler.context.res,
+                                &mut app_handler.cx.res,
                             ) == EventCaptureStatus::Captured;
                         }
                     }
                 }
 
                 if !captured {
-                    self.app_handler.user_app.on_keyboard_event(
+                    app_handler.user_app.on_keyboard_event(
                         key_event,
                         window_id,
-                        &mut self.app_handler.context,
+                        &mut app_handler.cx,
                     );
                 }
             }
@@ -785,8 +754,17 @@ impl<A: Application> WinitApplicationHandler for WinitAppHandler<A> {
         _device_id: winit::event::DeviceId,
         event: winit::event::DeviceEvent,
     ) {
+        let Some(app_handler) = &mut self.app_handler else {
+            return;
+        };
+
         if let winit::event::DeviceEvent::MouseMotion { delta } = event {
-            for window in self.app_handler.context.window_map.values_mut() {
+            for window in app_handler
+                .cx
+                .window_map
+                .values_mut()
+                .chain([&mut app_handler.cx.main_window])
+            {
                 if window.pointer_lock_state().is_locked() {
                     if let Some(prev_delta) = &mut window.queued_pointer_delta {
                         prev_delta.0 += delta.0;
@@ -818,14 +796,18 @@ impl<A: Application> WinitApplicationHandler for WinitAppHandler<A> {
         if !self.inner.tick_wait_cancelled {
             let now = Instant::now();
 
-            let mut next_instant =
-                if self.app_handler.prev_tick_instant + self.inner.tick_interval > now {
-                    self.app_handler.prev_tick_instant + self.inner.tick_interval
-                } else {
-                    self.app_handler.on_tick();
+            let Some(app_handler) = &mut self.app_handler else {
+                return;
+            };
 
-                    now + self.inner.tick_interval
-                };
+            let mut next_instant = if app_handler.prev_tick_instant + self.inner.tick_interval > now
+            {
+                app_handler.prev_tick_instant + self.inner.tick_interval
+            } else {
+                app_handler.on_tick();
+
+                now + self.inner.tick_interval
+            };
 
             if let Some(pointer_resume_instant) = self.inner.requested_cursor_debounce_resume {
                 if next_instant == pointer_resume_instant {
@@ -839,10 +821,6 @@ impl<A: Application> WinitApplicationHandler for WinitAppHandler<A> {
             event_loop.set_control_flow(ControlFlow::WaitUntil(next_instant));
         }
     }
-
-    fn suspended(&mut self, _event_loop: &ActiveEventLoop) {}
-
-    fn exiting(&mut self, _event_loop: &ActiveEventLoop) {}
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -853,22 +831,12 @@ pub enum OpenWindowError {
     SurfaceError(#[from] rootvg::surface::NewSurfaceError),
 }
 
-pub fn run_blocking<A: Application, B>(
-    main_window_config: WindowConfig,
-    action_sender: ActionSender<A::Action>,
-    action_receiver: ActionReceiver<A::Action>,
-    mut build_app: B,
-) -> Result<(), Box<dyn Error>>
+pub fn run_blocking<A: Application>(config: AppConfig) -> Result<(), Box<dyn Error>>
 where
     A::Action: Send,
-    B: FnMut() -> A,
-    B: 'static + Send,
 {
-    let app = (build_app)();
-
     let event_loop = EventLoop::new()?;
-    let mut app_handler =
-        WinitAppHandler::new(app, action_sender, action_receiver, main_window_config)?;
+    let mut app_handler = WinitAppHandler::<A>::new(config)?;
 
     event_loop.run_app(&mut app_handler).map_err(Into::into)
 }
@@ -958,10 +926,15 @@ fn create_window<A: Clone + 'static>(
         &mut res.font_system,
     );
 
-    let view = View::new(
+    let element_system = ElementSystem::new(
         physical_size,
         scale_factor,
-        config.view_config.clone(),
+        ElementSystemConfig {
+            clear_color: config.clear_color,
+            preallocate_for_this_many_elements: config.preallocate_for_this_many_elements,
+            hover_timeout_duration: config.hover_timeout_duration,
+            scroll_wheel_timeout_duration: config.scroll_wheel_timeout_duration,
+        },
         action_sender.clone(),
         id,
     );
@@ -971,7 +944,7 @@ fn create_window<A: Clone + 'static>(
     Ok((
         window,
         WindowState {
-            view,
+            element_system,
             renderer,
             surface: Some(surface),
             multisample: canvas_config.multisample,

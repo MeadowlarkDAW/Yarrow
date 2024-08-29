@@ -522,11 +522,6 @@ pub struct LabelBuilder {
 }
 
 impl LabelBuilder {
-    /// Build the element
-    pub fn build<A: Clone + 'static>(self, cx: &mut WindowContext<'_, A>) -> Label {
-        LabelElement::create(self, cx)
-    }
-
     /// The text of the label
     ///
     /// If this method isn't used, then the label will have no text (unless
@@ -600,18 +595,8 @@ impl LabelBuilder {
         self.text_icon_layout = layout;
         self
     }
-}
 
-/// A label element with an optional quad background.
-pub struct LabelElement {
-    shared_state: Rc<RefCell<SharedState>>,
-}
-
-impl LabelElement {
-    pub fn create<A: Clone + 'static>(
-        builder: LabelBuilder,
-        cx: &mut WindowContext<'_, A>,
-    ) -> Label {
+    pub fn build<A: Clone + 'static>(self, window_cx: &mut WindowContext<'_, A>) -> Label {
         let LabelBuilder {
             text,
             icon,
@@ -625,10 +610,12 @@ impl LabelElement {
             rect,
             manually_hidden,
             scissor_rect,
-        } = builder;
+        } = self;
 
-        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
-        let style = cx.res.style_system.get(class);
+        let style = window_cx
+            .res
+            .style_system
+            .get(window_cx.builder_class(class));
 
         let shared_state = Rc::new(RefCell::new(SharedState {
             inner: LabelInner::new(
@@ -640,34 +627,29 @@ impl LabelElement {
                 icon_scale,
                 text_icon_layout,
                 &style,
-                &mut cx.res.font_system,
+                &mut window_cx.res.font_system,
             ),
         }));
 
-        let element_builder = ElementBuilder {
-            element: Box::new(Self {
-                shared_state: Rc::clone(&shared_state),
-            }),
-            z_index,
-            rect,
-            manually_hidden,
-            scissor_rect,
-            class,
-        };
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
+        let el = ElementBuilder::new(LabelElement {
+            shared_state: Rc::clone(&shared_state),
+        })
+        .builder_values(z_index, scissor_rect, class, window_cx)
+        .rect(rect)
+        .hidden(manually_hidden)
+        .flags(ElementFlags::PAINTS)
+        .build(window_cx);
 
         Label { el, shared_state }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for LabelElement {
-    fn flags(&self) -> ElementFlags {
-        ElementFlags::PAINTS
-    }
+/// A label element with an optional quad background.
+struct LabelElement {
+    shared_state: Rc<RefCell<SharedState>>,
+}
 
+impl<A: Clone + 'static> Element<A> for LabelElement {
     fn on_event(
         &mut self,
         event: ElementEvent,

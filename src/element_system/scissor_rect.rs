@@ -3,15 +3,15 @@ use std::u32;
 use thunderdome::Arena;
 
 use super::{ElementEntry, ElementID, EntryStackData};
+use crate::element_system::element::{ElementModification, ElementModificationType};
 use crate::math::{PointI32, RectI32, Vector};
 use crate::stmpsc_queue;
-use crate::view::element::{ElementModification, ElementModificationType};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ScissorRectID(pub u32);
 
 impl ScissorRectID {
-    /// `ScissorRectID` of `u32::MAX` means to use use the main View itself as the
+    /// `ScissorRectID` of `u32::MAX` means to use use the main ElementSystem itself as the
     /// scissoring rectangle.
     pub const DEFAULT: Self = Self(u32::MAX);
 }

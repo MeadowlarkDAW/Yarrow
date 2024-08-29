@@ -3,8 +3,8 @@ use std::{any::Any, rc::Rc};
 use rootvg::{math::Size, PrimitiveGroup};
 
 use crate::{
+    element_system::element::{ElementRenderCache, RenderContext},
     prelude::ElementStyle,
-    view::element::{ElementRenderCache, RenderContext},
 };
 
 use super::{AutomationInfo, ParamMarkersConfig, SteppedValue};

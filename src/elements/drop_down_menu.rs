@@ -354,10 +354,6 @@ pub struct DropDownMenuBuilder<A: Clone + 'static> {
 }
 
 impl<A: Clone + 'static> DropDownMenuBuilder<A> {
-    pub fn build(self, cx: &mut WindowContext<'_, A>) -> DropDownMenu {
-        DropDownMenuElement::create(self, cx)
-    }
-
     pub fn on_entry_selected<F: FnMut(usize) -> A + 'static>(mut self, f: F) -> Self {
         self.action = Some(Box::new(f));
         self
@@ -367,9 +363,57 @@ impl<A: Clone + 'static> DropDownMenuBuilder<A> {
         self.entries = entries.into();
         self
     }
+
+    pub fn build(self, window_cx: &mut WindowContext<'_, A>) -> DropDownMenu {
+        let DropDownMenuBuilder {
+            action,
+            entries,
+            class,
+            z_index,
+            position,
+            scissor_rect,
+        } = self;
+
+        let shared_state = Rc::new(RefCell::new(SharedState {
+            new_entries: None,
+            open_requested: false,
+        }));
+
+        let style = window_cx
+            .res
+            .style_system
+            .get::<DropDownMenuStyle>(window_cx.builder_class(class));
+        let cursor_icon = style.cursor_icon;
+
+        let mut entries = build_entries(entries, &style, &mut window_cx.res.font_system);
+
+        let size = style.measure(&mut entries);
+
+        let el = ElementBuilder::new(DropDownMenuElement {
+            shared_state: Rc::clone(&shared_state),
+            action,
+            entries,
+            size,
+            active: false,
+            hovered_entry_index: None,
+            cursor_icon,
+        })
+        .builder_values(z_index, scissor_rect, class, window_cx)
+        .rect(Rect::new(position, Size::zero()))
+        .flags(
+            ElementFlags::PAINTS
+                | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
+                | ElementFlags::LISTENS_TO_FOCUS_CHANGE
+                | ElementFlags::LISTENS_TO_POINTER_OUTSIDE_BOUNDS_WHEN_FOCUSED
+                | ElementFlags::LISTENS_TO_POSITION_CHANGE,
+        )
+        .build(window_cx);
+
+        DropDownMenu { el, shared_state }
+    }
 }
 
-pub struct DropDownMenuElement<A: Clone + 'static> {
+struct DropDownMenuElement<A: Clone + 'static> {
     shared_state: Rc<RefCell<SharedState>>,
     action: Option<Box<dyn FnMut(usize) -> A>>,
     entries: Vec<MenuEntryInner>,
@@ -379,65 +423,7 @@ pub struct DropDownMenuElement<A: Clone + 'static> {
     cursor_icon: Option<CursorIcon>,
 }
 
-impl<A: Clone + 'static> DropDownMenuElement<A> {
-    pub fn create(builder: DropDownMenuBuilder<A>, cx: &mut WindowContext<'_, A>) -> DropDownMenu {
-        let DropDownMenuBuilder {
-            action,
-            entries,
-            class,
-            z_index,
-            position,
-            scissor_rect,
-        } = builder;
-
-        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
-
-        let shared_state = Rc::new(RefCell::new(SharedState {
-            new_entries: None,
-            open_requested: false,
-        }));
-
-        let style = cx.res.style_system.get::<DropDownMenuStyle>(class);
-        let cursor_icon = style.cursor_icon;
-
-        let mut entries = build_entries(entries, &style, &mut cx.res.font_system);
-
-        let size = style.measure(&mut entries);
-
-        let element_builder = ElementBuilder {
-            element: Box::new(Self {
-                shared_state: Rc::clone(&shared_state),
-                action,
-                entries,
-                size,
-                active: false,
-                hovered_entry_index: None,
-                cursor_icon,
-            }),
-            z_index,
-            rect: Rect::new(position, Size::zero()),
-            manually_hidden: false,
-            scissor_rect,
-            class,
-        };
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
-
-        DropDownMenu { el, shared_state }
-    }
-}
-
 impl<A: Clone + 'static> Element<A> for DropDownMenuElement<A> {
-    fn flags(&self) -> ElementFlags {
-        ElementFlags::PAINTS
-            | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
-            | ElementFlags::LISTENS_TO_FOCUS_CHANGE
-            | ElementFlags::LISTENS_TO_POINTER_OUTSIDE_BOUNDS_WHEN_FOCUSED
-            | ElementFlags::LISTENS_TO_POSITION_CHANGE
-    }
-
     fn on_event(
         &mut self,
         event: ElementEvent,

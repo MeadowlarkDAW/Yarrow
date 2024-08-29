@@ -5,7 +5,8 @@ use crate::derive::*;
 use crate::prelude::*;
 use crate::theme::DEFAULT_ICON_SIZE;
 
-use super::super::icon::IconInner;
+use super::super::icon::{IconInner, IconStyle};
+use super::super::tooltip::TooltipInner;
 use super::{TextInputAction, TextInputInner, TextInputStyle, TextInputUpdateResult};
 
 /// The style of an [`IconTextInput`] element
@@ -158,10 +159,6 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
         }
     }
 
-    pub fn build(self, cx: &mut WindowContext<'_, A>) -> IconTextInput {
-        IconTextInputElement::create(self, cx)
-    }
-
     pub fn on_changed<F: FnMut(String) -> A + 'static>(mut self, f: F) -> Self {
         self.action = Some(Box::new(f));
         self
@@ -235,23 +232,8 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
         self.max_characters = max;
         self
     }
-}
 
-pub struct IconTextInputElement<A: Clone + 'static> {
-    shared_state: Rc<RefCell<SharedState>>,
-    action: Option<Box<dyn FnMut(String) -> A>>,
-    right_click_action: Option<Box<dyn FnMut(Point) -> A>>,
-    icon: IconInner,
-    icon_rect: Rect,
-    text_input_style: TextInputStyle,
-    hovered: bool,
-}
-
-impl<A: Clone + 'static> IconTextInputElement<A> {
-    pub fn create(
-        builder: IconTextInputBuilder<A>,
-        cx: &mut WindowContext<'_, A>,
-    ) -> IconTextInput {
+    pub fn build(self, window_cx: &mut WindowContext<'_, A>) -> IconTextInput {
         let IconTextInputBuilder {
             action,
             right_click_action,
@@ -272,10 +254,12 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
             rect,
             manually_hidden,
             scissor_rect,
-        } = builder;
+        } = self;
 
-        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
-        let style = cx.res.style_system.get::<IconTextInputStyle>(cx.class());
+        let style = window_cx
+            .res
+            .style_system
+            .get::<IconTextInputStyle>(window_cx.builder_class(class));
 
         let icon = IconInner::new(icon, icon_size, icon_scale, icon_offset);
 
@@ -295,48 +279,50 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
                 disabled,
                 select_all_when_focused,
                 &layout_res.text_input_style,
-                &mut cx.res.font_system,
+                &mut window_cx.res.font_system,
             ),
             text_offset,
             tooltip_inner: TooltipInner::new(tooltip_data),
         }));
 
-        let element_builder = ElementBuilder {
-            element: Box::new(Self {
-                shared_state: Rc::clone(&shared_state),
-                action,
-                right_click_action,
-                icon,
-                icon_rect: layout_res.icon_rect,
-                text_input_style: layout_res.text_input_style,
-                hovered: false,
-            }),
-            z_index,
-            rect,
-            manually_hidden,
-            scissor_rect,
-            class,
-        };
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
+        let el = ElementBuilder::new(IconTextInputElement {
+            shared_state: Rc::clone(&shared_state),
+            action,
+            right_click_action,
+            icon,
+            icon_rect: layout_res.icon_rect,
+            text_input_style: layout_res.text_input_style,
+            hovered: false,
+        })
+        .builder_values(z_index, scissor_rect, class, window_cx)
+        .rect(rect)
+        .hidden(manually_hidden)
+        .flags(
+            ElementFlags::PAINTS
+                | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
+                | ElementFlags::LISTENS_TO_POINTER_OUTSIDE_BOUNDS_WHEN_FOCUSED
+                | ElementFlags::LISTENS_TO_TEXT_COMPOSITION_WHEN_FOCUSED
+                | ElementFlags::LISTENS_TO_KEYS_WHEN_FOCUSED
+                | ElementFlags::LISTENS_TO_SIZE_CHANGE
+                | ElementFlags::LISTENS_TO_FOCUS_CHANGE,
+        )
+        .build(window_cx);
 
         IconTextInput { el, shared_state }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
-    fn flags(&self) -> ElementFlags {
-        ElementFlags::PAINTS
-            | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
-            | ElementFlags::LISTENS_TO_POINTER_OUTSIDE_BOUNDS_WHEN_FOCUSED
-            | ElementFlags::LISTENS_TO_TEXT_COMPOSITION_WHEN_FOCUSED
-            | ElementFlags::LISTENS_TO_KEYS_WHEN_FOCUSED
-            | ElementFlags::LISTENS_TO_SIZE_CHANGE
-            | ElementFlags::LISTENS_TO_FOCUS_CHANGE
-    }
+struct IconTextInputElement<A: Clone + 'static> {
+    shared_state: Rc<RefCell<SharedState>>,
+    action: Option<Box<dyn FnMut(String) -> A>>,
+    right_click_action: Option<Box<dyn FnMut(Point) -> A>>,
+    icon: IconInner,
+    icon_rect: Rect,
+    text_input_style: TextInputStyle,
+    hovered: bool,
+}
 
+impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
     fn on_event(
         &mut self,
         event: ElementEvent,

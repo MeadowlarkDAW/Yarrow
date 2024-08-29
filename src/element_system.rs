@@ -45,10 +45,10 @@ mod custom_shaders;
 #[cfg(feature = "custom-shaders")]
 pub use self::custom_shaders::CustomPipelines;
 
-/// The settings for a new `View`.
+/// The settings for a new `ElementSystem`.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ViewConfig {
+pub(crate) struct ElementSystemConfig {
     /// The clear color.
     pub clear_color: PackedSrgb,
 
@@ -68,18 +68,7 @@ pub struct ViewConfig {
     pub scroll_wheel_timeout_duration: Duration,
 }
 
-impl Default for ViewConfig {
-    fn default() -> Self {
-        Self {
-            clear_color: PackedSrgb::BLACK,
-            preallocate_for_this_many_elements: 0,
-            hover_timeout_duration: Duration::from_millis(500),
-            scroll_wheel_timeout_duration: Duration::from_millis(250),
-        }
-    }
-}
-
-struct ViewContext<A: Clone + 'static> {
+struct ElementSystemContext<A: Clone + 'static> {
     current_focus_info: Option<FocusInfo>,
     prev_element_with_exclusive_focus: Option<ElementID>,
     mod_queue_sender: stmpsc_queue::Sender<ElementModification>,
@@ -92,10 +81,10 @@ struct ViewContext<A: Clone + 'static> {
     window_id: WindowID,
 }
 
-pub struct View<A: Clone + 'static> {
+pub(crate) struct ElementSystem<A: Clone + 'static> {
     pub clear_color: PackedSrgb,
 
-    context: ViewContext<A>,
+    context: ElementSystemContext<A>,
 
     element_arena: Arena<ElementEntry<A>>,
     scissor_rect_id_to_index_map: FxHashMap<ScissorRectID, usize>,
@@ -121,7 +110,7 @@ pub struct View<A: Clone + 'static> {
     show_tooltip_action: Option<Box<dyn FnMut(TooltipInfo) -> A>>,
     hide_tooltip_action: Option<Box<dyn FnMut() -> A>>,
 
-    view_needs_repaint: bool,
+    needs_repaint: bool,
     window_visible: bool,
 
     render_caches: FxHashMap<u32, Box<dyn ElementRenderCache>>,
@@ -130,15 +119,15 @@ pub struct View<A: Clone + 'static> {
     custom_pipelines: CustomPipelines,
 }
 
-impl<A: Clone + 'static> View<A> {
+impl<A: Clone + 'static> ElementSystem<A> {
     pub fn new(
         physical_size: PhysicalSizeI32,
         scale_factor: ScaleFactor,
-        config: ViewConfig,
+        config: ElementSystemConfig,
         action_sender: ActionSender<A>,
         window_id: WindowID,
     ) -> Self {
-        let ViewConfig {
+        let ElementSystemConfig {
             clear_color,
             preallocate_for_this_many_elements,
             hover_timeout_duration,
@@ -171,7 +160,7 @@ impl<A: Clone + 'static> View<A> {
         Self {
             clear_color,
 
-            context: ViewContext {
+            context: ElementSystemContext {
                 current_focus_info: None,
                 prev_element_with_exclusive_focus: None,
                 mod_queue_sender,
@@ -205,7 +194,7 @@ impl<A: Clone + 'static> View<A> {
             scroll_wheel_timeout_duration,
             prev_pointer_pos: None,
 
-            view_needs_repaint: true,
+            needs_repaint: true,
             window_visible: true,
 
             show_tooltip_action: None,
@@ -216,10 +205,6 @@ impl<A: Clone + 'static> View<A> {
             #[cfg(feature = "custom-shaders")]
             custom_pipelines: CustomPipelines::new(),
         }
-    }
-
-    pub fn size(&self) -> Size {
-        self.context.logical_size
     }
 
     pub fn set_tooltip_actions<S, H>(&mut self, on_show_tooltip: S, on_hide_tooltip: H)
@@ -296,9 +281,8 @@ impl<A: Clone + 'static> View<A> {
             manually_hidden,
             scissor_rect,
             class,
+            flags,
         } = element_builder;
-
-        let flags = element.flags();
 
         let scissor_rect_index = self.get_scissor_rect_index(scissor_rect);
 
@@ -322,7 +306,7 @@ impl<A: Clone + 'static> View<A> {
         stack_data.update_visibility(&self.scissor_rects, self.window_visible);
 
         if stack_data.visible() && stack_data.flags.contains(ElementFlags::PAINTS) {
-            self.view_needs_repaint = true;
+            self.needs_repaint = true;
         }
 
         let element_id = ElementID(self.element_arena.insert(ElementEntry {
@@ -415,12 +399,30 @@ impl<A: Clone + 'static> View<A> {
         }
     }
 
-    pub(crate) fn on_pointer_locked(&mut self, locked: bool) {
+    pub fn needs_repaint(&self) -> bool {
+        self.needs_repaint
+    }
+
+    pub fn element_is_hovered(&self, element: &ElementHandle) -> bool {
+        let Some(element_entry) = self.element_arena.get(element.id().0) else {
+            return false;
+        };
+
+        if let Some(pos) = self.prev_pointer_pos {
+            if let Some(visible_rect) = &element_entry.stack_data.visible_rect {
+                return visible_rect.contains(pos);
+            }
+        }
+
+        false
+    }
+
+    pub fn on_pointer_locked(&mut self, locked: bool) {
         self.context.pointer_locked = locked;
         self.context.pointer_lock_request = None;
     }
 
-    pub(crate) fn resize(&mut self, physical_size: PhysicalSizeI32, scale_factor: ScaleFactor) {
+    pub fn resize(&mut self, physical_size: PhysicalSizeI32, scale_factor: ScaleFactor) {
         self.physical_size = physical_size;
         self.context.scale_factor = scale_factor;
         self.context.logical_size = crate::math::to_logical_size_i32(physical_size, scale_factor);
@@ -437,10 +439,10 @@ impl<A: Clone + 'static> View<A> {
             &mut self.context.mod_queue_sender,
         );
 
-        self.view_needs_repaint = true;
+        self.needs_repaint = true;
     }
 
-    pub(crate) fn on_theme_changed(&mut self, res: &mut ResourceCtx, clipboard: &mut Clipboard) {
+    pub fn on_theme_changed(&mut self, res: &mut ResourceCtx, clipboard: &mut Clipboard) {
         let mut element_ids = Vec::new();
         for (element_id, element_entry) in self.element_arena.iter_mut() {
             let element_id = ElementID(element_id);
@@ -462,7 +464,7 @@ impl<A: Clone + 'static> View<A> {
         }
     }
 
-    pub(crate) fn handle_event(
+    pub fn handle_event(
         &mut self,
         event: &CanvasEvent,
         res: &mut ResourceCtx,
@@ -889,7 +891,7 @@ impl<A: Clone + 'static> View<A> {
                                       element_id: ElementID,
                                       event: PointerEvent,
                                       did_just_enter: bool,
-                                      view_cx: &mut ViewContext<A>|
+                                      view_cx: &mut ElementSystemContext<A>|
          -> EventCaptureStatus {
             let mut event = event.clone();
 
@@ -1166,24 +1168,6 @@ impl<A: Clone + 'static> View<A> {
         processed_update
     }
 
-    pub fn view_needs_repaint(&self) -> bool {
-        self.view_needs_repaint
-    }
-
-    pub fn element_is_hovered(&self, element: &ElementHandle) -> bool {
-        let Some(element_entry) = self.element_arena.get(element.id().0) else {
-            return false;
-        };
-
-        if let Some(pos) = self.prev_pointer_pos {
-            if let Some(visible_rect) = &element_entry.stack_data.visible_rect {
-                return visible_rect.contains(pos);
-            }
-        }
-
-        false
-    }
-
     fn handle_element_listen_to_click_off(&mut self, element_id: ElementID) {
         if self.element_arena.contains(element_id.0) {
             self.elements_listening_to_clicked_off.insert(element_id);
@@ -1297,7 +1281,7 @@ impl<A: Clone + 'static> View<A> {
 
         self.painted_elements[element_entry.stack_data.index_in_painted_list as usize].dirty = true;
 
-        self.view_needs_repaint = true;
+        self.needs_repaint = true;
     }
 
     fn update_element_rect(
@@ -1398,7 +1382,7 @@ impl<A: Clone + 'static> View<A> {
         );
 
         if element_entry.stack_data.visible() || visibility_changed {
-            self.view_needs_repaint = true;
+            self.needs_repaint = true;
         }
     }
 
@@ -1457,7 +1441,7 @@ impl<A: Clone + 'static> View<A> {
         }
 
         if element_entry.stack_data.visible() || visibility_changed {
-            self.view_needs_repaint = true;
+            self.needs_repaint = true;
         }
     }
 
@@ -1516,7 +1500,7 @@ impl<A: Clone + 'static> View<A> {
         // Detecting if a z index change requires a repaint or not would be very tricky,
         // so just repaint regardless if the element is visible.
         if element_entry.stack_data.visible() {
-            self.view_needs_repaint = true;
+            self.needs_repaint = true;
         }
     }
 
@@ -1582,7 +1566,7 @@ impl<A: Clone + 'static> View<A> {
             );
         }
 
-        self.view_needs_repaint = true;
+        self.needs_repaint = true;
     }
 
     fn set_element_animating(&mut self, element_id: ElementID, animating: bool) {
@@ -1843,7 +1827,7 @@ impl<A: Clone + 'static> View<A> {
         self.elements_with_scroll_wheel_timeout.remove(&element_id);
 
         if element_entry.stack_data.visible() {
-            self.view_needs_repaint = true;
+            self.needs_repaint = true;
         }
     }
 
@@ -1859,7 +1843,7 @@ impl<A: Clone + 'static> View<A> {
         pre_present_notify: P,
         res: &mut ResourceCtx,
     ) -> Result<(), wgpu::SurfaceError> {
-        if !self.view_needs_repaint {
+        if !self.needs_repaint {
             return Ok(());
         }
 
@@ -1957,16 +1941,16 @@ impl<A: Clone + 'static> View<A> {
         queue.submit(Some(encoder.finish()));
         frame.present();
 
-        self.view_needs_repaint = false;
+        self.needs_repaint = false;
 
         Ok(())
     }
 
-    pub(crate) fn cursor_icon(&self) -> CursorIcon {
+    pub fn cursor_icon(&self) -> CursorIcon {
         self.context.cursor_icon
     }
 
-    pub(crate) fn pointer_lock_request(&mut self) -> Option<bool> {
+    pub fn pointer_lock_request(&mut self) -> Option<bool> {
         self.context.pointer_lock_request.take()
     }
 }
@@ -2059,7 +2043,7 @@ fn send_event_to_element<A: Clone + 'static>(
     event: ElementEvent,
     element_entry: &mut ElementEntry<A>,
     element_id: ElementID,
-    view_cx: &mut ViewContext<A>,
+    view_cx: &mut ElementSystemContext<A>,
     res: &mut ResourceCtx,
     clipboard: &mut Clipboard,
 ) -> EventCaptureStatus {
@@ -2174,7 +2158,7 @@ fn send_event_to_element<A: Clone + 'static>(
 fn release_focus_for_element<A: Clone + 'static>(
     element_id: ElementID,
     element_entry: &mut ElementEntry<A>,
-    cx: &mut ViewContext<A>,
+    cx: &mut ElementSystemContext<A>,
     res: &mut ResourceCtx,
     clipboard: &mut Clipboard,
 ) {

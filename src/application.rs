@@ -1,6 +1,6 @@
 use rootvg::{
     math::{PhysicalPoint, Size},
-    text::glyphon::FontSystem,
+    text::{glyphon::FontSystem, svg::SvgIconSystem},
 };
 use rustc_hash::FxHashMap;
 use std::{
@@ -16,14 +16,13 @@ use crate::{
         LinuxBackendType, OpenWindowError, PointerLockState, ScaleFactorConfig, WindowBackend,
         WindowCloseRequest, WindowConfig, WindowContext, WindowID, WindowState,
     },
+    MAIN_WINDOW,
 };
 
-pub trait Application {
+pub trait Application: Sized {
     type Action: Clone + 'static;
 
-    fn init(&mut self) -> Result<AppConfig, Box<dyn Error>> {
-        Ok(AppConfig::default())
-    }
+    fn init(cx: &mut AppContext<Self::Action>) -> Result<Self, Box<dyn Error>>;
 
     #[allow(unused)]
     fn on_window_event(
@@ -73,9 +72,10 @@ impl Default for TimerInterval {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AppConfig {
+    pub main_window_config: WindowConfig,
     pub tick_timer_interval: TimerInterval,
     pub pointer_debounce_interval: TimerInterval,
     pub pointer_locking_enabled: bool,
@@ -85,6 +85,7 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
+            main_window_config: WindowConfig::default(),
             tick_timer_interval: TimerInterval::PercentageOfFrameRate(1.0),
             pointer_debounce_interval: TimerInterval::PercentageOfFrameRate(2.0),
             pointer_locking_enabled: true,
@@ -93,20 +94,31 @@ impl Default for AppConfig {
     }
 }
 
-/// A context for globally-shared resources
+/// A cx for globally-shared resources
 pub struct ResourceCtx {
     pub style_system: StyleSystem,
     pub font_system: FontSystem,
     #[cfg(feature = "svg-icons")]
-    pub svg_icon_system: rootvg::text::svg::SvgIconSystem,
+    pub svg_icon_system: SvgIconSystem,
+}
+
+impl ResourceCtx {
+    pub fn new(use_dark_theme: bool) -> Self {
+        Self {
+            style_system: StyleSystem::new(use_dark_theme),
+            font_system: FontSystem::new(),
+            svg_icon_system: SvgIconSystem::default(),
+        }
+    }
 }
 
 pub struct AppContext<A: Clone + 'static> {
     pub(crate) config: AppConfig,
     pub(crate) window_requests: Vec<(WindowID, WindowRequest)>,
+    pub(crate) main_window: WindowState<A>,
     pub(crate) window_map: FxHashMap<WindowID, WindowState<A>>,
     pub(crate) linux_backend_type: Option<LinuxBackendType>,
-    /// The global resource context
+    /// The global resource cx
     pub res: ResourceCtx,
 
     /// The sending end of the action queue.
@@ -116,7 +128,35 @@ pub struct AppContext<A: Clone + 'static> {
 }
 
 impl<A: Clone + 'static> AppContext<A> {
-    pub fn window_context<'a>(&'a mut self, window_id: WindowID) -> Option<WindowContext<'a, A>> {
+    pub(crate) fn new(
+        config: AppConfig,
+        action_sender: ActionSender<A>,
+        action_receiver: ActionReceiver<A>,
+        main_window: WindowState<A>,
+        res: ResourceCtx,
+        linux_backend_type: Option<LinuxBackendType>,
+    ) -> Self {
+        Self {
+            config,
+            window_requests: Vec::new(),
+            main_window,
+            window_map: FxHashMap::default(),
+            res,
+            linux_backend_type,
+            action_sender,
+            action_receiver,
+        }
+    }
+
+    pub fn main_window<'a>(&'a mut self) -> WindowContext<'a, A> {
+        self.main_window.context(
+            &mut self.res,
+            &mut self.action_sender,
+            &mut self.action_receiver,
+        )
+    }
+
+    pub fn window<'a>(&'a mut self, window_id: WindowID) -> Option<WindowContext<'a, A>> {
         self.window_map.get_mut(&window_id).map(|w| {
             w.context(
                 &mut self.res,
@@ -188,48 +228,35 @@ impl<A: Clone + 'static> AppContext<A> {
     }
 }
 
-impl<A: Clone + 'static> AppContext<A> {
-    pub fn new(
-        config: AppConfig,
-        action_sender: ActionSender<A>,
-        action_receiver: ActionReceiver<A>,
-    ) -> Self {
-        let use_dark_theme = config.use_dark_theme;
-
-        Self {
-            config,
-            window_requests: Vec::new(),
-            window_map: FxHashMap::default(),
-            res: ResourceCtx {
-                style_system: StyleSystem::new(use_dark_theme),
-                font_system: FontSystem::new(),
-                #[cfg(feature = "svg-icons")]
-                svg_icon_system: Default::default(),
-            },
-            linux_backend_type: None,
-            action_sender,
-            action_receiver,
-        }
-    }
-}
-
 pub(crate) struct AppHandler<A: Application> {
     pub user_app: A,
-    pub context: AppContext<A::Action>,
+    pub cx: AppContext<A::Action>,
     pub prev_tick_instant: Instant,
 }
 
 impl<A: Application> AppHandler<A> {
     pub fn new(
-        mut user_app: A,
+        main_window: WindowState<A::Action>,
         action_sender: ActionSender<A::Action>,
         action_receiver: ActionReceiver<A::Action>,
+        config: AppConfig,
+        res: ResourceCtx,
+        linux_backend_type: Option<LinuxBackendType>,
     ) -> Result<Self, Box<dyn Error>> {
-        let config = user_app.init()?;
+        let mut cx = AppContext::new(
+            config,
+            action_sender,
+            action_receiver,
+            main_window,
+            res,
+            linux_backend_type,
+        );
+
+        let user_app = A::init(&mut cx)?;
 
         Ok(Self {
             user_app,
-            context: AppContext::new(config, action_sender, action_receiver),
+            cx,
             prev_tick_instant: Instant::now(),
         })
     }
@@ -239,10 +266,12 @@ impl<A: Application> AppHandler<A> {
         let dt = (now - self.prev_tick_instant).as_secs_f64();
         self.prev_tick_instant = now;
 
-        self.user_app.on_tick(dt, &mut self.context);
+        self.user_app.on_tick(dt, &mut self.cx);
 
-        for window_state in self.context.window_map.values_mut() {
-            window_state.on_animation_tick(dt, &mut self.context.res);
+        self.cx.main_window.on_animation_tick(dt, &mut self.cx.res);
+
+        for window_state in self.cx.window_map.values_mut() {
+            window_state.on_animation_tick(dt, &mut self.cx.res);
         }
     }
 
@@ -255,15 +284,17 @@ impl<A: Application> AppHandler<A> {
             self.drain_window_requests(backend);
 
             let mut any_updates_processed = false;
-            for (window_id, window_state) in self.context.window_map.iter_mut() {
-                if window_state
-                    .view
-                    .process_updates(&mut self.context.res, &mut window_state.clipboard)
-                {
+            for (window_id, window_state) in self
+                .cx
+                .window_map
+                .iter_mut()
+                .chain([(&MAIN_WINDOW, &mut self.cx.main_window)])
+            {
+                if window_state.process_updates(&mut self.cx.res) {
                     any_updates_processed = true;
                 }
 
-                if window_state.view.view_needs_repaint() {
+                if window_state.needs_repaint() {
                     backend.request_redraw(*window_id);
                 }
             }
@@ -277,7 +308,12 @@ impl<A: Application> AppHandler<A> {
     }
 
     fn drain_pointer_moved_events<B: WindowBackend>(&mut self, backend: &mut B) {
-        for (window_id, window_state) in self.context.window_map.iter_mut() {
+        for (window_id, window_state) in self
+            .cx
+            .window_map
+            .iter_mut()
+            .chain([(&MAIN_WINDOW, &mut self.cx.main_window)])
+        {
             if let Some(delta) = window_state.queued_pointer_delta.take() {
                 if window_state.pointer_lock_state().is_locked() {
                     let delta = crate::math::to_logical_point_from_recip(
@@ -286,14 +322,14 @@ impl<A: Application> AppHandler<A> {
                     )
                     .to_vector();
 
-                    window_state.handle_locked_pointer_delta(delta, &mut self.context.res);
+                    window_state.handle_locked_pointer_delta(delta, &mut self.cx.res);
                 }
             }
 
             if let Some(pos) = window_state.queued_pointer_position.take() {
                 match window_state.pointer_lock_state() {
                     PointerLockState::NotLocked => {
-                        window_state.handle_pointer_moved(pos, &mut self.context.res);
+                        window_state.handle_pointer_moved(pos, &mut self.cx.res);
                     }
                     PointerLockState::LockedUsingOS => {
                         // Only send events from the raw device input when locked.
@@ -309,7 +345,7 @@ impl<A: Application> AppHandler<A> {
                                     .unlock_pointer(*window_id, window_state.pointer_lock_state());
                                 window_state.set_pointer_locked(PointerLockState::NotLocked);
 
-                                window_state.handle_pointer_moved(pos, &mut self.context.res);
+                                window_state.handle_pointer_moved(pos, &mut self.cx.res);
                             }
                         }
                     }
@@ -323,16 +359,20 @@ impl<A: Application> AppHandler<A> {
         let mut successful_open_requests: Vec<WindowID> = Vec::new();
         let mut failed_open_requests: Vec<(WindowID, OpenWindowError)> = Vec::new();
 
-        for (window_id, request) in self.context.window_requests.drain(..) {
+        for (window_id, request) in self.cx.window_requests.drain(..) {
             if let WindowRequest::Create(config) = &request {
+                if window_id == MAIN_WINDOW || self.cx.window_map.contains_key(&window_id) {
+                    log::warn!("Ignored request to create window with ID {window_id}. Window with that ID already exists.")
+                }
+
                 match backend.create_window(
                     window_id,
                     config,
-                    &self.context.action_sender,
-                    &mut self.context.res,
+                    &self.cx.action_sender,
+                    &mut self.cx.res,
                 ) {
                     Ok(window_state) => {
-                        self.context.window_map.insert(window_id, window_state);
+                        self.cx.window_map.insert(window_id, window_state);
                         successful_open_requests.push(window_id);
                     }
                     Err(e) => failed_open_requests.push((window_id, e)),
@@ -341,7 +381,11 @@ impl<A: Application> AppHandler<A> {
                 continue;
             }
 
-            let Some(window_state) = self.context.window_map.get_mut(&window_id) else {
+            let window_state = if window_id == MAIN_WINDOW {
+                &mut self.cx.main_window
+            } else if let Some(window_state) = self.cx.window_map.get_mut(&window_id) {
+                window_state
+            } else {
                 log::warn!(
                     "Ignored request {:?} for window {}, window does not exist",
                     request,
@@ -393,24 +437,21 @@ impl<A: Application> AppHandler<A> {
                     }
                 }
                 WindowRequest::NotifyThemeChange => {
-                    window_state.on_theme_changed(&mut self.context.res);
+                    window_state.on_theme_changed(&mut self.cx.res);
                 }
                 _ => {}
             }
         }
 
         for window_id in windows_to_close {
-            self.context.window_map.remove(&window_id);
+            self.cx.window_map.remove(&window_id);
 
             backend.close_window(window_id);
         }
 
         for window_id in successful_open_requests.drain(..) {
-            self.user_app.on_window_event(
-                AppWindowEvent::WindowOpened,
-                window_id,
-                &mut self.context,
-            );
+            self.user_app
+                .on_window_event(AppWindowEvent::WindowOpened, window_id, &mut self.cx);
         }
 
         for (window_id, error) in failed_open_requests.drain(..) {
@@ -418,28 +459,33 @@ impl<A: Application> AppHandler<A> {
             self.user_app.on_window_event(
                 AppWindowEvent::OpenWindowFailed(error),
                 window_id,
-                &mut self.context,
+                &mut self.cx,
             );
         }
     }
 
     fn poll_actions(&mut self) -> bool {
-        let any_actions_processed = self.context.action_sender.any_action_sent();
+        let any_actions_processed = self.cx.action_sender.any_action_sent();
         if any_actions_processed {
-            self.user_app.on_action_emitted(&mut self.context);
+            self.user_app.on_action_emitted(&mut self.cx);
         }
         return any_actions_processed;
     }
 
     fn update_pointer_lock_and_cursor<B: WindowBackend>(&mut self, backend: &mut B) {
-        for (window_id, window_state) in self.context.window_map.iter_mut() {
+        for (window_id, window_state) in self
+            .cx
+            .window_map
+            .iter_mut()
+            .chain([(&MAIN_WINDOW, &mut self.cx.main_window)])
+        {
             let mut do_unlock_pointer = false;
 
             let has_focus = backend.has_focus(*window_id);
 
             if let Some(lock) = window_state.new_pointer_lock_request() {
                 if lock
-                    && self.context.config.pointer_locking_enabled
+                    && self.cx.config.pointer_locking_enabled
                     && !window_state.pointer_lock_state().is_locked()
                     && has_focus
                 {

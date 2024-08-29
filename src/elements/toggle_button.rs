@@ -695,10 +695,6 @@ pub struct ToggleButtonBuilder<A: Clone + 'static> {
 }
 
 impl<A: Clone + 'static> ToggleButtonBuilder<A> {
-    pub fn build(self, cx: &mut WindowContext<'_, A>) -> ToggleButton {
-        ToggleButtonElement::create(self, cx)
-    }
-
     pub fn on_toggled<F: FnMut(bool) -> A + 'static>(mut self, f: F) -> Self {
         self.action = Some(Box::new(f));
         self
@@ -782,17 +778,8 @@ impl<A: Clone + 'static> ToggleButtonBuilder<A> {
         self.text_icon_layout = layout;
         self
     }
-}
 
-/// A button element with a label.
-pub struct ToggleButtonElement<A: Clone + 'static> {
-    shared_state: Rc<RefCell<SharedState>>,
-    action: Option<Box<dyn FnMut(bool) -> A>>,
-    cursor_icon: Option<CursorIcon>,
-}
-
-impl<A: Clone + 'static> ToggleButtonElement<A> {
-    pub fn create(builder: ToggleButtonBuilder<A>, cx: &mut WindowContext<'_, A>) -> ToggleButton {
+    pub fn build(self, window_cx: &mut WindowContext<'_, A>) -> ToggleButton {
         let ToggleButtonBuilder {
             action,
             tooltip_data,
@@ -810,10 +797,12 @@ impl<A: Clone + 'static> ToggleButtonElement<A> {
             manually_hidden,
             disabled,
             scissor_rect,
-        } = builder;
+        } = self;
 
-        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
-        let style = cx.res.style_system.get::<ToggleButtonStyle>(class);
+        let style = window_cx
+            .res
+            .style_system
+            .get::<ToggleButtonStyle>(window_cx.builder_class(class));
         let cursor_icon = style.cursor_icon;
 
         let shared_state = Rc::new(RefCell::new(SharedState {
@@ -828,37 +817,34 @@ impl<A: Clone + 'static> ToggleButtonElement<A> {
                 disabled,
                 text_icon_layout,
                 &style,
-                &mut cx.res.font_system,
+                &mut window_cx.res.font_system,
             ),
             tooltip_inner: TooltipInner::new(tooltip_data),
         }));
 
-        let element_builder = ElementBuilder {
-            element: Box::new(Self {
-                shared_state: Rc::clone(&shared_state),
-                action,
-                cursor_icon,
-            }),
-            z_index,
-            rect,
-            manually_hidden,
-            scissor_rect,
-            class,
-        };
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
+        let el = ElementBuilder::new(ToggleButtonElement {
+            shared_state: Rc::clone(&shared_state),
+            action,
+            cursor_icon,
+        })
+        .builder_values(z_index, scissor_rect, class, window_cx)
+        .rect(rect)
+        .hidden(manually_hidden)
+        .flags(ElementFlags::PAINTS | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS)
+        .build(window_cx);
 
         ToggleButton { el, shared_state }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for ToggleButtonElement<A> {
-    fn flags(&self) -> ElementFlags {
-        ElementFlags::PAINTS | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
-    }
+/// A button element with a label.
+struct ToggleButtonElement<A: Clone + 'static> {
+    shared_state: Rc<RefCell<SharedState>>,
+    action: Option<Box<dyn FnMut(bool) -> A>>,
+    cursor_icon: Option<CursorIcon>,
+}
 
+impl<A: Clone + 'static> Element<A> for ToggleButtonElement<A> {
     fn on_event(
         &mut self,
         event: ElementEvent,

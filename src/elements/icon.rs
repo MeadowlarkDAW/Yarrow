@@ -219,10 +219,6 @@ pub struct IconBuilder {
 }
 
 impl IconBuilder {
-    pub fn build<A: Clone + 'static>(self, cx: &mut WindowContext<'_, A>) -> Icon {
-        IconElement::create(self, cx)
-    }
-
     pub fn icon(mut self, id: impl Into<IconID>) -> Self {
         self.icon = id.into();
         self
@@ -248,15 +244,8 @@ impl IconBuilder {
         self.offset = offset;
         self
     }
-}
 
-/// An icon element with an optional quad background.
-pub struct IconElement {
-    shared_state: Rc<RefCell<SharedState>>,
-}
-
-impl IconElement {
-    pub fn create<A: Clone + 'static>(builder: IconBuilder, cx: &mut WindowContext<'_, A>) -> Icon {
+    pub fn build<A: Clone + 'static>(self, window_cx: &mut WindowContext<'_, A>) -> Icon {
         let IconBuilder {
             icon,
             icon_size,
@@ -267,38 +256,31 @@ impl IconElement {
             rect,
             manually_hidden,
             scissor_rect,
-        } = builder;
-
-        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
+        } = self;
 
         let shared_state = Rc::new(RefCell::new(SharedState {
             inner: IconInner::new(icon, icon_size, scale, offset),
         }));
 
-        let element_builder = ElementBuilder {
-            element: Box::new(Self {
-                shared_state: Rc::clone(&shared_state),
-            }),
-            z_index,
-            rect,
-            manually_hidden,
-            scissor_rect,
-            class,
-        };
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
+        let el = ElementBuilder::new(IconElement {
+            shared_state: Rc::clone(&shared_state),
+        })
+        .builder_values(z_index, scissor_rect, class, window_cx)
+        .rect(rect)
+        .hidden(manually_hidden)
+        .flags(ElementFlags::PAINTS)
+        .build(window_cx);
 
         Icon { el, shared_state }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for IconElement {
-    fn flags(&self) -> ElementFlags {
-        ElementFlags::PAINTS
-    }
+/// An icon element with an optional quad background.
+struct IconElement {
+    shared_state: Rc<RefCell<SharedState>>,
+}
 
+impl<A: Clone + 'static> Element<A> for IconElement {
     fn on_event(
         &mut self,
         event: ElementEvent,

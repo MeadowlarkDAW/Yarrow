@@ -16,8 +16,8 @@ use crate::action_queue::ActionSender;
 use crate::event::{ElementEvent, EventCaptureStatus};
 use crate::math::{Rect, Size, ZIndex};
 use crate::prelude::TooltipData;
-use crate::stmpsc_queue;
 use crate::style::ClassID;
+use crate::{stmpsc_queue, WindowContext};
 
 pub(crate) use context::ChangeFocusRequest;
 
@@ -25,8 +25,6 @@ pub(crate) use context::ChangeFocusRequest;
 pub(crate) struct ElementID(pub thunderdome::Index);
 
 pub trait Element<A: Clone + 'static> {
-    fn flags(&self) -> ElementFlags;
-
     #[allow(unused)]
     fn on_event(
         &mut self,
@@ -73,18 +71,33 @@ pub struct ElementBuilder<A: Clone + 'static> {
     pub manually_hidden: bool,
     pub scissor_rect: ScissorRectID,
     pub class: ClassID,
+    pub flags: ElementFlags,
 }
 
 impl<A: Clone + 'static> ElementBuilder<A> {
-    pub const fn new(element: Box<dyn Element<A>>) -> Self {
+    pub fn new(element: impl Element<A> + 'static) -> Self {
         Self {
-            element,
+            element: Box::new(element),
             z_index: 0,
             rect: Rect::new(Point::new(0.0, 0.0), Size::new(0.0, 0.0)),
             manually_hidden: false,
             scissor_rect: ScissorRectID::DEFAULT,
             class: 0,
+            flags: ElementFlags::empty(),
         }
+    }
+
+    pub fn builder_values(
+        mut self,
+        z_index: Option<ZIndex>,
+        scissor_rect: Option<ScissorRectID>,
+        class: Option<ClassID>,
+        window_cx: &mut WindowContext<A>,
+    ) -> Self {
+        self.z_index = z_index.unwrap_or_else(|| window_cx.z_index());
+        self.scissor_rect = scissor_rect.unwrap_or_else(|| window_cx.scissor_rect());
+        self.class = class.unwrap_or_else(|| window_cx.class());
+        self
     }
 
     pub const fn class(mut self, class: ClassID) -> Self {
@@ -110,6 +123,15 @@ impl<A: Clone + 'static> ElementBuilder<A> {
     pub const fn scissor_rect(mut self, scissor_rect: ScissorRectID) -> Self {
         self.scissor_rect = scissor_rect;
         self
+    }
+
+    pub const fn flags(mut self, flags: ElementFlags) -> Self {
+        self.flags = flags;
+        self
+    }
+
+    pub fn build(self, window_cx: &mut WindowContext<A>) -> ElementHandle {
+        window_cx.add_element(self)
     }
 }
 

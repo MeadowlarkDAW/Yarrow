@@ -128,10 +128,6 @@ impl<A: Clone + 'static> Default for ScrollAreaBuilder<A> {
 }
 
 impl<A: Clone + 'static> ScrollAreaBuilder<A> {
-    pub fn build(self, cx: &mut WindowContext<'_, A>) -> ScrollArea {
-        ScrollAreaElement::create(self, cx)
-    }
-
     pub fn on_scrolled<F: FnMut(Vector) -> A + 'static>(mut self, f: F) -> Self {
         self.scrolled_action = Some(Box::new(f));
         self
@@ -185,38 +181,8 @@ impl<A: Clone + 'static> ScrollAreaBuilder<A> {
         self.points_per_line = points_per_line;
         self
     }
-}
 
-struct DragState {
-    drag_start_pos: Point,
-    drag_start_scroll_offset: Vector,
-}
-
-pub struct ScrollAreaElement<A: Clone + 'static> {
-    shared_state: Rc<RefCell<SharedState>>,
-
-    control_scissor_rect: Option<ScissorRectID>,
-
-    scrolled_action: Option<Box<dyn FnMut(Vector) -> A>>,
-
-    scroll_horizontally: bool,
-    scroll_vertically: bool,
-    scroll_with_scroll_wheel: bool,
-    show_slider_when_content_fits: bool,
-    capture_scroll_wheel: bool,
-    points_per_line: f32,
-
-    vertical_state: ScrollBarState,
-    horizontal_state: ScrollBarState,
-
-    sliders_state: SlidersState,
-    drag_state: Option<DragState>,
-
-    slider_width: f32,
-}
-
-impl<A: Clone + 'static> ScrollAreaElement<A> {
-    pub fn create(builder: ScrollAreaBuilder<A>, cx: &mut WindowContext<'_, A>) -> ScrollArea {
+    pub fn build(self, window_cx: &mut WindowContext<'_, A>) -> ScrollArea {
         let ScrollAreaBuilder {
             scrolled_action,
             control_scissor_rect,
@@ -236,14 +202,12 @@ impl<A: Clone + 'static> ScrollAreaElement<A> {
             manually_hidden,
             scissor_rect,
             disabled,
-        } = builder;
+        } = self;
 
-        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
-
-        let slider_width = cx
+        let slider_width = window_cx
             .res
             .style_system
-            .get::<ScrollBarStyle>(class)
+            .get::<ScrollBarStyle>(window_cx.builder_class(class))
             .slider_width;
 
         let res = update_sliders_state(
@@ -272,49 +236,69 @@ impl<A: Clone + 'static> ScrollAreaElement<A> {
             None
         };
 
-        let element_builder = ElementBuilder {
-            element: Box::new(Self {
-                shared_state: Rc::clone(&shared_state),
-                control_scissor_rect,
-                scrolled_action,
-                scroll_horizontally,
-                scroll_vertically,
-                scroll_with_scroll_wheel,
-                show_slider_when_content_fits,
-                capture_scroll_wheel,
-                points_per_line,
-                vertical_state: ScrollBarState::Idle,
-                horizontal_state: ScrollBarState::Idle,
-                sliders_state: res,
-                drag_state: None,
-                slider_width,
-            }),
-            z_index,
-            rect,
-            manually_hidden,
-            scissor_rect,
-            class,
-        };
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
+        let el = ElementBuilder::new(ScrollAreaElement {
+            shared_state: Rc::clone(&shared_state),
+            control_scissor_rect,
+            scrolled_action,
+            scroll_horizontally,
+            scroll_vertically,
+            scroll_with_scroll_wheel,
+            show_slider_when_content_fits,
+            capture_scroll_wheel,
+            points_per_line,
+            vertical_state: ScrollBarState::Idle,
+            horizontal_state: ScrollBarState::Idle,
+            sliders_state: res,
+            drag_state: None,
+            slider_width,
+        })
+        .builder_values(z_index, scissor_rect, class, window_cx)
+        .rect(rect)
+        .hidden(manually_hidden)
+        .flags(
+            ElementFlags::PAINTS
+                | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
+                | ElementFlags::LISTENS_TO_POINTER_OUTSIDE_BOUNDS_WHEN_FOCUSED
+                | ElementFlags::LISTENS_TO_FOCUS_CHANGE
+                | ElementFlags::LISTENS_TO_SIZE_CHANGE
+                | ElementFlags::LISTENS_TO_POSITION_CHANGE
+                | ElementFlags::LISTENS_TO_INIT,
+        )
+        .build(window_cx);
 
         ScrollArea { el, shared_state }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
-    fn flags(&self) -> ElementFlags {
-        ElementFlags::PAINTS
-            | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
-            | ElementFlags::LISTENS_TO_POINTER_OUTSIDE_BOUNDS_WHEN_FOCUSED
-            | ElementFlags::LISTENS_TO_FOCUS_CHANGE
-            | ElementFlags::LISTENS_TO_SIZE_CHANGE
-            | ElementFlags::LISTENS_TO_POSITION_CHANGE
-            | ElementFlags::LISTENS_TO_INIT
-    }
+struct DragState {
+    drag_start_pos: Point,
+    drag_start_scroll_offset: Vector,
+}
 
+struct ScrollAreaElement<A: Clone + 'static> {
+    shared_state: Rc<RefCell<SharedState>>,
+
+    control_scissor_rect: Option<ScissorRectID>,
+
+    scrolled_action: Option<Box<dyn FnMut(Vector) -> A>>,
+
+    scroll_horizontally: bool,
+    scroll_vertically: bool,
+    scroll_with_scroll_wheel: bool,
+    show_slider_when_content_fits: bool,
+    capture_scroll_wheel: bool,
+    points_per_line: f32,
+
+    vertical_state: ScrollBarState,
+    horizontal_state: ScrollBarState,
+
+    sliders_state: SlidersState,
+    drag_state: Option<DragState>,
+
+    slider_width: f32,
+}
+
+impl<A: Clone + 'static> Element<A> for ScrollAreaElement<A> {
     fn on_event(
         &mut self,
         event: ElementEvent,

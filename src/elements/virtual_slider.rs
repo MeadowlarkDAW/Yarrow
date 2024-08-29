@@ -281,13 +281,6 @@ impl<A: Clone + 'static> VirtualSliderBuilder<A> {
         }
     }
 
-    pub fn build<R: VirtualSliderRenderer>(
-        self,
-        cx: &mut WindowContext<'_, A>,
-    ) -> VirtualSlider<R> {
-        VirtualSliderElement::create(self, cx)
-    }
-
     pub fn on_gesture<F: FnMut(ParamUpdate) -> A + 'static>(mut self, f: F) -> Self {
         self.on_gesture = Some(Box::new(f));
         self
@@ -366,27 +359,10 @@ impl<A: Clone + 'static> VirtualSliderBuilder<A> {
         self.horizontal = horizontal;
         self
     }
-}
 
-pub struct VirtualSliderElement<A: Clone + 'static, R: VirtualSliderRenderer + 'static> {
-    shared_state: Rc<RefCell<SharedState<R>>>,
-
-    on_gesture: Option<Box<dyn FnMut(ParamUpdate) -> A>>,
-    on_right_click: Option<Box<dyn FnMut(ParamRightClickInfo) -> A>>,
-    on_open_text_entry: Option<Box<dyn FnMut(ParamOpenTextEntryInfo) -> A>>,
-    on_tooltip_request: Option<Box<dyn FnMut(ParamElementTooltipInfo) -> A>>,
-    tooltip_align: Align2,
-    horizontal: bool,
-
-    hovered: bool,
-    state: VirtualSliderState,
-    global_render_cache_id: Option<u32>,
-}
-
-impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElement<A, R> {
-    pub fn create(
-        builder: VirtualSliderBuilder<A>,
-        cx: &mut WindowContext<'_, A>,
+    pub fn build<R: VirtualSliderRenderer>(
+        self,
+        window_cx: &mut WindowContext<'_, A>,
     ) -> VirtualSlider<R> {
         let VirtualSliderBuilder {
             on_gesture,
@@ -410,13 +386,23 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
             manually_hidden,
             disabled,
             scissor_rect,
-        } = builder;
+        } = self;
 
-        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
-        let style = cx.res.style_system.get_rc::<R::Style>(class);
+        let style = window_cx
+            .res
+            .style_system
+            .get_rc::<R::Style>(window_cx.builder_class(class));
 
         let renderer = R::new(style);
         let global_render_cache_id = renderer.global_render_cache_id();
+
+        let mut flags = ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
+            | ElementFlags::LISTENS_TO_POINTER_OUTSIDE_BOUNDS_WHEN_FOCUSED
+            | ElementFlags::LISTENS_TO_FOCUS_CHANGE;
+
+        if renderer.does_paint() {
+            flags.insert(ElementFlags::PAINTS);
+        }
 
         let shared_state = Rc::new(RefCell::new(SharedState {
             inner: VirtualSliderInner::new(
@@ -438,53 +424,50 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
             queued_new_val: None,
         }));
 
-        let element_builder = ElementBuilder {
-            element: Box::new(Self {
-                shared_state: Rc::clone(&shared_state),
-                on_gesture,
-                on_right_click,
-                on_open_text_entry,
-                on_tooltip_request,
-                tooltip_align,
-                horizontal,
-                hovered: false,
-                state: if disabled {
-                    VirtualSliderState::Disabled
-                } else {
-                    VirtualSliderState::Idle
-                },
-                global_render_cache_id,
-            }),
-            z_index,
-            rect,
-            manually_hidden,
-            scissor_rect,
-            class,
-        };
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
+        let el = ElementBuilder::new(VirtualSliderElement {
+            shared_state: Rc::clone(&shared_state),
+            on_gesture,
+            on_right_click,
+            on_open_text_entry,
+            on_tooltip_request,
+            tooltip_align,
+            horizontal,
+            hovered: false,
+            state: if disabled {
+                VirtualSliderState::Disabled
+            } else {
+                VirtualSliderState::Idle
+            },
+            global_render_cache_id,
+        })
+        .builder_values(z_index, scissor_rect, class, window_cx)
+        .rect(rect)
+        .hidden(manually_hidden)
+        .flags(flags)
+        .build(window_cx);
 
         VirtualSlider { el, shared_state }
     }
 }
 
+struct VirtualSliderElement<A: Clone + 'static, R: VirtualSliderRenderer + 'static> {
+    shared_state: Rc<RefCell<SharedState<R>>>,
+
+    on_gesture: Option<Box<dyn FnMut(ParamUpdate) -> A>>,
+    on_right_click: Option<Box<dyn FnMut(ParamRightClickInfo) -> A>>,
+    on_open_text_entry: Option<Box<dyn FnMut(ParamOpenTextEntryInfo) -> A>>,
+    on_tooltip_request: Option<Box<dyn FnMut(ParamElementTooltipInfo) -> A>>,
+    tooltip_align: Align2,
+    horizontal: bool,
+
+    hovered: bool,
+    state: VirtualSliderState,
+    global_render_cache_id: Option<u32>,
+}
+
 impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
     for VirtualSliderElement<A, R>
 {
-    fn flags(&self) -> ElementFlags {
-        let mut flags = ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
-            | ElementFlags::LISTENS_TO_POINTER_OUTSIDE_BOUNDS_WHEN_FOCUSED
-            | ElementFlags::LISTENS_TO_FOCUS_CHANGE;
-
-        if RefCell::borrow(&self.shared_state).renderer.does_paint() {
-            flags.insert(ElementFlags::PAINTS);
-        }
-
-        flags
-    }
-
     fn on_event(
         &mut self,
         event: ElementEvent,
@@ -1264,12 +1247,12 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
         &mut self,
         get_text: F,
         align: Align2,
-        cx: &WindowContext<'_, A>,
+        window_cx: &WindowContext<'_, A>,
     ) {
         let shared_state = RefCell::borrow(&self.shared_state);
 
         if !shared_state.inner.is_gesturing() {
-            if !cx.view.element_is_hovered(&self.el) {
+            if !window_cx.element_is_hovered(&self.el) {
                 return;
             }
         }

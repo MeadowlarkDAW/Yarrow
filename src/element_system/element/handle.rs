@@ -1,10 +1,10 @@
 use super::ElementModificationType;
+use crate::element_system::{ElementID, ElementModification};
 use crate::layout::Align2;
 use crate::math::{Point, Rect, Size, Vector, ZIndex};
 use crate::prelude::TooltipData;
 use crate::stmpsc_queue;
 use crate::style::ClassID;
-use crate::view::{ElementID, ElementModification};
 use crate::WindowContext;
 
 pub struct ElementHandle {
@@ -348,8 +348,8 @@ impl ElementHandle {
 
     /// Get the actual bounding rectangle of this element, accounting for the offset
     /// introduced by its assigned scissoring rectangle.
-    pub fn rect_in_window<A: Clone + 'static>(&self, cx: &WindowContext<'_, A>) -> Rect {
-        cx.view.element_rect(self).unwrap()
+    pub fn rect_in_window<A: Clone + 'static>(&self, window_cx: &WindowContext<'_, A>) -> Rect {
+        window_cx.element_rect(self).unwrap()
     }
 
     pub(crate) fn id(&self) -> ElementID {

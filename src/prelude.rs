@@ -1,6 +1,13 @@
 pub use crate::action_queue::{ActionReceiver, ActionSender};
 pub use crate::application::*;
 pub use crate::cursor_icon::*;
+pub use crate::element_system::{
+    element::{
+        Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, ElementRenderCache,
+        ElementStyle, RenderContext,
+    },
+    ScissorRectID, TooltipInfo,
+};
 pub use crate::elements::button::{Button, ButtonStyle};
 pub use crate::elements::click_area::ClickArea;
 pub use crate::elements::drop_down_menu::{DropDownMenu, DropDownMenuStyle, MenuEntry};
@@ -61,13 +68,6 @@ pub use crate::vg::text::{
     Style as FontStyle, TextProperties, Weight, Wrap,
 };
 pub use crate::vg::PrimitiveGroup;
-pub use crate::view::{
-    element::{
-        Element, ElementBuilder, ElementContext, ElementFlags, ElementHandle, ElementRenderCache,
-        ElementStyle, RenderContext,
-    },
-    ScissorRectID, TooltipInfo, View,
-};
 pub use crate::window::*;
 #[cfg(feature = "custom-shaders")]
 pub use crate::CustomPipelines;
