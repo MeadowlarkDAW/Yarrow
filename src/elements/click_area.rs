@@ -26,10 +26,6 @@ pub struct ClickAreaBuilder<A: Clone + 'static> {
 }
 
 impl<A: Clone + 'static> ClickAreaBuilder<A> {
-    pub fn build(self, cx: &mut WindowContext<'_, A>) -> ClickArea {
-        ClickAreaElement::create(self, cx)
-    }
-
     pub fn on_clicked<F: FnMut(ClickAreaInfo) -> A + 'static>(mut self, f: F) -> Self {
         self.click_action = Some(Box::new(f));
         self
@@ -59,20 +55,8 @@ impl<A: Clone + 'static> ClickAreaBuilder<A> {
         self.pointer_type = Some(pointer_type);
         self
     }
-}
 
-pub struct ClickAreaElement<A: Clone + 'static> {
-    click_action: Option<Box<dyn FnMut(ClickAreaInfo) -> A>>,
-    button: PointerButton,
-    modifiers: Option<Modifiers>,
-    click_count: usize,
-    cursor_icon: Option<CursorIcon>,
-    pointer_type: Option<PointerType>,
-    shared_state: Rc<RefCell<SharedState>>,
-}
-
-impl<A: Clone + 'static> ClickAreaElement<A> {
-    pub fn create(builder: ClickAreaBuilder<A>, cx: &mut WindowContext<'_, A>) -> ClickArea {
+    pub fn build(self, window_cx: &mut WindowContext<'_, A>) -> ClickArea {
         let ClickAreaBuilder {
             click_action,
             tooltip_data,
@@ -85,45 +69,42 @@ impl<A: Clone + 'static> ClickAreaElement<A> {
             z_index,
             disabled,
             scissor_rect,
-        } = builder;
-
-        let z_index = z_index.unwrap_or_else(|| cx.z_index());
-        let scissor_rect = scissor_rect.unwrap_or_else(|| cx.scissor_rect());
+        } = self;
 
         let shared_state = Rc::new(RefCell::new(SharedState {
             tooltip_inner: TooltipInner::new(tooltip_data),
         }));
 
-        let element_builder = ElementBuilder {
-            element: Box::new(Self {
-                click_action,
-                button,
-                modifiers,
-                click_count,
-                cursor_icon,
-                pointer_type,
-                shared_state: Rc::clone(&shared_state),
-            }),
-            z_index,
-            rect,
-            manually_hidden: disabled,
-            scissor_rect,
-            class: Default::default(),
-        };
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
+        let el = ElementBuilder::new(ClickAreaElement {
+            click_action,
+            button,
+            modifiers,
+            click_count,
+            cursor_icon,
+            pointer_type,
+            shared_state: Rc::clone(&shared_state),
+        })
+        .builder_values(z_index, scissor_rect, None, window_cx)
+        .rect(rect)
+        .hidden(disabled)
+        .flags(ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS)
+        .build(window_cx);
 
         ClickArea { el, shared_state }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for ClickAreaElement<A> {
-    fn flags(&self) -> ElementFlags {
-        ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
-    }
+struct ClickAreaElement<A: Clone + 'static> {
+    click_action: Option<Box<dyn FnMut(ClickAreaInfo) -> A>>,
+    button: PointerButton,
+    modifiers: Option<Modifiers>,
+    click_count: usize,
+    cursor_icon: Option<CursorIcon>,
+    pointer_type: Option<PointerType>,
+    shared_state: Rc<RefCell<SharedState>>,
+}
 
+impl<A: Clone + 'static> Element<A> for ClickAreaElement<A> {
     fn on_event(
         &mut self,
         event: ElementEvent,

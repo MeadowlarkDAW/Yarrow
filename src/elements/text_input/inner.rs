@@ -346,15 +346,15 @@ impl TextInputInner {
         }
     }
 
-    pub fn set_text(
+    pub fn set_text<T: AsRef<str> + Into<String>>(
         &mut self,
-        text: &str,
+        text: T,
         font_system: &mut FontSystem,
         select_all: bool,
     ) -> TextInputUpdateResult {
         let mut result = TextInputUpdateResult::default();
 
-        if self.text == text {
+        if self.text.as_str() == text.as_ref() {
             if select_all {
                 self.queue_action(TextInputAction::SelectAll);
             }
@@ -364,10 +364,9 @@ impl TextInputInner {
 
         result.needs_repaint = true;
 
-        self.text = if text.len() > self.max_characters {
-            String::from(&text[0..self.max_characters])
-        } else {
-            String::from(text)
+        self.text = text.into();
+        if self.text.len() > self.max_characters {
+            self.text = String::from(&self.text[0..self.max_characters])
         };
 
         self.buffer.with_editor_mut(
@@ -379,7 +378,7 @@ impl TextInputInner {
                 }));
                 editor.delete_selection();
 
-                editor.insert_string(text, None);
+                editor.insert_string(&self.text, None);
                 editor.shape_as_needed(font_system, true);
 
                 if select_all {
@@ -407,26 +406,25 @@ impl TextInputInner {
         &self.text
     }
 
-    pub fn set_placeholder_text<F: FnOnce() -> TextInputStyle>(
+    pub fn set_placeholder_text<T: AsRef<str> + Into<String>, F: FnOnce() -> TextInputStyle>(
         &mut self,
-        mut text: &str,
+        text: T,
         font_system: &mut FontSystem,
         get_style: F,
     ) -> TextInputUpdateResult {
         let mut result = TextInputUpdateResult::default();
 
-        if text.len() > self.max_characters {
-            text = &text[0..self.max_characters];
-        }
-
-        if self.placeholder_text == text {
+        if self.placeholder_text.as_str() == text.as_ref() {
             return result;
         }
 
-        self.placeholder_text = String::from(text);
+        self.placeholder_text = text.into();
+        if self.placeholder_text.len() > self.max_characters {
+            self.placeholder_text = String::from(&self.placeholder_text[0..self.max_characters]);
+        }
 
         if let Some(buffer) = self.placeholder_buffer.as_mut() {
-            buffer.set_text(text, font_system);
+            buffer.set_text(&self.placeholder_text, font_system);
         } else {
             let style = (get_style)();
 
@@ -436,7 +434,7 @@ impl TextInputInner {
                 .unwrap_or(placeholder_properties.attrs);
 
             self.placeholder_buffer = Some(RcTextBuffer::new(
-                text,
+                &self.placeholder_text,
                 placeholder_properties,
                 Some(self.text_bounds_rect.width()),
                 None,

@@ -5,7 +5,8 @@ use crate::derive::*;
 use crate::prelude::*;
 use crate::theme::DEFAULT_ICON_SIZE;
 
-use super::super::icon::IconInner;
+use super::super::icon::{IconInner, IconStyle};
+use super::super::tooltip::TooltipInner;
 use super::{TextInputAction, TextInputInner, TextInputStyle, TextInputUpdateResult};
 
 /// The style of an [`IconTextInput`] element
@@ -158,10 +159,6 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
         }
     }
 
-    pub fn build(self, cx: &mut WindowContext<'_, A>) -> IconTextInput {
-        IconTextInputElement::create(self, cx)
-    }
-
     pub fn on_changed<F: FnMut(String) -> A + 'static>(mut self, f: F) -> Self {
         self.action = Some(Box::new(f));
         self
@@ -235,23 +232,8 @@ impl<A: Clone + 'static> IconTextInputBuilder<A> {
         self.max_characters = max;
         self
     }
-}
 
-pub struct IconTextInputElement<A: Clone + 'static> {
-    shared_state: Rc<RefCell<SharedState>>,
-    action: Option<Box<dyn FnMut(String) -> A>>,
-    right_click_action: Option<Box<dyn FnMut(Point) -> A>>,
-    icon: IconInner,
-    icon_rect: Rect,
-    text_input_style: TextInputStyle,
-    hovered: bool,
-}
-
-impl<A: Clone + 'static> IconTextInputElement<A> {
-    pub fn create(
-        builder: IconTextInputBuilder<A>,
-        cx: &mut WindowContext<'_, A>,
-    ) -> IconTextInput {
+    pub fn build(self, window_cx: &mut WindowContext<'_, A>) -> IconTextInput {
         let IconTextInputBuilder {
             action,
             right_click_action,
@@ -272,10 +254,12 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
             rect,
             manually_hidden,
             scissor_rect,
-        } = builder;
+        } = self;
 
-        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
-        let style = cx.res.style_system.get::<IconTextInputStyle>(cx.class());
+        let style = window_cx
+            .res
+            .style_system
+            .get::<IconTextInputStyle>(window_cx.builder_class(class));
 
         let icon = IconInner::new(icon, icon_size, icon_scale, icon_offset);
 
@@ -295,48 +279,50 @@ impl<A: Clone + 'static> IconTextInputElement<A> {
                 disabled,
                 select_all_when_focused,
                 &layout_res.text_input_style,
-                &mut cx.res.font_system,
+                &mut window_cx.res.font_system,
             ),
             text_offset,
             tooltip_inner: TooltipInner::new(tooltip_data),
         }));
 
-        let element_builder = ElementBuilder {
-            element: Box::new(Self {
-                shared_state: Rc::clone(&shared_state),
-                action,
-                right_click_action,
-                icon,
-                icon_rect: layout_res.icon_rect,
-                text_input_style: layout_res.text_input_style,
-                hovered: false,
-            }),
-            z_index,
-            rect,
-            manually_hidden,
-            scissor_rect,
-            class,
-        };
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
+        let el = ElementBuilder::new(IconTextInputElement {
+            shared_state: Rc::clone(&shared_state),
+            action,
+            right_click_action,
+            icon,
+            icon_rect: layout_res.icon_rect,
+            text_input_style: layout_res.text_input_style,
+            hovered: false,
+        })
+        .builder_values(z_index, scissor_rect, class, window_cx)
+        .rect(rect)
+        .hidden(manually_hidden)
+        .flags(
+            ElementFlags::PAINTS
+                | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
+                | ElementFlags::LISTENS_TO_POINTER_OUTSIDE_BOUNDS_WHEN_FOCUSED
+                | ElementFlags::LISTENS_TO_TEXT_COMPOSITION_WHEN_FOCUSED
+                | ElementFlags::LISTENS_TO_KEYS_WHEN_FOCUSED
+                | ElementFlags::LISTENS_TO_SIZE_CHANGE
+                | ElementFlags::LISTENS_TO_FOCUS_CHANGE,
+        )
+        .build(window_cx);
 
         IconTextInput { el, shared_state }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
-    fn flags(&self) -> ElementFlags {
-        ElementFlags::PAINTS
-            | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
-            | ElementFlags::LISTENS_TO_POINTER_OUTSIDE_BOUNDS_WHEN_FOCUSED
-            | ElementFlags::LISTENS_TO_TEXT_COMPOSITION_WHEN_FOCUSED
-            | ElementFlags::LISTENS_TO_KEYS_WHEN_FOCUSED
-            | ElementFlags::LISTENS_TO_SIZE_CHANGE
-            | ElementFlags::LISTENS_TO_FOCUS_CHANGE
-    }
+struct IconTextInputElement<A: Clone + 'static> {
+    shared_state: Rc<RefCell<SharedState>>,
+    action: Option<Box<dyn FnMut(String) -> A>>,
+    right_click_action: Option<Box<dyn FnMut(Point) -> A>>,
+    icon: IconInner,
+    icon_rect: Rect,
+    text_input_style: TextInputStyle,
+    hovered: bool,
+}
 
+impl<A: Clone + 'static> Element<A> for IconTextInputElement<A> {
     fn on_event(
         &mut self,
         event: ElementEvent,
@@ -519,7 +505,12 @@ impl IconTextInput {
     /// so this method is relatively cheap to call frequently. However, this method still
     /// involves a string comparison so you may want to call this method
     /// sparingly.
-    pub fn set_text(&mut self, text: &str, res: &mut ResourceCtx, select_all: bool) -> bool {
+    pub fn set_text<T: AsRef<str> + Into<String>>(
+        &mut self,
+        text: T,
+        res: &mut ResourceCtx,
+        select_all: bool,
+    ) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         let result = shared_state
@@ -539,21 +530,31 @@ impl IconTextInput {
 
     /// Set the placeholder text.
     ///
-    /// Note, this will *always* cause an element update even if
-    /// the placeholder text has not changed, so prefer to use this method sparingly.
-    pub fn set_placeholder_text(&mut self, text: &str, res: &mut ResourceCtx) {
+    /// Returns `true` if the text has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call frequently. However, this method still
+    /// involves a string comparison so you may want to call this method
+    /// sparingly.
+    pub fn set_placeholder_text<T: AsRef<str> + Into<String>>(
+        &mut self,
+        text: T,
+        res: &mut ResourceCtx,
+    ) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         let result = shared_state
             .inner
             .set_placeholder_text(text, &mut res.font_system, || {
                 res.style_system
-                    .get::<IconTextInputStyle>(self.el.class())
-                    .text_input
+                    .get::<TextInputStyle>(self.el.class())
                     .clone()
             });
         if result.needs_repaint {
             self.el.notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 

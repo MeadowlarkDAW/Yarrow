@@ -9,8 +9,8 @@ use rustc_hash::FxHashMap;
 #[cfg(feature = "tessellation")]
 use rootvg::mesh::MeshPrimitive;
 
+use crate::prelude::ElementRenderCache;
 use crate::style::ClassID;
-use crate::view::element::ElementRenderCache;
 
 use super::{KnobNotchLinePrimitives, KnobNotchStyle, KnobStyle};
 

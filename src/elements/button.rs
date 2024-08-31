@@ -380,9 +380,9 @@ impl ButtonInner {
     }
 
     /// Returns `true` if the text has changed.
-    pub fn set_text<F: FnOnce() -> TextProperties>(
+    pub fn set_text<T: AsRef<str> + Into<String>, F: FnOnce() -> TextProperties>(
         &mut self,
-        text: Option<&str>,
+        text: Option<T>,
         font_system: &mut FontSystem,
         get_text_props: F,
     ) -> bool {
@@ -491,10 +491,6 @@ pub struct ButtonBuilder<A: Clone + 'static> {
 }
 
 impl<A: Clone + 'static> ButtonBuilder<A> {
-    pub fn build(self, cx: &mut WindowContext<'_, A>) -> Button {
-        ButtonElement::create(self, cx)
-    }
-
     pub fn on_select(mut self, action: A) -> Self {
         self.on_select_action = Some(action);
         self
@@ -578,17 +574,8 @@ impl<A: Clone + 'static> ButtonBuilder<A> {
         self.text_icon_layout = layout;
         self
     }
-}
 
-/// A button element with a label.
-pub struct ButtonElement<A: Clone + 'static> {
-    shared_state: Rc<RefCell<SharedState>>,
-    on_select_action: Option<A>,
-    cursor_icon: Option<CursorIcon>,
-}
-
-impl<A: Clone + 'static> ButtonElement<A> {
-    pub fn create(builder: ButtonBuilder<A>, cx: &mut WindowContext<'_, A>) -> Button {
+    pub fn build(self, window_cx: &mut WindowContext<'_, A>) -> Button {
         let ButtonBuilder {
             on_select_action,
             text,
@@ -605,10 +592,12 @@ impl<A: Clone + 'static> ButtonElement<A> {
             manually_hidden,
             scissor_rect,
             tooltip_data,
-        } = builder;
+        } = self;
 
-        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
-        let style = cx.res.style_system.get::<ButtonStyle>(class);
+        let style = window_cx
+            .res
+            .style_system
+            .get::<ButtonStyle>(window_cx.builder_class(class));
         let cursor_icon = style.cursor_icon;
 
         let shared_state = Rc::new(RefCell::new(SharedState {
@@ -622,37 +611,34 @@ impl<A: Clone + 'static> ButtonElement<A> {
                 disabled,
                 text_icon_layout,
                 &style,
-                &mut cx.res.font_system,
+                &mut window_cx.res.font_system,
             ),
             tooltip_inner: TooltipInner::new(tooltip_data),
         }));
 
-        let element_builder = ElementBuilder {
-            element: Box::new(Self {
-                shared_state: Rc::clone(&shared_state),
-                on_select_action,
-                cursor_icon,
-            }),
-            z_index,
-            rect,
-            manually_hidden,
-            scissor_rect,
-            class,
-        };
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
+        let el = ElementBuilder::new(ButtonElement {
+            shared_state: Rc::clone(&shared_state),
+            on_select_action,
+            cursor_icon,
+        })
+        .builder_values(z_index, scissor_rect, class, window_cx)
+        .rect(rect)
+        .hidden(manually_hidden)
+        .flags(ElementFlags::PAINTS | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS)
+        .build(window_cx);
 
         Button { el, shared_state }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for ButtonElement<A> {
-    fn flags(&self) -> ElementFlags {
-        ElementFlags::PAINTS | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
-    }
+/// A button element with a label.
+struct ButtonElement<A: Clone + 'static> {
+    shared_state: Rc<RefCell<SharedState>>,
+    on_select_action: Option<A>,
+    cursor_icon: Option<CursorIcon>,
+}
 
+impl<A: Clone + 'static> Element<A> for ButtonElement<A> {
     fn on_event(
         &mut self,
         event: ElementEvent,
@@ -817,7 +803,11 @@ impl Button {
     /// so this method is relatively cheap to call frequently. However, this method still
     /// involves a string comparison so you may want to call this method
     /// sparingly.
-    pub fn set_text(&mut self, text: Option<&str>, res: &mut ResourceCtx) -> bool {
+    pub fn set_text<T: AsRef<str> + Into<String>>(
+        &mut self,
+        text: Option<T>,
+        res: &mut ResourceCtx,
+    ) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.set_text(text, &mut res.font_system, || {

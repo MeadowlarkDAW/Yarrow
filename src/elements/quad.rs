@@ -11,51 +11,30 @@ use crate::prelude::*;
 pub struct QuadElementBuilder {}
 
 impl QuadElementBuilder {
-    pub fn build<A: Clone + 'static>(self, cx: &mut WindowContext<'_, A>) -> QuadElement {
-        QuadElementInternal::create(self, cx)
-    }
-}
-
-/// A simple element with a quad background.
-pub struct QuadElementInternal;
-
-impl QuadElementInternal {
-    pub fn create<A: Clone + 'static>(
-        builder: QuadElementBuilder,
-        cx: &mut WindowContext<'_, A>,
-    ) -> QuadElement {
+    pub fn build<A: Clone + 'static>(self, window_cx: &mut WindowContext<'_, A>) -> QuadElement {
         let QuadElementBuilder {
             class,
             z_index,
             rect,
             manually_hidden,
             scissor_rect,
-        } = builder;
+        } = self;
 
-        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
-
-        let element_builder = ElementBuilder {
-            element: Box::new(Self),
-            z_index,
-            rect,
-            manually_hidden,
-            scissor_rect,
-            class,
-        };
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
+        let el = ElementBuilder::new(QuadElementInternal)
+            .builder_values(z_index, scissor_rect, class, window_cx)
+            .rect(rect)
+            .hidden(manually_hidden)
+            .flags(ElementFlags::PAINTS)
+            .build(window_cx);
 
         QuadElement { el }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for QuadElementInternal {
-    fn flags(&self) -> ElementFlags {
-        ElementFlags::PAINTS
-    }
+/// A simple element with a quad background.
+struct QuadElementInternal;
 
+impl<A: Clone + 'static> Element<A> for QuadElementInternal {
     fn on_event(
         &mut self,
         event: ElementEvent,

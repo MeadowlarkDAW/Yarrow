@@ -6,44 +6,105 @@ pub enum MyAction {
     ResetCounter,
 }
 
-#[derive(Default)]
 struct MyApp {
-    main_window_elements: Option<MainWindowElements>,
+    hello_label: Label,
+    increment_btn: Button,
+    decrement_btn: Button,
+    reset_btn: Button,
+
     style: MyStyle,
 
     count: i32,
 }
 
 impl MyApp {
-    pub fn sync_state(&mut self, cx: &mut WindowContext<'_, MyAction>) {
-        let Some(elements) = &mut self.main_window_elements else {
-            return;
-        };
-
+    fn sync_state(&mut self, window_cx: &mut WindowContext<MyAction>) {
         let mut needs_layout = false;
 
-        if elements
+        if self
             .hello_label
-            .set_text(Some(&format!("{}", self.count)), cx.res)
+            .set_text(Some(&format!("{}", self.count)), window_cx.res)
         {
             // Changing the text may resize the label, so do a layout.
             needs_layout = true;
         }
 
         if needs_layout {
-            elements.layout(&self.style, cx);
+            self.layout(window_cx);
         }
+    }
+
+    fn layout(&mut self, window_cx: &mut WindowContext<MyAction>) {
+        let label_size = self.hello_label.desired_size(window_cx.res);
+
+        // Center the label inside the window
+        let window_rect = Rect::from_size(window_cx.logical_size());
+        let label_rect = centered_rect(window_rect.center(), label_size);
+
+        self.hello_label.set_rect(label_rect);
+
+        self.increment_btn.layout(
+            point(
+                self.style.window_padding.left,
+                self.style.window_padding.top,
+            ),
+            window_cx.res,
+        );
+        self.decrement_btn.layout(
+            point(
+                self.increment_btn.max_x() + self.style.button_spacing,
+                self.style.window_padding.top,
+            ),
+            window_cx.res,
+        );
+        self.reset_btn.layout(
+            point(
+                self.decrement_btn.max_x() + self.style.button_spacing,
+                self.style.window_padding.top,
+            ),
+            window_cx.res,
+        );
     }
 }
 
 impl Application for MyApp {
     type Action = MyAction;
 
-    fn on_action_emitted(&mut self, cx: &mut AppContext<Self::Action>) {
-        let Some(mut cx) = cx.window_context(MAIN_WINDOW) else {
-            return;
+    fn init(cx: &mut AppContext<Self::Action>) -> Result<Self, Box<dyn std::error::Error>> {
+        let style = MyStyle::default();
+        style.load(&mut cx.res);
+
+        let mut window_cx = cx.main_window();
+
+        let mut new_self = Self {
+            hello_label: Label::builder()
+                .class(MyStyle::CLASS_FANCY_LABEL)
+                .text("Hello World!")
+                .build(&mut window_cx),
+            increment_btn: Button::builder()
+                .text("+")
+                .on_select(MyAction::OffsetCounterBy(1))
+                .build(&mut window_cx),
+            decrement_btn: Button::builder()
+                .text("-")
+                .on_select(MyAction::OffsetCounterBy(-1))
+                .build(&mut window_cx),
+            reset_btn: Button::builder()
+                .text("reset")
+                .on_select(MyAction::ResetCounter)
+                .build(&mut window_cx),
+
+            style,
+
+            count: 0,
         };
 
+        new_self.sync_state(&mut window_cx);
+
+        Ok(new_self)
+    }
+
+    fn on_action_emitted(&mut self, cx: &mut AppContext<Self::Action>) {
         let mut state_changed = false;
 
         while let Ok(action) = cx.action_receiver.try_recv() {
@@ -60,7 +121,7 @@ impl Application for MyApp {
         }
 
         if state_changed {
-            self.sync_state(&mut cx);
+            self.sync_state(&mut cx.main_window());
         }
     }
 
@@ -71,88 +132,13 @@ impl Application for MyApp {
         cx: &mut AppContext<MyAction>,
     ) {
         match event {
-            AppWindowEvent::WindowOpened => {
-                if window_id == MAIN_WINDOW {
-                    self.style.load(&mut cx.res);
-
-                    let mut cx = cx.window_context(MAIN_WINDOW).unwrap();
-
-                    self.main_window_elements = Some(MainWindowElements::build(&mut cx));
-
-                    self.sync_state(&mut cx);
-                }
-            }
             AppWindowEvent::WindowResized => {
                 if window_id == MAIN_WINDOW {
-                    let mut cx = cx.window_context(MAIN_WINDOW).unwrap();
-
-                    self.main_window_elements
-                        .as_mut()
-                        .unwrap()
-                        .layout(&self.style, &mut cx);
+                    self.layout(&mut cx.main_window());
                 }
             }
             _ => {}
         }
-    }
-}
-
-pub struct MainWindowElements {
-    hello_label: Label,
-    increment_btn: Button,
-    decrement_btn: Button,
-    reset_btn: Button,
-}
-
-impl MainWindowElements {
-    pub fn build(cx: &mut WindowContext<'_, MyAction>) -> Self {
-        Self {
-            hello_label: Label::builder()
-                .class(MyStyle::CLASS_FANCY_LABEL)
-                .text("Hello World!")
-                .build(cx),
-            increment_btn: Button::builder()
-                .text("+")
-                .on_select(MyAction::OffsetCounterBy(1))
-                .build(cx),
-            decrement_btn: Button::builder()
-                .text("-")
-                .on_select(MyAction::OffsetCounterBy(-1))
-                .build(cx),
-            reset_btn: Button::builder()
-                .text("reset")
-                .on_select(MyAction::ResetCounter)
-                .build(cx),
-        }
-    }
-
-    pub fn layout(&mut self, style: &MyStyle, cx: &mut WindowContext<'_, MyAction>) {
-        let label_size = self.hello_label.desired_size(cx.res);
-
-        // Center the label inside the window
-        let window_rect = Rect::from_size(cx.logical_size());
-        let label_rect = centered_rect(window_rect.center(), label_size);
-
-        self.hello_label.set_rect(label_rect);
-
-        self.increment_btn.layout(
-            point(style.window_padding.left, style.window_padding.top),
-            cx.res,
-        );
-        self.decrement_btn.layout(
-            point(
-                self.increment_btn.max_x() + style.button_spacing,
-                style.window_padding.top,
-            ),
-            cx.res,
-        );
-        self.reset_btn.layout(
-            point(
-                self.decrement_btn.max_x() + style.button_spacing,
-                style.window_padding.top,
-            ),
-            cx.res,
-        );
     }
 }
 
@@ -193,12 +179,5 @@ impl MyStyle {
 }
 
 pub fn main() {
-    let (action_sender, action_receiver) = yarrow::action_channel();
-    yarrow::run_blocking(
-        WindowConfig::default(),
-        action_sender,
-        action_receiver,
-        || MyApp::default(),
-    )
-    .unwrap();
+    yarrow::run_blocking::<MyApp>(AppConfig::default()).unwrap();
 }

@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use ahash::AHashMap;
 
-use crate::view::element::ElementStyle;
+use crate::element_system::element::ElementStyle;
 
 pub type ClassID = u16;
 

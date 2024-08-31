@@ -10,21 +10,27 @@ use raw_window_handle_06::{
 };
 use rootvg::math::Vector;
 use rootvg::surface::{DefaultSurface, NewSurfaceError};
+use rootvg::text::FontSystem;
 use std::error::Error;
 use std::num::{NonZeroIsize, NonZeroU32};
 use std::ptr::NonNull;
 
 mod convert;
 
-use super::{ScaleFactorConfig, WindowBackend, WindowConfig, WindowID, WindowState, MAIN_WINDOW};
+use super::{
+    LinuxBackendType, ScaleFactorConfig, WindowBackend, WindowConfig, WindowID, WindowState,
+    MAIN_WINDOW,
+};
 use crate::action_queue::ActionSender;
 use crate::application::Application;
 use crate::clipboard::Clipboard;
+use crate::element_system::{ElementSystem, ElementSystemConfig};
 use crate::event::{EventCaptureStatus, PointerButton, WheelDeltaType};
 use crate::math::{PhysicalPoint, PhysicalSizeI32, ScaleFactor, Size};
 use crate::prelude::{ActionReceiver, AppHandler, ResourceCtx};
+use crate::style::StyleSystem;
 use crate::window::{PointerBtnState, PointerLockState};
-use crate::{CursorIcon, View};
+use crate::{AppConfig, CursorIcon};
 
 struct BaseviewWindowBackend<'a, 'b> {
     main_window: &'a mut BaseviewWindow<'b>,
@@ -167,21 +173,44 @@ struct BaseviewAppHandler<A: Application> {
 }
 
 impl<A: Application> BaseviewAppHandler<A> {
-    fn new(
-        user_app: A,
-        action_sender: ActionSender<A::Action>,
-        action_receiver: ActionReceiver<A::Action>,
-        main_window_config: WindowConfig,
-        window: &mut BaseviewWindow,
-    ) -> Result<Self, Box<dyn Error>> {
-        let mut app_handler = AppHandler::new(user_app, action_sender, action_receiver)?;
+    fn new(config: AppConfig, window: &mut BaseviewWindow) -> Result<Self, Box<dyn Error>> {
+        let (action_sender, action_receiver) = crate::action_channel::<A::Action>();
 
-        let window_state = new_window::<A>(main_window_config, &mut app_handler, window)?;
+        let mut res = ResourceCtx::new(config.use_dark_theme);
 
-        app_handler
-            .context
-            .window_map
-            .insert(MAIN_WINDOW, window_state);
+        let window_state = new_window::<A>(
+            config.main_window_config.clone(),
+            &mut res,
+            action_sender.clone(),
+            window,
+        )?;
+
+        #[cfg(any(
+            target_os = "linux",
+            target_os = "freebsd",
+            target_os = "dragonfly",
+            target_os = "openbsd",
+            target_os = "netbsd",
+        ))]
+        let linux_backend_type = Some(LinuxBackendType::X11);
+
+        #[cfg(not(any(
+            target_os = "linux",
+            target_os = "freebsd",
+            target_os = "dragonfly",
+            target_os = "openbsd",
+            target_os = "netbsd",
+        )))]
+        let linux_backend_type = None;
+
+        let app_handler = AppHandler::new(
+            window_state,
+            action_sender,
+            action_receiver,
+            config,
+            res,
+            linux_backend_type,
+        )?;
 
         Ok(Self {
             app_handler,
@@ -204,11 +233,9 @@ impl<A: Application> BaseviewWindowHandler for BaseviewAppHandler<A> {
 
         if let Err(e) = self
             .app_handler
-            .context
-            .window_map
-            .get_mut(&MAIN_WINDOW)
-            .unwrap()
-            .render(|| {}, &mut self.app_handler.context.res)
+            .cx
+            .main_window
+            .render(|| {}, &mut self.app_handler.cx.res)
         {
             log::error!("render error: {}", e);
         }
@@ -228,32 +255,17 @@ impl<A: Application> BaseviewWindowHandler for BaseviewAppHandler<A> {
                     position,
                     modifiers,
                 } => {
-                    self.app_handler
-                        .context
-                        .window_map
-                        .get_mut(&MAIN_WINDOW)
-                        .unwrap()
-                        .set_modifiers(modifiers);
+                    self.app_handler.cx.main_window.set_modifiers(modifiers);
 
                     let pos = PhysicalPoint::new(position.x as f32, position.y as f32);
 
-                    self.app_handler
-                        .context
-                        .window_map
-                        .get_mut(&MAIN_WINDOW)
-                        .unwrap()
-                        .queued_pointer_position = Some(pos);
+                    self.app_handler.cx.main_window.queued_pointer_position = Some(pos);
 
                     // Debounce mouse move events by queing them to be processed in `on_frame()`
                     process_updates = false;
                 }
                 baseview::MouseEvent::ButtonPressed { button, modifiers } => {
-                    self.app_handler
-                        .context
-                        .window_map
-                        .get_mut(&MAIN_WINDOW)
-                        .unwrap()
-                        .set_modifiers(modifiers);
+                    self.app_handler.cx.main_window.set_modifiers(modifiers);
 
                     let button = match button {
                         baseview::MouseButton::Left => PointerButton::Primary,
@@ -264,20 +276,14 @@ impl<A: Application> BaseviewWindowHandler for BaseviewAppHandler<A> {
                         _ => return baseview::EventStatus::Ignored,
                     };
 
-                    self.app_handler
-                        .context
-                        .window_map
-                        .get_mut(&MAIN_WINDOW)
-                        .unwrap()
-                        .handle_mouse_button(button, true, &mut self.app_handler.context.res);
+                    self.app_handler.cx.main_window.handle_mouse_button(
+                        button,
+                        true,
+                        &mut self.app_handler.cx.res,
+                    );
                 }
                 baseview::MouseEvent::ButtonReleased { button, modifiers } => {
-                    self.app_handler
-                        .context
-                        .window_map
-                        .get_mut(&MAIN_WINDOW)
-                        .unwrap()
-                        .set_modifiers(modifiers);
+                    self.app_handler.cx.main_window.set_modifiers(modifiers);
 
                     let button = match button {
                         baseview::MouseButton::Left => PointerButton::Primary,
@@ -288,22 +294,14 @@ impl<A: Application> BaseviewWindowHandler for BaseviewAppHandler<A> {
                         _ => return baseview::EventStatus::Ignored,
                     };
 
-                    self.app_handler
-                        .context
-                        .window_map
-                        .get_mut(&MAIN_WINDOW)
-                        .unwrap()
-                        .handle_mouse_button(button, false, &mut self.app_handler.context.res);
+                    self.app_handler.cx.main_window.handle_mouse_button(
+                        button,
+                        false,
+                        &mut self.app_handler.cx.res,
+                    );
                 }
                 baseview::MouseEvent::WheelScrolled { delta, modifiers } => {
-                    let window_state = self
-                        .app_handler
-                        .context
-                        .window_map
-                        .get_mut(&MAIN_WINDOW)
-                        .unwrap();
-
-                    window_state.set_modifiers(modifiers);
+                    self.app_handler.cx.main_window.set_modifiers(modifiers);
 
                     let delta_type = match delta {
                         baseview::ScrollDelta::Lines { x, y } => {
@@ -311,22 +309,23 @@ impl<A: Application> BaseviewWindowHandler for BaseviewAppHandler<A> {
                         }
                         baseview::ScrollDelta::Pixels { x, y } => {
                             WheelDeltaType::Points(Vector::new(
-                                x * window_state.scale_factor_recip,
-                                -y * window_state.scale_factor_recip,
+                                x * self.app_handler.cx.main_window.scale_factor_recip,
+                                -y * self.app_handler.cx.main_window.scale_factor_recip,
                             ))
                         }
                     };
 
-                    window_state.handle_mouse_wheel(delta_type, &mut self.app_handler.context.res)
+                    self.app_handler
+                        .cx
+                        .main_window
+                        .handle_mouse_wheel(delta_type, &mut self.app_handler.cx.res)
                 }
                 baseview::MouseEvent::CursorEntered => (),
                 baseview::MouseEvent::CursorLeft => self
                     .app_handler
-                    .context
-                    .window_map
-                    .get_mut(&MAIN_WINDOW)
-                    .unwrap()
-                    .handle_pointer_left(&mut self.app_handler.context.res),
+                    .cx
+                    .main_window
+                    .handle_pointer_left(&mut self.app_handler.cx.res),
                 baseview::MouseEvent::DragEntered {
                     position,
                     modifiers,
@@ -345,37 +344,43 @@ impl<A: Application> BaseviewWindowHandler for BaseviewAppHandler<A> {
                 } => (),
             },
             baseview::Event::Keyboard(keyboard_event) => {
-                let window_state = self
-                    .app_handler
-                    .context
-                    .window_map
-                    .get_mut(&MAIN_WINDOW)
-                    .unwrap();
-
                 let key_event = self::convert::convert_keyboard_event(&keyboard_event);
 
-                let mut captured = window_state
-                    .handle_keyboard_event(key_event.clone(), &mut self.app_handler.context.res)
+                let mut captured = self
+                    .app_handler
+                    .cx
+                    .main_window
+                    .handle_keyboard_event(key_event.clone(), &mut self.app_handler.cx.res)
                     == EventCaptureStatus::Captured;
 
                 if !captured && keyboard_event.state == KeyState::Down {
                     if let Some(text) =
                         self::convert::key_to_composition(keyboard_event.key, keyboard_event.code)
                     {
-                        captured |= window_state.handle_text_composition_event(
-                            CompositionEvent {
-                                state: keyboard_types::CompositionState::Start,
-                                data: String::new(),
-                            },
-                            &mut self.app_handler.context.res,
-                        ) == EventCaptureStatus::Captured;
-                        captured |= window_state.handle_text_composition_event(
-                            CompositionEvent {
-                                state: keyboard_types::CompositionState::End,
-                                data: text,
-                            },
-                            &mut self.app_handler.context.res,
-                        ) == EventCaptureStatus::Captured
+                        captured |= self
+                            .app_handler
+                            .cx
+                            .main_window
+                            .handle_text_composition_event(
+                                CompositionEvent {
+                                    state: keyboard_types::CompositionState::Start,
+                                    data: String::new(),
+                                },
+                                &mut self.app_handler.cx.res,
+                            )
+                            == EventCaptureStatus::Captured;
+                        captured |= self
+                            .app_handler
+                            .cx
+                            .main_window
+                            .handle_text_composition_event(
+                                CompositionEvent {
+                                    state: keyboard_types::CompositionState::End,
+                                    data: text,
+                                },
+                                &mut self.app_handler.cx.res,
+                            )
+                            == EventCaptureStatus::Captured
                     }
                 }
 
@@ -383,7 +388,7 @@ impl<A: Application> BaseviewWindowHandler for BaseviewAppHandler<A> {
                     self.app_handler.user_app.on_keyboard_event(
                         key_event,
                         MAIN_WINDOW,
-                        &mut self.app_handler.context,
+                        &mut self.app_handler.cx,
                     );
                 }
             }
@@ -395,16 +400,12 @@ impl<A: Application> BaseviewWindowHandler for BaseviewAppHandler<A> {
                         physical_size.height as i32,
                     );
 
-                    let window_state = self
-                        .app_handler
-                        .context
-                        .window_map
-                        .get_mut(&MAIN_WINDOW)
-                        .unwrap();
-
                     let scale_factor = info.scale();
 
-                    window_state.set_size(new_size, scale_factor.into());
+                    self.app_handler
+                        .cx
+                        .main_window
+                        .set_size(new_size, scale_factor.into());
 
                     if self.inner.first_resize {
                         self.inner.first_resize = false;
@@ -412,51 +413,43 @@ impl<A: Application> BaseviewWindowHandler for BaseviewAppHandler<A> {
                         self.app_handler.user_app.on_window_event(
                             crate::event::AppWindowEvent::WindowOpened,
                             MAIN_WINDOW,
-                            &mut self.app_handler.context,
+                            &mut self.app_handler.cx,
                         );
                     } else {
                         self.app_handler.user_app.on_window_event(
                             crate::event::AppWindowEvent::WindowResized,
                             MAIN_WINDOW,
-                            &mut self.app_handler.context,
+                            &mut self.app_handler.cx,
                         );
                     }
                 }
                 baseview::WindowEvent::Focused => {
-                    let window_state = self
-                        .app_handler
-                        .context
-                        .window_map
-                        .get_mut(&MAIN_WINDOW)
-                        .unwrap();
-
-                    window_state.handle_window_focused(&mut self.app_handler.context.res);
+                    self.app_handler
+                        .cx
+                        .main_window
+                        .handle_window_focused(&mut self.app_handler.cx.res);
                     self.app_handler.user_app.on_window_event(
                         crate::event::AppWindowEvent::WindowFocused,
                         MAIN_WINDOW,
-                        &mut self.app_handler.context,
+                        &mut self.app_handler.cx,
                     );
                 }
                 baseview::WindowEvent::Unfocused => {
-                    let window_state = self
-                        .app_handler
-                        .context
-                        .window_map
-                        .get_mut(&MAIN_WINDOW)
-                        .unwrap();
-
-                    window_state.handle_window_unfocused(&mut self.app_handler.context.res);
+                    self.app_handler
+                        .cx
+                        .main_window
+                        .handle_window_unfocused(&mut self.app_handler.cx.res);
                     self.app_handler.user_app.on_window_event(
                         crate::event::AppWindowEvent::WindowUnfocused,
                         MAIN_WINDOW,
-                        &mut self.app_handler.context,
+                        &mut self.app_handler.cx,
                     );
                 }
                 baseview::WindowEvent::WillClose => {
                     self.app_handler.user_app.on_request_to_close_window(
                         MAIN_WINDOW,
                         true,
-                        &mut self.app_handler.context,
+                        &mut self.app_handler.cx,
                     );
                 }
             },
@@ -476,41 +469,22 @@ pub enum OpenWindowError {
     MultiWindowNotSupported,
 }
 
-pub fn run_blocking<A: Application + 'static, B>(
-    main_window_config: WindowConfig,
-    action_sender: ActionSender<A::Action>,
-    action_receiver: ActionReceiver<A::Action>,
-    mut build_app: B,
-) -> Result<(), Box<dyn Error>>
-where
-    A::Action: Send,
-    B: FnMut() -> A,
-    B: 'static + Send,
-{
+pub fn run_blocking<A: Application + 'static>(app_config: AppConfig) -> Result<(), Box<dyn Error>> {
     let options = WindowOpenOptions {
-        title: main_window_config.title.clone(),
-        scale: match main_window_config.scale_factor {
+        title: app_config.main_window_config.title.clone(),
+        scale: match app_config.main_window_config.scale_factor {
             ScaleFactorConfig::System => WindowScalePolicy::SystemScaleFactor,
             ScaleFactorConfig::Custom(c) => WindowScalePolicy::ScaleFactor(c.into()),
         },
         size: baseview::Size::new(
-            main_window_config.size.width as f64,
-            main_window_config.size.height as f64,
+            app_config.main_window_config.size.width as f64,
+            app_config.main_window_config.size.height as f64,
         ),
     };
 
     BaseviewWindow::open_blocking(options, move |window: &mut BaseviewWindow| {
-        let user_app = (build_app)();
-
         // TODO: get rid of unwrap once baseview supports erros on build closures.
-        BaseviewAppHandler::new(
-            user_app,
-            action_sender,
-            action_receiver,
-            main_window_config,
-            window,
-        )
-        .unwrap()
+        BaseviewAppHandler::<A>::new(app_config, window).unwrap()
     });
 
     Ok(())
@@ -518,25 +492,17 @@ where
 
 pub fn run_parented<P: HasRawWindowHandle, A: Application + 'static, B>(
     parent: &P,
-    main_window_config: WindowConfig,
-    action_sender: ActionSender<A::Action>,
-    action_receiver: ActionReceiver<A::Action>,
-    mut build_app: B,
-) -> Result<WindowHandle, Box<dyn Error>>
-where
-    A::Action: Send,
-    B: FnMut() -> A,
-    B: 'static + Send,
-{
+    app_config: AppConfig,
+) -> Result<WindowHandle, Box<dyn Error>> {
     let options = WindowOpenOptions {
-        title: main_window_config.title.clone(),
-        scale: match main_window_config.scale_factor {
+        title: app_config.main_window_config.title.clone(),
+        scale: match app_config.main_window_config.scale_factor {
             ScaleFactorConfig::System => WindowScalePolicy::SystemScaleFactor,
             ScaleFactorConfig::Custom(c) => WindowScalePolicy::ScaleFactor(c.into()),
         },
         size: baseview::Size::new(
-            main_window_config.size.width as f64,
-            main_window_config.size.height as f64,
+            app_config.main_window_config.size.width as f64,
+            app_config.main_window_config.size.height as f64,
         ),
     };
 
@@ -544,24 +510,16 @@ where
         parent,
         options,
         move |window: &mut BaseviewWindow| {
-            let user_app = (build_app)();
-
             // TODO: get rid of unwrap once baseview supports erros on build closures.
-            BaseviewAppHandler::new(
-                user_app,
-                action_sender,
-                action_receiver,
-                main_window_config,
-                window,
-            )
-            .unwrap()
+            BaseviewAppHandler::<A>::new(app_config, window).unwrap()
         },
     ))
 }
 
 fn new_window<A: Application>(
     config: WindowConfig,
-    app_handler: &mut AppHandler<A>,
+    res: &mut ResourceCtx,
+    action_sender: ActionSender<A::Action>,
     window: &mut BaseviewWindow,
 ) -> Result<WindowState<A::Action>, NewSurfaceError> {
     let scale_factor = config.scale_factor.scale_factor(1.0.into());
@@ -634,21 +592,26 @@ fn new_window<A: Application>(
         &surface.queue,
         surface.format(),
         canvas_config,
-        &mut app_handler.context.res.font_system,
+        &mut res.font_system,
     );
 
-    let view = View::new(
+    let element_system = ElementSystem::new(
         physical_size,
         scale_factor,
-        config.view_config,
-        app_handler.context.action_sender.clone(),
+        ElementSystemConfig {
+            clear_color: config.clear_color,
+            preallocate_for_this_many_elements: config.preallocate_for_this_many_elements,
+            hover_timeout_duration: config.hover_timeout_duration,
+            scroll_wheel_timeout_duration: config.scroll_wheel_timeout_duration,
+        },
+        action_sender,
         MAIN_WINDOW,
     );
 
     let clipboard = new_clipboard(window);
 
     Ok(WindowState {
-        view,
+        element_system,
         renderer,
         surface: Some(surface),
         multisample: canvas_config.multisample,

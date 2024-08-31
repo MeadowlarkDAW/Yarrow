@@ -72,10 +72,6 @@ pub struct TabBuilder<A: Clone + 'static> {
 }
 
 impl<A: Clone + 'static> TabBuilder<A> {
-    pub fn build(self, cx: &mut WindowContext<'_, A>) -> Tab {
-        TabElement::create(self, cx)
-    }
-
     pub fn on_toggled_on(mut self, action: A) -> Self {
         self.action = Some(action);
         self
@@ -164,18 +160,8 @@ impl<A: Clone + 'static> TabBuilder<A> {
         self.text_icon_layout = layout;
         self
     }
-}
 
-/// A button element with a label.
-pub struct TabElement<A: Clone + 'static> {
-    shared_state: Rc<RefCell<SharedState>>,
-    action: Option<A>,
-    on_indicator_line_placement: IndicatorLinePlacement,
-    cursor_icon: Option<CursorIcon>,
-}
-
-impl<A: Clone + 'static> TabElement<A> {
-    pub fn create(builder: TabBuilder<A>, cx: &mut WindowContext<'_, A>) -> Tab {
+    pub fn build(self, window_cx: &mut WindowContext<'_, A>) -> Tab {
         let TabBuilder {
             action,
             tooltip_data,
@@ -194,10 +180,12 @@ impl<A: Clone + 'static> TabElement<A> {
             manually_hidden,
             disabled,
             scissor_rect,
-        } = builder;
+        } = self;
 
-        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
-        let style = cx.res.style_system.get::<TabStyle>(class);
+        let style = window_cx
+            .res
+            .style_system
+            .get::<TabStyle>(window_cx.builder_class(class));
         let cursor_icon = style.toggle_btn_style.cursor_icon;
 
         let shared_state = Rc::new(RefCell::new(SharedState {
@@ -212,38 +200,36 @@ impl<A: Clone + 'static> TabElement<A> {
                 disabled,
                 text_icon_layout,
                 &style.toggle_btn_style,
-                &mut cx.res.font_system,
+                &mut window_cx.res.font_system,
             ),
             tooltip_inner: TooltipInner::new(tooltip_data),
         }));
 
-        let element_builder = ElementBuilder {
-            element: Box::new(Self {
-                shared_state: Rc::clone(&shared_state),
-                action,
-                on_indicator_line_placement,
-                cursor_icon,
-            }),
-            z_index,
-            rect,
-            manually_hidden,
-            scissor_rect,
-            class,
-        };
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
+        let el = ElementBuilder::new(TabElement {
+            shared_state: Rc::clone(&shared_state),
+            action,
+            on_indicator_line_placement,
+            cursor_icon,
+        })
+        .builder_values(z_index, scissor_rect, class, window_cx)
+        .rect(rect)
+        .hidden(manually_hidden)
+        .flags(ElementFlags::PAINTS | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS)
+        .build(window_cx);
 
         Tab { el, shared_state }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for TabElement<A> {
-    fn flags(&self) -> ElementFlags {
-        ElementFlags::PAINTS | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
-    }
+/// A button element with a label.
+struct TabElement<A: Clone + 'static> {
+    shared_state: Rc<RefCell<SharedState>>,
+    action: Option<A>,
+    on_indicator_line_placement: IndicatorLinePlacement,
+    cursor_icon: Option<CursorIcon>,
+}
 
+impl<A: Clone + 'static> Element<A> for TabElement<A> {
     fn on_event(
         &mut self,
         event: ElementEvent,
@@ -480,7 +466,11 @@ impl Tab {
     /// so this method is relatively cheap to call frequently. However, this method still
     /// involves a string comparison so you may want to call this method
     /// sparingly.
-    pub fn set_text(&mut self, text: Option<&str>, res: &mut ResourceCtx) -> bool {
+    pub fn set_text<T: AsRef<str> + Into<String>>(
+        &mut self,
+        text: Option<T>,
+        res: &mut ResourceCtx,
+    ) -> bool {
         let mut shared_state = RefCell::borrow_mut(&self.shared_state);
 
         if shared_state.inner.set_text(text, &mut res.font_system, || {
@@ -696,12 +686,14 @@ impl TabGroup {
         tooltip_align: Align2,
         z_index: Option<ZIndex>,
         scissor_rect: Option<ScissorRectID>,
-        cx: &mut WindowContext<A>,
+        window_cx: &mut WindowContext<A>,
     ) -> Self
     where
         F: FnMut(usize) -> A + 'static,
     {
-        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
+        let z_index = z_index.unwrap_or_else(|| window_cx.z_index());
+        let class = class.unwrap_or_else(|| window_cx.class());
+        let scissor_rect = scissor_rect.unwrap_or_else(|| window_cx.scissor_rect());
 
         let tabs: Vec<Tab> = options
             .into_iter()
@@ -727,7 +719,7 @@ impl TabGroup {
                     tab = tab.tooltip(text, tooltip_align);
                 }
 
-                tab.build(cx)
+                tab.build(window_cx)
             })
             .collect();
 

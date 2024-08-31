@@ -101,10 +101,6 @@ pub struct RadioButtonBuilder<A: Clone + 'static> {
 }
 
 impl<A: Clone + 'static> RadioButtonBuilder<A> {
-    pub fn build(self, cx: &mut WindowContext<'_, A>) -> RadioButton {
-        RadioButtonElement::create(self, cx)
-    }
-
     pub fn on_toggled_on(mut self, action: A) -> Self {
         self.action = Some(action);
         self
@@ -114,17 +110,8 @@ impl<A: Clone + 'static> RadioButtonBuilder<A> {
         self.toggled = toggled;
         self
     }
-}
 
-pub struct RadioButtonElement<A: Clone + 'static> {
-    shared_state: Rc<RefCell<SharedState>>,
-    action: Option<A>,
-    hovered: bool,
-    cursor_icon: Option<CursorIcon>,
-}
-
-impl<A: Clone + 'static> RadioButtonElement<A> {
-    pub fn create(builder: RadioButtonBuilder<A>, cx: &mut WindowContext<'_, A>) -> RadioButton {
+    pub fn build(self, window_cx: &mut WindowContext<'_, A>) -> RadioButton {
         let RadioButtonBuilder {
             action,
             tooltip_data,
@@ -135,10 +122,12 @@ impl<A: Clone + 'static> RadioButtonElement<A> {
             manually_hidden,
             disabled,
             scissor_rect,
-        } = builder;
+        } = self;
 
-        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
-        let style = cx.res.style_system.get::<RadioButtonStyle>(class);
+        let style = window_cx
+            .res
+            .style_system
+            .get::<RadioButtonStyle>(window_cx.builder_class(class));
         let cursor_icon = style.cursor_icon;
 
         let shared_state = Rc::new(RefCell::new(SharedState {
@@ -147,33 +136,30 @@ impl<A: Clone + 'static> RadioButtonElement<A> {
             tooltip_inner: TooltipInner::new(tooltip_data),
         }));
 
-        let element_builder = ElementBuilder {
-            element: Box::new(Self {
-                shared_state: Rc::clone(&shared_state),
-                action,
-                hovered: false,
-                cursor_icon,
-            }),
-            z_index,
-            rect,
-            manually_hidden,
-            scissor_rect,
-            class,
-        };
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
+        let el = ElementBuilder::new(RadioButtonElement {
+            shared_state: Rc::clone(&shared_state),
+            action,
+            hovered: false,
+            cursor_icon,
+        })
+        .builder_values(z_index, scissor_rect, class, window_cx)
+        .rect(rect)
+        .hidden(manually_hidden)
+        .flags(ElementFlags::PAINTS | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS)
+        .build(window_cx);
 
         RadioButton { el, shared_state }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
-    fn flags(&self) -> ElementFlags {
-        ElementFlags::PAINTS | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
-    }
+struct RadioButtonElement<A: Clone + 'static> {
+    shared_state: Rc<RefCell<SharedState>>,
+    action: Option<A>,
+    hovered: bool,
+    cursor_icon: Option<CursorIcon>,
+}
 
+impl<A: Clone + 'static> Element<A> for RadioButtonElement<A> {
     fn on_event(
         &mut self,
         event: ElementEvent,
@@ -486,16 +472,16 @@ impl RadioButtonGroup {
         radio_btn_class: Option<ClassID>,
         z_index: Option<ZIndex>,
         scissor_rect: Option<ScissorRectID>,
-        cx: &mut WindowContext<A>,
+        window_cx: &mut WindowContext<A>,
     ) -> Self
     where
         F: FnMut(usize) -> A + 'static,
     {
-        let z_index = z_index.unwrap_or_else(|| cx.z_index());
-        let scissor_rect = scissor_rect.unwrap_or_else(|| cx.scissor_rect());
+        let z_index = z_index.unwrap_or_else(|| window_cx.z_index());
+        let scissor_rect = scissor_rect.unwrap_or_else(|| window_cx.scissor_rect());
 
-        let label_class = label_class.unwrap_or_else(|| cx.class());
-        let radio_btn_class = radio_btn_class.unwrap_or_else(|| cx.class());
+        let label_class = label_class.unwrap_or_else(|| window_cx.class());
+        let radio_btn_class = radio_btn_class.unwrap_or_else(|| window_cx.class());
 
         let rows: Vec<(RadioButton, Label)> = options
             .into_iter()
@@ -508,13 +494,13 @@ impl RadioButtonGroup {
                         .class(radio_btn_class)
                         .z_index(z_index)
                         .scissor_rect(scissor_rect)
-                        .build(cx),
+                        .build(window_cx),
                     Label::builder()
                         .text(option.into())
                         .class(label_class)
                         .z_index(z_index)
                         .scissor_rect(scissor_rect)
-                        .build(cx),
+                        .build(window_cx),
                 )
             })
             .collect();

@@ -1,4 +1,5 @@
 use smallvec::SmallVec;
+use smol_str::{SmolStr, ToSmolStr};
 use std::cell::{Ref, RefCell};
 use std::ops::Range;
 use std::rc::Rc;
@@ -15,7 +16,7 @@ pub mod slider;
 pub use inner::*;
 pub use renderer::*;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ParamOpenTextEntryInfo {
     pub param_info: ParamInfo,
     /// The bounding rectangle of this element
@@ -242,7 +243,7 @@ pub struct VirtualSliderBuilder<A: Clone + 'static> {
     pub on_open_text_entry: Option<Box<dyn FnMut(ParamOpenTextEntryInfo) -> A>>,
     pub on_tooltip_request: Option<Box<dyn FnMut(ParamElementTooltipInfo) -> A>>,
     pub tooltip_align: Align2,
-    pub param_id: u32,
+    pub param_id: SmolStr,
     pub normal_value: f64,
     pub default_normal: f64,
     pub num_quantized_steps: Option<u32>,
@@ -255,7 +256,7 @@ pub struct VirtualSliderBuilder<A: Clone + 'static> {
 }
 
 impl<A: Clone + 'static> VirtualSliderBuilder<A> {
-    pub fn new(param_id: u32) -> Self {
+    pub fn new(param_id: impl ToSmolStr) -> Self {
         Self {
             on_gesture: None,
             on_right_click: None,
@@ -263,7 +264,7 @@ impl<A: Clone + 'static> VirtualSliderBuilder<A> {
             on_tooltip_request: None,
             class: None,
             tooltip_align: Align2::default(),
-            param_id,
+            param_id: param_id.to_smolstr(),
             normal_value: 0.0,
             default_normal: 0.0,
             num_quantized_steps: None,
@@ -279,13 +280,6 @@ impl<A: Clone + 'static> VirtualSliderBuilder<A> {
             disabled: false,
             scissor_rect: None,
         }
-    }
-
-    pub fn build<R: VirtualSliderRenderer>(
-        self,
-        cx: &mut WindowContext<'_, A>,
-    ) -> VirtualSlider<R> {
-        VirtualSliderElement::create(self, cx)
     }
 
     pub fn on_gesture<F: FnMut(ParamUpdate) -> A + 'static>(mut self, f: F) -> Self {
@@ -366,27 +360,10 @@ impl<A: Clone + 'static> VirtualSliderBuilder<A> {
         self.horizontal = horizontal;
         self
     }
-}
 
-pub struct VirtualSliderElement<A: Clone + 'static, R: VirtualSliderRenderer + 'static> {
-    shared_state: Rc<RefCell<SharedState<R>>>,
-
-    on_gesture: Option<Box<dyn FnMut(ParamUpdate) -> A>>,
-    on_right_click: Option<Box<dyn FnMut(ParamRightClickInfo) -> A>>,
-    on_open_text_entry: Option<Box<dyn FnMut(ParamOpenTextEntryInfo) -> A>>,
-    on_tooltip_request: Option<Box<dyn FnMut(ParamElementTooltipInfo) -> A>>,
-    tooltip_align: Align2,
-    horizontal: bool,
-
-    hovered: bool,
-    state: VirtualSliderState,
-    global_render_cache_id: Option<u32>,
-}
-
-impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElement<A, R> {
-    pub fn create(
-        builder: VirtualSliderBuilder<A>,
-        cx: &mut WindowContext<'_, A>,
+    pub fn build<R: VirtualSliderRenderer>(
+        self,
+        window_cx: &mut WindowContext<'_, A>,
     ) -> VirtualSlider<R> {
         let VirtualSliderBuilder {
             on_gesture,
@@ -410,13 +387,23 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
             manually_hidden,
             disabled,
             scissor_rect,
-        } = builder;
+        } = self;
 
-        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
-        let style = cx.res.style_system.get_rc::<R::Style>(class);
+        let style = window_cx
+            .res
+            .style_system
+            .get_rc::<R::Style>(window_cx.builder_class(class));
 
         let renderer = R::new(style);
         let global_render_cache_id = renderer.global_render_cache_id();
+
+        let mut flags = ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
+            | ElementFlags::LISTENS_TO_POINTER_OUTSIDE_BOUNDS_WHEN_FOCUSED
+            | ElementFlags::LISTENS_TO_FOCUS_CHANGE;
+
+        if renderer.does_paint() {
+            flags.insert(ElementFlags::PAINTS);
+        }
 
         let shared_state = Rc::new(RefCell::new(SharedState {
             inner: VirtualSliderInner::new(
@@ -438,53 +425,50 @@ impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> VirtualSliderElemen
             queued_new_val: None,
         }));
 
-        let element_builder = ElementBuilder {
-            element: Box::new(Self {
-                shared_state: Rc::clone(&shared_state),
-                on_gesture,
-                on_right_click,
-                on_open_text_entry,
-                on_tooltip_request,
-                tooltip_align,
-                horizontal,
-                hovered: false,
-                state: if disabled {
-                    VirtualSliderState::Disabled
-                } else {
-                    VirtualSliderState::Idle
-                },
-                global_render_cache_id,
-            }),
-            z_index,
-            rect,
-            manually_hidden,
-            scissor_rect,
-            class,
-        };
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
+        let el = ElementBuilder::new(VirtualSliderElement {
+            shared_state: Rc::clone(&shared_state),
+            on_gesture,
+            on_right_click,
+            on_open_text_entry,
+            on_tooltip_request,
+            tooltip_align,
+            horizontal,
+            hovered: false,
+            state: if disabled {
+                VirtualSliderState::Disabled
+            } else {
+                VirtualSliderState::Idle
+            },
+            global_render_cache_id,
+        })
+        .builder_values(z_index, scissor_rect, class, window_cx)
+        .rect(rect)
+        .hidden(manually_hidden)
+        .flags(flags)
+        .build(window_cx);
 
         VirtualSlider { el, shared_state }
     }
 }
 
+struct VirtualSliderElement<A: Clone + 'static, R: VirtualSliderRenderer + 'static> {
+    shared_state: Rc<RefCell<SharedState<R>>>,
+
+    on_gesture: Option<Box<dyn FnMut(ParamUpdate) -> A>>,
+    on_right_click: Option<Box<dyn FnMut(ParamRightClickInfo) -> A>>,
+    on_open_text_entry: Option<Box<dyn FnMut(ParamOpenTextEntryInfo) -> A>>,
+    on_tooltip_request: Option<Box<dyn FnMut(ParamElementTooltipInfo) -> A>>,
+    tooltip_align: Align2,
+    horizontal: bool,
+
+    hovered: bool,
+    state: VirtualSliderState,
+    global_render_cache_id: Option<u32>,
+}
+
 impl<A: Clone + 'static, R: VirtualSliderRenderer + 'static> Element<A>
     for VirtualSliderElement<A, R>
 {
-    fn flags(&self) -> ElementFlags {
-        let mut flags = ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
-            | ElementFlags::LISTENS_TO_POINTER_OUTSIDE_BOUNDS_WHEN_FOCUSED
-            | ElementFlags::LISTENS_TO_FOCUS_CHANGE;
-
-        if RefCell::borrow(&self.shared_state).renderer.does_paint() {
-            flags.insert(ElementFlags::PAINTS);
-        }
-
-        flags
-    }
-
     fn on_event(
         &mut self,
         event: ElementEvent,
@@ -1049,7 +1033,7 @@ pub struct VirtualSlider<R: VirtualSliderRenderer> {
 }
 
 impl<R: VirtualSliderRenderer> VirtualSlider<R> {
-    pub fn builder<A: Clone + 'static>(param_id: u32) -> VirtualSliderBuilder<A> {
+    pub fn builder<A: Clone + 'static>(param_id: impl ToSmolStr) -> VirtualSliderBuilder<A> {
         VirtualSliderBuilder::new(param_id)
     }
 
@@ -1264,12 +1248,12 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
         &mut self,
         get_text: F,
         align: Align2,
-        cx: &WindowContext<'_, A>,
+        window_cx: &WindowContext<'_, A>,
     ) {
         let shared_state = RefCell::borrow(&self.shared_state);
 
         if !shared_state.inner.is_gesturing() {
-            if !cx.view.element_is_hovered(&self.el) {
+            if !window_cx.element_is_hovered(&self.el) {
                 return;
             }
         }
@@ -1293,6 +1277,26 @@ impl<R: VirtualSliderRenderer> VirtualSlider<R> {
             shared_state.disabled = disabled;
             shared_state.needs_repaint = true;
             self.el.notify_custom_state_change();
+        }
+    }
+
+    /// Set the parameter ID.
+    ///
+    /// Returns `true` if the parameter ID has changed.
+    ///
+    /// This will *NOT* trigger an element update unless the value has changed,
+    /// so this method is relatively cheap to call frequently. However, this method still
+    /// involves a string comparison so you may want to call this method
+    /// sparingly.
+    pub fn set_param_id<T: AsRef<str> + ToSmolStr>(&mut self, param_id: T) -> bool {
+        let mut shared_state = RefCell::borrow_mut(&self.shared_state);
+
+        if shared_state.inner.param_id.as_str() != param_id.as_ref() {
+            shared_state.inner.param_id = param_id.to_smolstr();
+            self.el.notify_custom_state_change();
+            true
+        } else {
+            false
         }
     }
 

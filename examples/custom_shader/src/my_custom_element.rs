@@ -11,15 +11,15 @@ use yarrow::vg::pipeline::CustomPrimitive;
 pub struct MyCustomElementBuilder {}
 
 impl MyCustomElementBuilder {
-    pub fn build<A: Clone + 'static>(self, cx: &mut WindowContext<'_, A>) -> MyCustomElement {
-        let element_builder = ElementBuilder::new(Box::new(MyCustomElementInternal::new()))
-            .z_index(self.z_index.unwrap_or(cx.z_index()))
+    pub fn build<A: Clone + 'static>(
+        self,
+        window_cx: &mut WindowContext<'_, A>,
+    ) -> MyCustomElement {
+        let el = ElementBuilder::new(MyCustomElementInternal::new())
+            .builder_values(self.z_index, self.scissor_rect, None, window_cx)
             .rect(self.rect)
-            .scissor_rect(self.scissor_rect.unwrap_or(cx.scissor_rect()));
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
+            .flags(ElementFlags::PAINTS)
+            .build(window_cx);
 
         MyCustomElement { el }
     }
@@ -40,10 +40,6 @@ impl MyCustomElementInternal {
 }
 
 impl<A: Clone + 'static> Element<A> for MyCustomElementInternal {
-    fn flags(&self) -> ElementFlags {
-        ElementFlags::PAINTS
-    }
-
     fn render(&mut self, cx: RenderContext, primitives: &mut PrimitiveGroup) {
         // Custom primitives need to get the arena ID of the pipeline.
         let pipeline_id = cx.custom_pipelines.get_id(

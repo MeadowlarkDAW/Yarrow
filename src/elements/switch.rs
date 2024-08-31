@@ -125,10 +125,6 @@ pub struct SwitchBuilder<A: Clone + 'static> {
 }
 
 impl<A: Clone + 'static> SwitchBuilder<A> {
-    pub fn build(self, cx: &mut WindowContext<'_, A>) -> Switch {
-        SwitchElement::create(self, cx)
-    }
-
     pub fn on_toggled<F: FnMut(bool) -> A + 'static>(mut self, f: F) -> Self {
         self.action = Some(Box::new(f));
         self
@@ -138,17 +134,8 @@ impl<A: Clone + 'static> SwitchBuilder<A> {
         self.toggled = toggled;
         self
     }
-}
 
-pub struct SwitchElement<A: Clone + 'static> {
-    shared_state: Rc<RefCell<SharedState>>,
-    action: Option<Box<dyn FnMut(bool) -> A>>,
-    hovered: bool,
-    cursor_icon: Option<CursorIcon>,
-}
-
-impl<A: Clone + 'static> SwitchElement<A> {
-    pub fn create(builder: SwitchBuilder<A>, cx: &mut WindowContext<'_, A>) -> Switch {
+    pub fn build(self, window_cx: &mut WindowContext<'_, A>) -> Switch {
         let SwitchBuilder {
             action,
             tooltip_data,
@@ -159,10 +146,12 @@ impl<A: Clone + 'static> SwitchElement<A> {
             rect,
             manually_hidden,
             scissor_rect,
-        } = builder;
+        } = self;
 
-        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
-        let style = cx.res.style_system.get::<SwitchStyle>(class);
+        let style = window_cx
+            .res
+            .style_system
+            .get::<SwitchStyle>(window_cx.builder_class(class));
         let cursor_icon = style.cursor_icon;
 
         let shared_state = Rc::new(RefCell::new(SharedState {
@@ -171,33 +160,30 @@ impl<A: Clone + 'static> SwitchElement<A> {
             tooltip_inner: TooltipInner::new(tooltip_data),
         }));
 
-        let element_builder = ElementBuilder {
-            element: Box::new(Self {
-                shared_state: Rc::clone(&shared_state),
-                action,
-                hovered: false,
-                cursor_icon,
-            }),
-            z_index,
-            rect,
-            manually_hidden,
-            scissor_rect,
-            class,
-        };
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
+        let el = ElementBuilder::new(SwitchElement {
+            shared_state: Rc::clone(&shared_state),
+            action,
+            hovered: false,
+            cursor_icon,
+        })
+        .builder_values(z_index, scissor_rect, class, window_cx)
+        .rect(rect)
+        .hidden(manually_hidden)
+        .flags(ElementFlags::PAINTS | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS)
+        .build(window_cx);
 
         Switch { el, shared_state }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for SwitchElement<A> {
-    fn flags(&self) -> ElementFlags {
-        ElementFlags::PAINTS | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
-    }
+struct SwitchElement<A: Clone + 'static> {
+    shared_state: Rc<RefCell<SharedState>>,
+    action: Option<Box<dyn FnMut(bool) -> A>>,
+    hovered: bool,
+    cursor_icon: Option<CursorIcon>,
+}
 
+impl<A: Clone + 'static> Element<A> for SwitchElement<A> {
     fn on_event(
         &mut self,
         event: ElementEvent,

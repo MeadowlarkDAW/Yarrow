@@ -159,15 +159,19 @@ impl ParagraphInner {
     }
 
     /// Returns `true` if the text has changed.
-    pub fn set_text(&mut self, text: &str, font_system: &mut FontSystem) -> bool {
+    pub fn set_text<T: AsRef<str> + Into<String>>(
+        &mut self,
+        text: T,
+        font_system: &mut FontSystem,
+    ) -> bool {
         // TODO: If the text is sufficiently large, use a hash for comparison
         // for better performance.
-        if &self.text != text {
-            self.text = String::from(text);
+        if self.text.as_str() != text.as_ref() {
+            self.text = text.into();
             self.text_size_needs_calculated = true;
             self.padded_size_needs_calculated = true;
 
-            self.text_buffer.set_text(text, font_system);
+            self.text_buffer.set_text(&self.text, font_system);
 
             true
         } else {
@@ -273,10 +277,6 @@ pub struct ParagraphBuilder {
 }
 
 impl ParagraphBuilder {
-    pub fn build<A: Clone + 'static>(self, cx: &mut WindowContext<'_, A>) -> Paragraph {
-        ParagraphElement::create(self, cx)
-    }
-
     /// The text of the paragraph
     pub fn text(mut self, text: impl Into<String>) -> Self {
         self.text = text.into();
@@ -300,18 +300,8 @@ impl ParagraphBuilder {
         self.text_offset = offset;
         self
     }
-}
 
-/// A Paragraph element with an optional quad background.
-pub struct ParagraphElement {
-    shared_state: Rc<RefCell<SharedState>>,
-}
-
-impl ParagraphElement {
-    pub fn create<A: Clone + 'static>(
-        builder: ParagraphBuilder,
-        cx: &mut WindowContext<'_, A>,
-    ) -> Paragraph {
+    pub fn build<A: Clone + 'static>(self, window_cx: &mut WindowContext<'_, A>) -> Paragraph {
         let ParagraphBuilder {
             text,
             text_offset,
@@ -321,11 +311,12 @@ impl ParagraphElement {
             rect,
             manually_hidden,
             scissor_rect,
-        } = builder;
+        } = self;
 
-        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
-
-        let style = cx.res.style_system.get(class);
+        let style = window_cx
+            .res
+            .style_system
+            .get(window_cx.builder_class(class));
 
         let bounds_width = bounds_width.unwrap_or(rect.width());
 
@@ -334,35 +325,30 @@ impl ParagraphElement {
                 text,
                 &style,
                 bounds_width,
-                &mut cx.res.font_system,
+                &mut window_cx.res.font_system,
                 text_offset,
             ),
         }));
 
-        let element_builder = ElementBuilder {
-            element: Box::new(Self {
-                shared_state: Rc::clone(&shared_state),
-            }),
-            z_index,
-            rect,
-            manually_hidden,
-            scissor_rect,
-            class,
-        };
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
+        let el = ElementBuilder::new(ParagraphElement {
+            shared_state: Rc::clone(&shared_state),
+        })
+        .builder_values(z_index, scissor_rect, class, window_cx)
+        .rect(rect)
+        .hidden(manually_hidden)
+        .flags(ElementFlags::PAINTS)
+        .build(window_cx);
 
         Paragraph { el, shared_state }
     }
 }
 
-impl<A: Clone + 'static> Element<A> for ParagraphElement {
-    fn flags(&self) -> ElementFlags {
-        ElementFlags::PAINTS
-    }
+/// A Paragraph element with an optional quad background.
+struct ParagraphElement {
+    shared_state: Rc<RefCell<SharedState>>,
+}
 
+impl<A: Clone + 'static> Element<A> for ParagraphElement {
     fn on_event(
         &mut self,
         event: ElementEvent,
@@ -444,7 +430,11 @@ impl Paragraph {
     /// This will *NOT* trigger an element update unless the value has changed.
     /// However, calling this method can be expensive if the text is particuarly
     /// long, so prefer to call this method sparingly.
-    pub fn set_text(&mut self, text: &str, res: &mut ResourceCtx) -> bool {
+    pub fn set_text<T: AsRef<str> + Into<String>>(
+        &mut self,
+        text: T,
+        res: &mut ResourceCtx,
+    ) -> bool {
         let changed = RefCell::borrow_mut(&self.shared_state)
             .inner
             .set_text(text, &mut res.font_system);

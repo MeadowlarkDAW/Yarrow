@@ -125,10 +125,6 @@ impl<A: Clone + 'static> Default for ResizeHandleBuilder<A> {
 }
 
 impl<A: Clone + 'static> ResizeHandleBuilder<A> {
-    pub fn build(self, cx: &mut WindowContext<'_, A>) -> ResizeHandle {
-        ResizeHandleElement::create(self, cx)
-    }
-
     pub fn on_resized<F: FnMut(f32) -> A + 'static>(mut self, f: F) -> Self {
         self.resized_action = Some(Box::new(f));
         self
@@ -168,31 +164,8 @@ impl<A: Clone + 'static> ResizeHandleBuilder<A> {
         self.layout = Some(layout);
         self
     }
-}
 
-struct DragState {
-    drag_start_pos: Point,
-    drag_start_span: f32,
-}
-
-pub struct ResizeHandleElement<A: Clone + 'static> {
-    shared_state: Rc<RefCell<SharedState>>,
-
-    resized_action: Option<Box<dyn FnMut(f32) -> A>>,
-    resize_finished_action: Option<Box<dyn FnMut(f32) -> A>>,
-
-    direction: ResizeDirection,
-    min_span: f32,
-    max_span: f32,
-    default_span: f32,
-
-    drag_state: Option<DragState>,
-    queued_resize_finished_span: Option<f32>,
-    show_drag_handle: bool,
-}
-
-impl<A: Clone + 'static> ResizeHandleElement<A> {
-    pub fn create(builder: ResizeHandleBuilder<A>, cx: &mut WindowContext<'_, A>) -> ResizeHandle {
+    pub fn build(self, window_cx: &mut WindowContext<'_, A>) -> ResizeHandle {
         let ResizeHandleBuilder {
             resized_action,
             resize_finished_action,
@@ -207,9 +180,7 @@ impl<A: Clone + 'static> ResizeHandleElement<A> {
             manually_hidden,
             scissor_rect,
             disabled,
-        } = builder;
-
-        let (z_index, scissor_rect, class) = cx.builder_values(z_index, scissor_rect, class);
+        } = self;
 
         let max_span = if max_span < min_span {
             min_span
@@ -230,29 +201,28 @@ impl<A: Clone + 'static> ResizeHandleElement<A> {
             disabled,
         }));
 
-        let element_builder = ElementBuilder {
-            element: Box::new(Self {
-                shared_state: Rc::clone(&shared_state),
-                resized_action,
-                resize_finished_action,
-                direction,
-                min_span,
-                max_span,
-                default_span,
-                drag_state: None,
-                queued_resize_finished_span: None,
-                show_drag_handle: false,
-            }),
-            z_index,
-            rect,
-            manually_hidden,
-            scissor_rect,
-            class,
-        };
-
-        let el = cx
-            .view
-            .add_element(element_builder, &mut cx.res, cx.clipboard);
+        let el = ElementBuilder::new(ResizeHandleElement {
+            shared_state: Rc::clone(&shared_state),
+            resized_action,
+            resize_finished_action,
+            direction,
+            min_span,
+            max_span,
+            default_span,
+            drag_state: None,
+            queued_resize_finished_span: None,
+            show_drag_handle: false,
+        })
+        .builder_values(z_index, scissor_rect, class, window_cx)
+        .rect(rect)
+        .hidden(manually_hidden)
+        .flags(
+            ElementFlags::PAINTS
+                | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
+                | ElementFlags::LISTENS_TO_POINTER_OUTSIDE_BOUNDS_WHEN_FOCUSED
+                | ElementFlags::LISTENS_TO_FOCUS_CHANGE,
+        )
+        .build(window_cx);
 
         ResizeHandle {
             el,
@@ -265,14 +235,28 @@ impl<A: Clone + 'static> ResizeHandleElement<A> {
     }
 }
 
-impl<A: Clone + 'static> Element<A> for ResizeHandleElement<A> {
-    fn flags(&self) -> ElementFlags {
-        ElementFlags::PAINTS
-            | ElementFlags::LISTENS_TO_POINTER_INSIDE_BOUNDS
-            | ElementFlags::LISTENS_TO_POINTER_OUTSIDE_BOUNDS_WHEN_FOCUSED
-            | ElementFlags::LISTENS_TO_FOCUS_CHANGE
-    }
+struct DragState {
+    drag_start_pos: Point,
+    drag_start_span: f32,
+}
 
+struct ResizeHandleElement<A: Clone + 'static> {
+    shared_state: Rc<RefCell<SharedState>>,
+
+    resized_action: Option<Box<dyn FnMut(f32) -> A>>,
+    resize_finished_action: Option<Box<dyn FnMut(f32) -> A>>,
+
+    direction: ResizeDirection,
+    min_span: f32,
+    max_span: f32,
+    default_span: f32,
+
+    drag_state: Option<DragState>,
+    queued_resize_finished_span: Option<f32>,
+    show_drag_handle: bool,
+}
+
+impl<A: Clone + 'static> Element<A> for ResizeHandleElement<A> {
     fn on_event(
         &mut self,
         event: ElementEvent,

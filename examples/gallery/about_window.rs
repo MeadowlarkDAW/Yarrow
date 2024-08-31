@@ -32,15 +32,15 @@ pub struct Elements {
 }
 
 impl Elements {
-    pub fn new(style: &MyStyle, cx: &mut WindowContext<'_, MyAction>) -> Self {
-        cx.view.clear_color = style.clear_color.into();
+    pub fn new(style: &MyStyle, window_cx: &mut WindowContext<MyAction>) -> Self {
+        window_cx.set_clear_color(style.clear_color);
 
-        let window_size = cx.view.size();
+        let window_size = window_cx.logical_size();
 
         let mut close_btn = Button::builder()
             .text("Close")
             .on_select(Action::CloseAboutWindow.into())
-            .build(cx);
+            .build(window_cx);
 
         close_btn.layout_aligned(
             point(
@@ -48,7 +48,7 @@ impl Elements {
                 window_size.height - style.content_padding,
             ),
             Align2::BOTTOM_CENTER,
-            cx.res,
+            window_cx.res,
         );
 
         let separator = Separator::builder()
@@ -58,7 +58,7 @@ impl Elements {
                 window_size.width - style.content_padding - style.content_padding,
                 style.separator_width,
             ))
-            .build(cx);
+            .build(window_cx);
 
         let paragraph = Paragraph::builder()
             .text(ABOUT_TEXT)
@@ -68,7 +68,7 @@ impl Elements {
                 window_size.width - style.content_padding - style.content_padding,
                 separator.min_y() - style.element_padding,
             ))
-            .build(cx);
+            .build(window_cx);
 
         Self {
             _paragraph: paragraph,
@@ -78,7 +78,11 @@ impl Elements {
     }
 
     /// Returns `true` if the about window should be closed.
-    pub fn handle_action(&mut self, action: Action, _cx: &mut WindowContext<'_, MyAction>) -> bool {
+    pub fn handle_action(
+        &mut self,
+        action: Action,
+        _window_cx: &mut WindowContext<MyAction>,
+    ) -> bool {
         let close_window = match action {
             Action::CloseAboutWindow => true,
         };

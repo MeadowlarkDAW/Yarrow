@@ -1,5 +1,6 @@
 use crate::style::MyStyle;
 use crate::{MyAction, OVERLAY_Z_INDEX, RIGHT_CLICK_AREA_Z_INDEX};
+use smol_str::SmolStr;
 use yarrow::prelude::*;
 
 const SCROLL_AREA_SRECT: ScissorRectID = ScissorRectID(1);
@@ -32,34 +33,34 @@ pub struct Elements {
     scroll_area: ScrollArea,
     floating_text_input: FloatingTextInput,
 
-    text_input_param_id: Option<u32>,
+    text_input_param_id: Option<SmolStr>,
 }
 
 impl Elements {
-    pub fn new(style: &MyStyle, cx: &mut WindowContext<'_, MyAction>) -> Self {
+    pub fn new(style: &MyStyle, window_cx: &mut WindowContext<MyAction>) -> Self {
         let scroll_area = ScrollArea::builder()
             .control_scissor_rect(SCROLL_AREA_SRECT)
             .z_index(RIGHT_CLICK_AREA_Z_INDEX)
-            .build(cx);
+            .build(window_cx);
 
         let floating_text_input = FloatingTextInput::builder()
             .on_result(|new_text| Action::FloatingTextInput(new_text).into())
             .rect(Rect::from_size(style.floating_text_input_size))
             .z_index(OVERLAY_Z_INDEX)
-            .build(cx);
+            .build(window_cx);
 
-        cx.with_scissor_rect(SCROLL_AREA_SRECT, |cx| Self {
-            knob_0: Knob::builder(0)
+        window_cx.with_scissor_rect(SCROLL_AREA_SRECT, |window_cx| Self {
+            knob_0: Knob::builder("knob_0")
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
                 .on_open_text_entry(|info| Action::OpenTextInput(info).into())
                 .on_tooltip_request(
                     |info| Action::ShowParamTooltip(info).into(),
                     Align2::TOP_CENTER,
                 )
-                .build(cx),
-            knob_0_label: Label::builder().text("Normal").build(cx),
+                .build(window_cx),
+            knob_0_label: Label::builder().text("Normal").build(window_cx),
 
-            knob_1: Knob::builder(1)
+            knob_1: Knob::builder("knob_1")
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
                 .on_open_text_entry(|info| Action::OpenTextInput(info).into())
                 .on_tooltip_request(
@@ -69,10 +70,10 @@ impl Elements {
                 .bipolar(true)
                 .normal_value(0.5)
                 .default_normal(0.5)
-                .build(cx),
-            knob_1_label: Label::builder().text("Bipolar").build(cx),
+                .build(window_cx),
+            knob_1_label: Label::builder().text("Bipolar").build(window_cx),
 
-            knob_2: Knob::builder(2)
+            knob_2: Knob::builder("knob_2")
                 .class(MyStyle::CLASS_KNOB_2)
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
                 .on_open_text_entry(|info| Action::OpenTextInput(info).into())
@@ -81,19 +82,19 @@ impl Elements {
                     Align2::TOP_CENTER,
                 )
                 .num_quantized_steps(Some(5))
-                .build(cx),
-            knob_2_label: Label::builder().text("Stepped").build(cx),
+                .build(window_cx),
+            knob_2_label: Label::builder().text("Stepped").build(window_cx),
 
-            slider_3: Slider::builder(3)
+            slider_3: Slider::builder("slider_3")
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
                 .on_open_text_entry(|info| Action::OpenTextInput(info).into())
                 .on_tooltip_request(
                     |info| Action::ShowParamTooltip(info).into(),
                     Align2::TOP_CENTER,
                 )
-                .build(cx),
+                .build(window_cx),
 
-            slider_4: Slider::builder(4)
+            slider_4: Slider::builder("slider_4")
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
                 .on_open_text_entry(|info| Action::OpenTextInput(info).into())
                 .on_tooltip_request(
@@ -103,9 +104,9 @@ impl Elements {
                 .bipolar(true)
                 .default_normal(0.5)
                 .normal_value(0.5)
-                .build(cx),
+                .build(window_cx),
 
-            slider_5: Slider::builder(5)
+            slider_5: Slider::builder("slider_5")
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
                 .on_open_text_entry(|info| Action::OpenTextInput(info).into())
                 .on_tooltip_request(
@@ -114,9 +115,9 @@ impl Elements {
                 )
                 .horizontal(true)
                 .drag_horizontally(true)
-                .build(cx),
+                .build(window_cx),
 
-            slider_6: Slider::builder(6)
+            slider_6: Slider::builder("slider_6")
                 .on_gesture(|param_update| Action::ParamUpdate(param_update).into())
                 .on_open_text_entry(|info| Action::OpenTextInput(info).into())
                 .on_tooltip_request(
@@ -128,9 +129,9 @@ impl Elements {
                 .bipolar(true)
                 .default_normal(0.5)
                 .normal_value(0.5)
-                .build(cx),
+                .build(window_cx),
 
-            separator: Separator::builder().build(cx),
+            separator: Separator::builder().build(window_cx),
 
             scroll_area,
             floating_text_input,
@@ -144,22 +145,22 @@ impl Elements {
         &mut self,
         action: Action,
         style: &MyStyle,
-        cx: &mut WindowContext<'_, MyAction>,
+        window_cx: &mut WindowContext<MyAction>,
     ) -> bool {
         let needs_layout = false;
 
         match action {
             Action::ParamUpdate(info) => {
-                self.show_param_tooltip(info.param_info, cx);
+                self.show_param_tooltip(&info.param_info, window_cx);
 
                 if !info.is_gesturing() {
                     // Set the tooltip to auto-hide when gesturing is finished.
-                    cx.view.auto_hide_tooltip();
+                    window_cx.auto_hide_tooltip();
                 }
             }
-            Action::ShowParamTooltip(info) => self.show_param_tooltip(info.param_info, cx),
+            Action::ShowParamTooltip(info) => self.show_param_tooltip(&info.param_info, window_cx),
             Action::OpenTextInput(info) => {
-                self.text_input_param_id = Some(info.param_info.id);
+                self.text_input_param_id = Some(info.param_info.id.clone());
                 let text = match info.param_info.value() {
                     ParamValue::Normal(n) => format!("{:.4}", n),
                     ParamValue::Stepped(s) => format!("{}", s),
@@ -171,44 +172,44 @@ impl Elements {
                     info.bounds,
                     style.floating_text_input_align,
                     style.floating_text_input_padding,
-                    &mut cx.res,
+                    window_cx.res,
                 );
             }
             Action::FloatingTextInput(new_text) => {
                 if let Some(param_id) = self.text_input_param_id.take() {
                     if let Some(new_text) = new_text {
-                        match param_id {
-                            0 => {
+                        match param_id.as_str() {
+                            "knob_0" => {
                                 if let Ok(v) = new_text.parse::<f64>() {
                                     self.knob_0.set_normal_value(v);
                                 }
                             }
-                            1 => {
+                            "knob_1" => {
                                 if let Ok(v) = new_text.parse::<f64>() {
                                     self.knob_1.set_normal_value(v);
                                 }
                             }
-                            2 => {
+                            "knob_2" => {
                                 if let Ok(v) = new_text.parse::<u32>() {
                                     self.knob_2.set_stepped_value(v);
                                 }
                             }
-                            3 => {
+                            "slider_3" => {
                                 if let Ok(v) = new_text.parse::<f64>() {
                                     self.slider_3.set_normal_value(v);
                                 }
                             }
-                            4 => {
+                            "slider_4" => {
                                 if let Ok(v) = new_text.parse::<f64>() {
                                     self.slider_4.set_normal_value(v);
                                 }
                             }
-                            5 => {
+                            "slider_5" => {
                                 if let Ok(v) = new_text.parse::<f64>() {
                                     self.slider_5.set_normal_value(v);
                                 }
                             }
-                            6 => {
+                            "slider_6" => {
                                 if let Ok(v) = new_text.parse::<f64>() {
                                     self.slider_6.set_normal_value(v);
                                 }
@@ -223,20 +224,34 @@ impl Elements {
         needs_layout
     }
 
-    fn show_param_tooltip(&mut self, param_info: ParamInfo, cx: &WindowContext<'_, MyAction>) {
+    fn show_param_tooltip(&mut self, param_info: &ParamInfo, window_cx: &WindowContext<MyAction>) {
         let get_text = || match param_info.value() {
             ParamValue::Normal(n) => format!("{:.4}", n),
             ParamValue::Stepped(s) => format!("{}", s),
         };
 
-        match param_info.id {
-            0 => self.knob_0.show_tooltip(get_text, Align2::TOP_CENTER, cx),
-            1 => self.knob_1.show_tooltip(get_text, Align2::TOP_CENTER, cx),
-            2 => self.knob_2.show_tooltip(get_text, Align2::TOP_CENTER, cx),
-            3 => self.slider_3.show_tooltip(get_text, Align2::TOP_CENTER, cx),
-            4 => self.slider_4.show_tooltip(get_text, Align2::TOP_CENTER, cx),
-            5 => self.slider_5.show_tooltip(get_text, Align2::TOP_CENTER, cx),
-            6 => self.slider_6.show_tooltip(get_text, Align2::TOP_CENTER, cx),
+        match param_info.id.as_str() {
+            "knob_0" => self
+                .knob_0
+                .show_tooltip(get_text, Align2::TOP_CENTER, window_cx),
+            "knob_1" => self
+                .knob_1
+                .show_tooltip(get_text, Align2::TOP_CENTER, window_cx),
+            "knob_2" => self
+                .knob_2
+                .show_tooltip(get_text, Align2::TOP_CENTER, window_cx),
+            "slider_3" => self
+                .slider_3
+                .show_tooltip(get_text, Align2::TOP_CENTER, window_cx),
+            "slider_4" => self
+                .slider_4
+                .show_tooltip(get_text, Align2::TOP_CENTER, window_cx),
+            "slider_5" => self
+                .slider_5
+                .show_tooltip(get_text, Align2::TOP_CENTER, window_cx),
+            "slider_6" => self
+                .slider_6
+                .show_tooltip(get_text, Align2::TOP_CENTER, window_cx),
             _ => return,
         };
     }
@@ -245,7 +260,7 @@ impl Elements {
         &mut self,
         content_rect: Rect,
         style: &MyStyle,
-        cx: &mut WindowContext<'_, MyAction>,
+        window_cx: &mut WindowContext<MyAction>,
     ) {
         self.scroll_area.set_rect(content_rect);
 
@@ -263,7 +278,7 @@ impl Elements {
                 self.knob_0.max_y() + style.param_label_padding,
             ),
             Align2::TOP_CENTER,
-            cx.res,
+            window_cx.res,
         );
 
         self.knob_1.set_rect(rect(
@@ -278,7 +293,7 @@ impl Elements {
                 self.knob_1.max_y() + style.param_label_padding,
             ),
             Align2::TOP_CENTER,
-            cx.res,
+            window_cx.res,
         );
 
         self.knob_2.set_rect(rect(
@@ -293,7 +308,7 @@ impl Elements {
                 self.knob_2.max_y() + style.param_label_padding,
             ),
             Align2::TOP_CENTER,
-            cx.res,
+            window_cx.res,
         );
 
         self.separator.set_rect(rect(
