@@ -8,7 +8,7 @@
 [![Crates.io](https://img.shields.io/crates/v/yarrow.svg)](https://crates.io/crates/yarrow)
 [![License](https://img.shields.io/crates/l/yarrow.svg)](https://github.com/MeadowlarkDAW/Yarrow/blob/main/LICENSE)
 
-> **WORK IN PROGRESS. This project is currently unstable and is missing some features. Check the [project board] for more details.**
+> **WORK IN PROGRESS. This project is currently unstable and its API is being reworked to be more data-driven. Stay tuned for updates.**
 
 **A modern retained-mode GUI library in Rust with extreme performance and control, geared towards audio software.**
 
@@ -58,7 +58,7 @@ To get started, read the [book](https://meadowlark.app/yarrow-book/) (WIP).
 
 # Contributing
 
-See the [project board] for a list of current tasks.
+Yarrow's API is currently in the process of being reworked to be more data-driven and easier to use. Also Yarrow's rendering engine RootVG is being rewritten to improve ergonomics, functionality, and rendering quality. So in the meantime contributions are currently closed. Stay tuned for updates!
 
 If you have any questions, reach out in the [Meadowlark Discord Server](https://discord.gg/2W3Xvc8wy4) under the #yarrow channel.
 
