@@ -1,0 +1,23 @@
+[package]
+name = "yarrow_core"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+## Enable the [`hex_color`] macro.
+color-hex = ["epaint/color-hex"]
+## Enables serde support for some types
+serde = ["dep:serde", "epaint/serde"]
+## Enables using crossbeam's channel type instead of the one built
+## in to the standard library.
+crossbeam = ["dep:crossbeam-channel"]
+
+[dependencies]
+epaint.workspace = true
+ahash.workspace = true
+bitflags.workspace = true
+thunderdome.workspace = true
+keyboard-types = { version = "0.6.1", default-features = false }
+serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
+crossbeam-channel = { version = "0.5", optional = true }
