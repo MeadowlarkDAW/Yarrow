@@ -18,9 +18,7 @@ pub mod color;
 pub mod element;
 pub mod event;
 pub mod layout;
-pub mod path;
-pub mod texture;
-pub mod util;
+pub mod math;
 
 mod cursor_icon;
 mod resource;
@@ -35,9 +33,5 @@ pub use scissor_rect::ScissorRectID;
 pub use style_system::StyleSystem;
 pub use tooltip::TooltipData;
 pub use window::WindowID;
-
-pub use epaint::emath as math;
-pub use epaint::text;
-pub use epaint::HAS_RAYON;
 
 pub type ZIndex = u16;

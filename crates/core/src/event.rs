@@ -2,7 +2,7 @@ use std::error::Error;
 
 pub use keyboard_types::{Code, CompositionEvent, KeyState, Location, Modifiers};
 
-use crate::math::{Pos2, Vec2};
+use crate::math::{Point, Vector};
 
 #[derive(Debug)]
 pub enum AppWindowEvent {
@@ -127,17 +127,17 @@ pub enum PointerButton {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum WheelDeltaType {
-    Points(Vec2),
-    Lines(Vec2),
-    Pages(Vec2),
+    Points(Vector),
+    Lines(Vector),
+    Pages(Vector),
 }
 
 impl WheelDeltaType {
-    pub fn points(&self, points_per_line: f32, points_per_page: f32) -> Vec2 {
+    pub fn points(&self, points_per_line: f32, points_per_page: f32) -> Vector {
         match self {
             Self::Points(delta) => *delta,
-            Self::Lines(delta) => Vec2::new(delta.x * points_per_line, delta.y * points_per_line),
-            Self::Pages(delta) => Vec2::new(delta.x * points_per_page, delta.y * points_per_page),
+            Self::Lines(delta) => Vector::new(delta.x * points_per_line, delta.y * points_per_line),
+            Self::Pages(delta) => Vector::new(delta.x * points_per_page, delta.y * points_per_page),
         }
     }
 }
@@ -145,8 +145,8 @@ impl WheelDeltaType {
 #[derive(Debug, Clone, PartialEq)]
 pub enum PointerEvent {
     Moved {
-        position: Pos2,
-        delta: Option<Vec2>,
+        position: Point,
+        delta: Option<Vector>,
         /// Whether or not the backend has locked the pointer in place.
         ///
         /// This will only be `true` if all the following conditions are true:
@@ -162,42 +162,42 @@ pub enum PointerEvent {
         just_entered: bool,
     },
     ButtonJustPressed {
-        position: Pos2,
+        position: Point,
         button: PointerButton,
         pointer_type: PointerType,
         click_count: usize,
         modifiers: Modifiers,
     },
     ButtonJustReleased {
-        position: Pos2,
+        position: Point,
         button: PointerButton,
         pointer_type: PointerType,
         click_count: usize,
         modifiers: Modifiers,
     },
     ScrollWheel {
-        position: Pos2,
+        position: Point,
         delta_type: WheelDeltaType,
         pointer_type: PointerType,
         modifiers: Modifiers,
     },
     HoverTimeout {
-        position: Pos2,
+        position: Point,
     },
     ScrollWheelTimeout,
     PointerLeft,
 }
 
 impl PointerEvent {
-    pub fn position(&self) -> Pos2 {
+    pub fn position(&self) -> Point {
         match self {
             Self::Moved { position, .. } => *position,
             Self::ButtonJustPressed { position, .. } => *position,
             Self::ButtonJustReleased { position, .. } => *position,
             Self::ScrollWheel { position, .. } => *position,
             Self::HoverTimeout { position } => *position,
-            Self::ScrollWheelTimeout => Pos2::default(),
-            Self::PointerLeft => Pos2::default(),
+            Self::ScrollWheelTimeout => Point::default(),
+            Self::PointerLeft => Point::default(),
         }
     }
 }

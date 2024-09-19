@@ -1,4 +1,4 @@
-use crate::math::{Pos2, Rect, Vec2};
+use crate::math::{Point, Rect, Scale, Size, Vector};
 use crate::{
     action::{Action, ActionSender},
     clipboard::Clipboard,
@@ -28,8 +28,8 @@ pub struct ElementContext<'a, A: Action> {
     visible_rect: Option<Rect>,
     element_id: ElementID,
     window_id: WindowID,
-    window_size: Vec2,
-    scale_factor: f32,
+    window_size: Size,
+    scale_factor: Scale,
     z_index: ZIndex,
     manually_hidden: bool,
     animating: bool,
@@ -49,8 +49,8 @@ impl<'a, A: Action> ElementContext<'a, A> {
         visible_rect: Option<Rect>,
         element_id: ElementID,
         window_id: WindowID,
-        window_size: Vec2,
-        scale_factor: f32,
+        window_size: Size,
+        scale_factor: Scale,
         z_index: ZIndex,
         manually_hidden: bool,
         animating: bool,
@@ -101,7 +101,7 @@ impl<'a, A: Action> ElementContext<'a, A> {
 
     /// The size of the window. This can be useful to reposition/resize elements
     /// like drop-down menus to fit within the window.
-    pub fn window_size(&self) -> Vec2 {
+    pub fn window_size(&self) -> Size {
         self.window_size
     }
 
@@ -146,11 +146,11 @@ impl<'a, A: Action> ElementContext<'a, A> {
     }
 
     /// The current scale factor in pixels per point.
-    pub fn scale_factor(&self) -> f32 {
+    pub fn scale_factor(&self) -> Scale {
         self.scale_factor
     }
 
-    pub fn is_point_within_visible_bounds(&self, point: Pos2) -> bool {
+    pub fn is_point_within_visible_bounds(&self, point: Point) -> bool {
         self.visible_rect
             .map(|r| r.contains(point))
             .unwrap_or(false)
@@ -287,7 +287,7 @@ impl<'a, A: Action> ElementContext<'a, A> {
         &mut self,
         id: ScissorRectID,
         new_rect: Option<Rect>,
-        new_scroll_offset: Option<Vec2>,
+        new_scroll_offset: Option<Vector>,
     ) {
         self.send_modification(ElementModificationType::UpdateScissorRect {
             id,
@@ -311,18 +311,18 @@ pub struct RenderContext<'a> {
     /// The global resource context
     pub res: &'a mut ResourceContext,
     /// The size of this element's bounding rectangle.
-    pub bounds_size: Vec2,
+    pub bounds_size: Size,
     /// The origin of the element's bounding rectangle. This is normally not needed
     /// since the view automatically applies this offset to all primitives.
-    pub bounds_origin: Pos2,
+    pub bounds_origin: Point,
     /// The visible rectangular area, accounting for the scissoring rectangle that
     /// this element belongs to.
     pub visible_bounds: Rect,
     /// The scale factor.
-    pub scale: f32,
+    pub scale: Scale,
     /// The current class ID.
     pub class: ClassID,
     /// The size of the window. This can be useful to reposition/resize elements
     /// like drop-down menus to fit within the window.
-    pub window_size: Vec2,
+    pub window_size: Size,
 }

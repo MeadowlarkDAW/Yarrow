@@ -1,6 +1,9 @@
-use epaint::{emath::Align2, Pos2, Vec2};
-
-use crate::{math::Rect, style_system::ClassID, TooltipData, ZIndex};
+use crate::{
+    layout::Align2,
+    math::{Point, Rect, Size, Vector},
+    style_system::ClassID,
+    TooltipData, ZIndex,
+};
 
 use super::{
     mod_queue::{ElementModification, ElementModificationType, ModQueueSender},
@@ -94,9 +97,9 @@ impl ElementHandle {
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
     /// so this method is very cheap to call frequently.
-    pub fn set_pos(&mut self, pos: Pos2) -> bool {
-        if self.rect.min != pos {
-            self.rect = Rect::from_min_size(pos, self.rect.size());
+    pub fn set_pos(&mut self, pos: Point) -> bool {
+        if self.rect.origin != pos {
+            self.rect.origin = pos;
             self.mod_queue_sender
                 .send(ElementModification {
                     element_id: self.element_id,
@@ -120,9 +123,9 @@ impl ElementHandle {
     ///
     /// This will *NOT* trigger an element update unless the value has changed,
     /// so this method is very cheap to call frequently.
-    pub fn set_size(&mut self, size: Vec2) -> bool {
-        if self.rect.size() != size {
-            self.rect.max = self.rect.min + size;
+    pub fn set_size(&mut self, size: Size) -> bool {
+        if self.rect.size != size {
+            self.rect.size = size;
             self.mod_queue_sender
                 .send(ElementModification {
                     element_id: self.element_id,
@@ -148,11 +151,8 @@ impl ElementHandle {
     /// This will *NOT* trigger an element update unless the value has changed,
     /// so this method is very cheap to call frequently.
     pub fn set_x(&mut self, x: f32) -> bool {
-        if self.rect.min.x != x {
-            let width = self.rect.width();
-            self.rect.min.x = x;
-            self.rect.set_width(width);
-
+        if self.rect.origin.x != x {
+            self.rect.origin.x = x;
             self.mod_queue_sender
                 .send(ElementModification {
                     element_id: self.element_id,
@@ -178,11 +178,8 @@ impl ElementHandle {
     /// This will *NOT* trigger an element update unless the value has changed,
     /// so this method is very cheap to call frequently.
     pub fn set_y(&mut self, y: f32) -> bool {
-        if self.rect.min.y != y {
-            let height = self.rect.height();
-            self.rect.min.y = y;
-            self.rect.set_height(height);
-
+        if self.rect.origin.y != y {
+            self.rect.origin.y = y;
             self.mod_queue_sender
                 .send(ElementModification {
                     element_id: self.element_id,
@@ -208,8 +205,8 @@ impl ElementHandle {
     /// This will *NOT* trigger an element update unless the value has changed,
     /// so this method is very cheap to call frequently.
     pub fn set_width(&mut self, width: f32) -> bool {
-        if self.rect.width() != width {
-            self.rect.set_width(width);
+        if self.rect.size.width != width {
+            self.rect.size.width = width;
             self.mod_queue_sender
                 .send(ElementModification {
                     element_id: self.element_id,
@@ -235,8 +232,8 @@ impl ElementHandle {
     /// This will *NOT* trigger an element update unless the value has changed,
     /// so this method is very cheap to call frequently.
     pub fn set_height(&mut self, height: f32) -> bool {
-        if self.rect.height() != height {
-            self.rect.set_height(height);
+        if self.rect.size.height != height {
+            self.rect.size.height = height;
             self.mod_queue_sender
                 .send(ElementModification {
                     element_id: self.element_id,
@@ -253,9 +250,8 @@ impl ElementHandle {
     ///
     /// Note, this will *always* cause an element update even if the offset
     /// is zero, so prefer to call this method sparingly.
-    pub fn offset_pos(&mut self, offset: Vec2) {
-        self.rect.min += offset;
-        self.rect.max += offset;
+    pub fn offset_pos(&mut self, offset: Vector) {
+        self.rect.origin += offset;
         self.mod_queue_sender
             .send(ElementModification {
                 element_id: self.element_id,

@@ -16,27 +16,9 @@ readme = "README.md"
 maintenance = { status = "actively-developed" }
 
 [features]
-default = [
-    "default_fonts",
-    "winit",
-    "x11",
-    "wayland",
-]
-## If set, Yarrow will use `include_bytes!` to bundle some fonts.
-## If you plan on specifying your own fonts you may disable this feature.
-default_fonts = ["epaint/default_fonts"]
-## Enable the [`hex_color`] macro.
-color-hex = ["yarrow_core/color-hex"]
-## Enable parallel tessellation using [`rayon`](https://docs.rs/rayon).
-##
-## This can help performance for graphics-intense applications.
-rayon = ["epaint/rayon"]
-## Enables X11 support on Linux platforms
-x11 = ["winit?/x11"]
-## Enables Wayland support on Linux platforms
-wayland = ["winit?/wayland"]
+default = []
 ## Enables serde support for some types
-serde = ["dep:serde", "yarrow_core/serde"]
+serde = ["yarrow_core/serde"]
 ## Enables using crossbeam's channel type instead of the one built
 ## in to the standard library.
 crossbeam = ["yarrow_core/crossbeam"]
@@ -51,25 +33,15 @@ members = ["crates/core"]
 
 [dependencies]
 yarrow_core = { path = "crates/core" }
-epaint.workspace = true
-window_clipboard = "0.4.1"
-#raw-window-handle = { version = "0.5.0", features = ["std"] }
-raw-window-handle-06 = { package = "raw-window-handle", version = "0.6.0" }
-winit = { version = "0.30.0", optional = true, default-features = false, features = ["rwh_06"] }
-baseview = { git = "https://github.com/RustAudio/baseview.git", optional = true }
-wgpu = { version = "22", default-features = false, features = ["wgsl"] }
-serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
 
 [workspace.dependencies]
+log = "0.4"
 thiserror = "1.0.61"
 ahash = "0.8.11"
 bitflags = "2.6.0"
 thunderdome = "0.6.1"
 smallvec = "1.13.2"
-bytemuck = { version = "1.14.1", features = ["derive"] }
-epaint = { version = "0.28.1", default-features = false, features = ["bytemuck"] }
 
 [dev-dependencies]
-wgpu = { version = "22", default-features = true }
 env_logger = { version = "0.11.3", default-features = false }
 

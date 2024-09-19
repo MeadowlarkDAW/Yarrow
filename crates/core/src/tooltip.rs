@@ -1,4 +1,4 @@
-use crate::math::Align2;
+use crate::layout::Align2;
 
 /// Tooltip data assigned to an element
 #[derive(Debug, Clone, PartialEq)]

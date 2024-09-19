@@ -1,5 +1,5 @@
 use crate::{
-    math::{Rect, Vec2},
+    math::{Rect, Vector},
     style_system::ClassID,
     ScissorRectID, TooltipData, ZIndex,
 };
@@ -55,6 +55,6 @@ pub enum ElementModificationType {
     UpdateScissorRect {
         id: ScissorRectID,
         new_rect: Option<Rect>,
-        new_scroll_offset: Option<Vec2>,
+        new_scroll_offset: Option<Vector>,
     },
 }
