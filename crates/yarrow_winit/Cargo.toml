@@ -1,0 +1,25 @@
+[package]
+name = "yarrow_winit"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["x11", "wayland", "wayland-dlopen", "wayland-csd-adwaita"]
+x11 = ["winit/x11", "glutin?/x11", "glutin-winit?/x11", "glutin?/glx", "glutin-winit?/glx"]
+wayland = ["winit/wayland", "glutin?/wayland", "glutin-winit?/wayland", "glutin?/egl", "glutin-winit?/egl"]
+wayland-dlopen = ["winit/wayland-dlopen"]
+wayland-csd-adwaita = ["winit/wayland-csd-adwaita"]
+gl = ["dep:glutin", "dep:glutin-winit", "yarrow_core/gl"]
+egl = ["glutin?/egl", "glutin-winit?/egl"]
+serde = ["winit/serde"]
+
+[dependencies]
+yarrow_core = { path = "../yarrow_core" }
+ahash.workspace = true
+thiserror.workspace = true
+log.workspace = true
+raw-window-handle.workspace = true
+window_clipboard = "0.4.1" # TODO: Modify this so X11/Wayland dependencies are optionally enabled
+winit = { version = "0.30.5", default-features = false, features = ["rwh_06"] }
+glutin = { version = "0.32.1", optional = true, default-features = false }
+glutin-winit = { version = "0.5.0", optional = true, default-features = false }

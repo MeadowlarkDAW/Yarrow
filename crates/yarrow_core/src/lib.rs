@@ -13,25 +13,28 @@
 // ---------------------------------------------------------------------------------
 
 pub mod action;
+pub mod application;
 pub mod clipboard;
 pub mod color;
+pub mod diff;
 pub mod element;
 pub mod event;
 pub mod layout;
 pub mod math;
+pub mod primitive;
+pub mod renderer;
+pub mod window;
 
 mod cursor_icon;
 mod resource;
 mod scissor_rect;
 mod style_system;
 mod tooltip;
-mod window;
 
-pub use cursor_icon::CursorIcon;
-pub use resource::ResourceContext;
-pub use scissor_rect::ScissorRectID;
-pub use style_system::StyleSystem;
-pub use tooltip::TooltipData;
-pub use window::WindowID;
+pub use self::cursor_icon::CursorIcon;
+pub use self::resource::ResourceContext;
+pub use self::scissor_rect::ScissorRectID;
+pub use self::style_system::StyleSystem;
+pub use self::tooltip::TooltipData;
 
 pub type ZIndex = u16;

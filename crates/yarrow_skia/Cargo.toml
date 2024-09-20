@@ -1,0 +1,26 @@
+[package]
+name = "yarrow_skia"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["gl", "x11", "wayland"]
+svg = ["skia-safe/svg"]
+webp = ["skia-safe/webp-decode"]
+embed-freetype = ["skia-safe/embed-freetype"]
+freetype-woff2 = ["skia-safe/freetype-woff2"]
+gl = ["dep:glutin", "dep:gl-rs", "yarrow_core/gl", "skia-safe/gl"]
+egl = ["gl", "skia-safe/egl", "glutin?/egl"]
+x11 = ["gl", "skia-safe/x11", "glutin?/x11", "glutin?/glx"]
+wayland = ["egl", "skia-safe/wayland", "glutin?/wayland"]
+vulkan = ["skia-safe/vulkan"]
+metal = ["skia-safe/metal"]
+d3d = ["skia-safe/d3d"]
+
+[dependencies]
+yarrow_core = { path = "../yarrow_core" }
+thiserror.workspace = true
+raw-window-handle.workspace = true
+skia-safe = { version = "0.78.0", features = ["binary-cache", "embed-icudtl", "textlayout"] }
+glutin = { version = "0.32.1", optional = true, default-features = false }
+gl-rs = { version = "0.14.0", package = "gl", optional = true }

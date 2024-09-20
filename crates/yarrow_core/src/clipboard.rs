@@ -1,3 +1,5 @@
+use std::error::Error;
+
 /// The kind of [`Clipboard`].
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClipboardKind {
@@ -15,5 +17,5 @@ pub trait Clipboard {
     fn read(&self, kind: ClipboardKind) -> Option<String>;
 
     /// Writes the given text contents to the [`Clipboard`].
-    fn write(&mut self, kind: ClipboardKind, contents: String);
+    fn write(&mut self, kind: ClipboardKind, contents: String) -> Result<(), Box<dyn Error>>;
 }

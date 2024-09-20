@@ -136,7 +136,7 @@ impl CustomPipeline for MyCustomPrimitivePipeline {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         screen_size: PhysicalSizeI32,
-        scale_factor: ScaleFactor,
+        scale_factor: f32Factor,
         primitives: &[CustomPipelinePrimitive],
     ) -> Result<(), Box<dyn std::error::Error>> {
         DefaultConstantUniforms::prepare_buffer(

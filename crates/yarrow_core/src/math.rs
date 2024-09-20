@@ -167,24 +167,24 @@ pub fn degrees(degrees: f32) -> Angle {
 
 /// Convert a point in units of physical pixels to units of logical points.
 #[inline]
-pub fn physical_point_to_logical(point: PhysicalPoint, scale_factor: Scale) -> Point {
+pub fn to_logical_point(point: PhysicalPoint, scale_factor: f32) -> Point {
     point.cast::<f32>().cast_unit::<Logical>() / scale_factor
 }
 
 /// Convert a point in units of logical points to units of logical pixels.
 #[inline]
-pub fn logical_point_to_physical(point: Point, scale_factor: Scale) -> PhysicalPoint {
+pub fn to_physical_point(point: Point, scale_factor: f32) -> PhysicalPoint {
     (point * scale_factor).round().cast::<i32>().cast_unit()
 }
 
 /// Convert a size in units of physical pixels to units of logical points.
 #[inline]
-pub fn physical_size_to_logical(size: PhysicalSize, scale_factor: Scale) -> Size {
+pub fn to_logical_size(size: PhysicalSize, scale_factor: f32) -> Size {
     size.cast::<f32>().cast_unit() / scale_factor
 }
 
 /// Convert a size in units of logical points to units of logical pixels.
 #[inline]
-pub fn logical_size_to_physical(size: Size, scale_factor: Scale) -> PhysicalSize {
+pub fn to_physical_size(size: Size, scale_factor: f32) -> PhysicalSize {
     (size * scale_factor).round().cast::<i32>().cast_unit()
 }

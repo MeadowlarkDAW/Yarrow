@@ -16,9 +16,38 @@ readme = "README.md"
 maintenance = { status = "actively-developed" }
 
 [features]
-default = []
+default = [
+    "winit",
+    "x11",
+    "wayland",
+    "winit-wayland-dlopen",
+    "winit-wayland-csd-adwaita",
+    "skia",
+    "skia-gl",
+]
+
+winit = ["dep:yarrow_winit"]
+x11 = ["yarrow_winit?/x11", "yarrow_skia?/x11"]
+wayland = ["yarrow_winit?/wayland", "yarrow_skia?/wayland"]
+winit-wayland-dlopen = ["yarrow_winit?/wayland-dlopen"]
+winit-wayland-csd-adwaita = ["yarrow_winit?/wayland-csd-adwaita"]
+
+skia = ["dep:yarrow_skia"]
+skia-svg = ["yarrow_skia?/svg"]
+skia-webp = ["yarrow_skia?/webp"]
+skia-embed-freetype = ["yarrow_skia?/embed-freetype"]
+skia-freetype-woff2 = ["yarrow_skia?/freetype-woff2"]
+skia-gl = ["yarrow_skia?/gl", "yarrow_winit?/gl"]
+skia-egl = ["yarrow_skia?/egl", "yarrow_winit?/egl"]
+skia-vulkan = ["yarrow_skia?/vulkan"]
+skia-metal = ["yarrow_skia?/metal"]
+skia-d3d = ["yarrow_skia?/d3d"]
+
 ## Enables serde support for some types
-serde = ["yarrow_core/serde"]
+serde = [
+    "yarrow_core/serde",
+    "yarrow_winit?/serde"
+]
 ## Enables using crossbeam's channel type instead of the one built
 ## in to the standard library.
 crossbeam = ["yarrow_core/crossbeam"]
@@ -27,12 +56,18 @@ crossbeam = ["yarrow_core/crossbeam"]
 all-features = true
 
 [workspace]
-members = ["crates/core"]
+members = [
+    "crates/yarrow_core",
+    "crates/yarrow_skia",
+    "crates/yarrow_winit"
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-yarrow_core = { path = "crates/core" }
+yarrow_core = { path = "crates/yarrow_core" }
+yarrow_skia = { path = "crates/yarrow_skia", default-features = false, optional = true }
+yarrow_winit = { path = "crates/yarrow_winit", default-features = false, optional = true }
 
 [workspace.dependencies]
 log = "0.4"
@@ -41,6 +76,7 @@ ahash = "0.8.11"
 bitflags = "2.6.0"
 thunderdome = "0.6.1"
 smallvec = "1.13.2"
+raw-window-handle = "0.6.2"
 
 [dev-dependencies]
 env_logger = { version = "0.11.3", default-features = false }

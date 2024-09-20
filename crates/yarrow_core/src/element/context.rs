@@ -3,7 +3,8 @@ use crate::{
     action::{Action, ActionSender},
     clipboard::Clipboard,
     style_system::ClassID,
-    CursorIcon, ResourceContext, WindowID, ZIndex,
+    window::WindowID,
+    CursorIcon, ResourceContext, ZIndex,
 };
 use crate::{ScissorRectID, TooltipData};
 
@@ -29,7 +30,7 @@ pub struct ElementContext<'a, A: Action> {
     element_id: ElementID,
     window_id: WindowID,
     window_size: Size,
-    scale_factor: Scale,
+    scale_factor: f32,
     z_index: ZIndex,
     manually_hidden: bool,
     animating: bool,
@@ -50,7 +51,7 @@ impl<'a, A: Action> ElementContext<'a, A> {
         element_id: ElementID,
         window_id: WindowID,
         window_size: Size,
-        scale_factor: Scale,
+        scale_factor: f32,
         z_index: ZIndex,
         manually_hidden: bool,
         animating: bool,
@@ -146,7 +147,7 @@ impl<'a, A: Action> ElementContext<'a, A> {
     }
 
     /// The current scale factor in pixels per point.
-    pub fn scale_factor(&self) -> Scale {
+    pub fn scale_factor(&self) -> f32 {
         self.scale_factor
     }
 
@@ -251,7 +252,7 @@ impl<'a, A: Action> ElementContext<'a, A> {
     ///
     /// The pointer will automatically be unlocked when this element
     /// loses focus.
-    pub fn request_pointer_lock(&mut self, lock: bool) {
+    pub fn request_pointer_lock(&mut self, _lock: bool) {
         todo!()
     }
 
