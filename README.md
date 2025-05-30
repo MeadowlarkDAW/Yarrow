@@ -8,7 +8,7 @@
 [![Crates.io](https://img.shields.io/crates/v/yarrow.svg)](https://crates.io/crates/yarrow)
 [![License](https://img.shields.io/crates/l/yarrow.svg)](https://github.com/MeadowlarkDAW/Yarrow/blob/main/LICENSE)
 
-> **WORK IN PROGRESS. This project is currently unstable and its API is being reworked to be more data-driven. Stay tuned for updates.**
+> **Yarrow has been discontinued. While I still like many of the ideas presented in this experiment, creating and maintaining both a DAW and a custom GUI library has turned out to be too much work. Meadowlark has moved to using the [Vizia](https://github.com/vizia/vizia) GUI library instead. This project has been archived for anyone interested in developing a similar project themselves.**
 
 **A modern retained-mode GUI library in Rust with extreme performance and control, geared towards audio software.**
 
